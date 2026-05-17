@@ -1,18 +1,62 @@
 # localagent
 
-Small local-agent utilities for finding OpenClaw work related to local and open-weight models.
+Localagent is a small TypeScript CLI for working with local and open-weight model workflows.
 
-The first tool searches a local gitcrawl SQLite database with a machine-readable keyword taxonomy.
+It currently does two things:
 
-## Files
+- runs prompts against an OpenAI-compatible local model server such as LM Studio
+- searches a local gitcrawl SQLite database with a weighted local-model taxonomy
 
-- `data/local-model-keywords.json` - weighted keyword and regex groups for local-model signals
-- `scripts/search_gitcrawl.py` - searches gitcrawl issue/PR documents and returns scored matches
-
-## Usage
+## Install
 
 ```bash
-python3 scripts/search_gitcrawl.py \
+npm install
+npm run build
+```
+
+During development, run the CLI through npm:
+
+```bash
+npm run localagent -- --help
+```
+
+After a build, the package binary is:
+
+```bash
+node dist/src/cli/main.js --help
+```
+
+## LM Studio / Gemma
+
+Start the LM Studio local server and load Gemma:
+
+```bash
+~/.lmstudio/bin/lms server start
+~/.lmstudio/bin/lms load gemma-4-e4b-it --identifier gemma-local -y
+```
+
+Check the model endpoint:
+
+```bash
+npm run localagent -- models --base-url http://127.0.0.1:1234/v1
+```
+
+Generate a longer response:
+
+```bash
+npm run localagent -- run \
+  --base-url http://127.0.0.1:1234/v1 \
+  --model gemma-local \
+  --max-tokens 1800 \
+  --prompt-file examples/prompts/gemma-longform.md
+```
+
+Use `--model auto` to select the first model returned by `/v1/models`.
+
+## Gitcrawl Search
+
+```bash
+npm run localagent -- search-gitcrawl \
   --db ~/.config/gitcrawl/gitcrawl.db \
   --repo openclaw/openclaw \
   --kind issue \
@@ -24,9 +68,18 @@ python3 scripts/search_gitcrawl.py \
 Machine-readable output:
 
 ```bash
-python3 scripts/search_gitcrawl.py --format jsonl
+npm run localagent -- search-gitcrawl --format jsonl
 ```
 
-## Scoring
+The taxonomy lives at `data/local-model-keywords.json`. Scores are a recall signal, not a final classifier.
 
-Each matched keyword group adds its configured weight. Regex groups are scored the same way. The score is meant as a recall and triage aid, not a final classifier. Human maintainer policy should still decide whether an item is actually important.
+## Project Commands
+
+```bash
+npm run format
+npm run lint
+npm run typecheck
+npm test
+npm run build
+npm run check
+```

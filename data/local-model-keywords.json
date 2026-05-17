@@ -6,15 +6,7 @@
   "matchPolicy": {
     "caseSensitive": false,
     "normalizeUnicode": true,
-    "matchOn": [
-      "title",
-      "body",
-      "labels",
-      "channelName",
-      "threadName",
-      "repoName",
-      "sourceUrl"
-    ],
+    "matchOn": ["title", "body", "labels", "channelName", "threadName", "repoName", "sourceUrl"],
     "recommendation": "Use these keywords as a recall filter. Apply INTERESTS.md before tagging an item as i0."
   },
   "keywordGroups": [

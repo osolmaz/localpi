@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 .venv/
 .DS_Store
+dist/
+coverage/
+node_modules/
+.env
+.env.*
+!.env.example

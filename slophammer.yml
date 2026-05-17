@@ -1,0 +1,34 @@
+typescript:
+  coverage_threshold: 85
+  complexity_max: 8
+  dry:
+    max_findings: 0
+    paths:
+      - src
+    exclude:
+      - "**/*.test.ts"
+      - "tests/**"
+      - "dist/**"
+      - "coverage/**"
+    copied_blocks:
+      enabled: true
+      min_tokens: 100
+  mutation_targets:
+    - src/gitcrawl/taxonomy.ts
+    - src/llm/openai.ts
+  dependency_boundaries:
+    - from: src/cli
+      allow:
+        - src/app
+        - src/common
+    - from: src/app
+      allow:
+        - src/common
+        - src/gitcrawl
+        - src/llm
+    - from: src/gitcrawl
+      allow:
+        - src/common
+    - from: src/llm
+      allow:
+        - src/common
