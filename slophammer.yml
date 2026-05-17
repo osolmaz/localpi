@@ -14,21 +14,22 @@ typescript:
       enabled: true
       min_tokens: 100
   mutation_targets:
-    - src/gitcrawl/taxonomy.ts
-    - src/llm/openai.ts
+    - src/localagent/options.ts
+    - src/pi/config.ts
   dependency_boundaries:
     - from: src/cli
       allow:
-        - src/app
         - src/common
-    - from: src/app
-      allow:
-        - src/common
-        - src/gitcrawl
+        - src/localagent
         - src/llm
-    - from: src/gitcrawl
+        - src/pi
+    - from: src/localagent
       allow:
         - src/common
+        - src/llm
+    - from: src/pi
+      allow:
+        - src/localagent
     - from: src/llm
       allow:
         - src/common

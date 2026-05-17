@@ -1,11 +1,8 @@
 # localagent
 
-Localagent is a small TypeScript CLI for working with local and open-weight model workflows.
+Localagent is Pi with the model wiring prefilled for a local OpenAI-compatible endpoint.
 
-It currently does two things:
-
-- runs prompts against an OpenAI-compatible local model server such as LM Studio
-- searches a local gitcrawl SQLite database with a weighted local-model taxonomy
+It does not know about any project-specific workflow. It discovers the local model, writes a temporary Pi config under local state, and forwards the rest of the command line to Pi.
 
 ## Install
 
@@ -14,66 +11,99 @@ npm install
 npm run build
 ```
 
-During development, run the CLI through npm:
+During development:
 
 ```bash
-npm run localagent -- --help
+npm run localagent -- --status
 ```
 
-After a build, the package binary is:
+After build:
 
 ```bash
-node dist/src/cli/main.js --help
+node dist/src/cli/main.js --status
 ```
 
-## LM Studio / Gemma
+## Local Model
 
-Start the LM Studio local server and load Gemma:
+Localagent defaults to LM Studio's OpenAI-compatible server:
+
+```text
+http://127.0.0.1:1234/v1
+```
+
+Load Gemma in LM Studio:
 
 ```bash
 ~/.lmstudio/bin/lms server start
 ~/.lmstudio/bin/lms load gemma-4-e4b-it --identifier gemma-local -y
 ```
 
-Check the model endpoint:
+Check what localagent will use:
 
 ```bash
-npm run localagent -- models --base-url http://127.0.0.1:1234/v1
+localagent --status
 ```
 
-Generate a longer response:
+## Usage
+
+Run Pi interactively on the local model:
 
 ```bash
-npm run localagent -- run \
-  --base-url http://127.0.0.1:1234/v1 \
-  --model gemma-local \
-  --max-tokens 1800 \
-  --prompt-file examples/prompts/gemma-longform.md
+localagent
 ```
 
-Use `--model auto` to select the first model returned by `/v1/models`.
-
-## Gitcrawl Search
+Run a non-interactive Pi prompt:
 
 ```bash
-npm run localagent -- search-gitcrawl \
-  --db ~/.config/gitcrawl/gitcrawl.db \
-  --repo openclaw/openclaw \
-  --kind issue \
-  --state open \
-  --min-score 14 \
-  --limit 20
+localagent -p "summarize this repo"
 ```
 
-Machine-readable output:
+Pin a specific local model id:
 
 ```bash
-npm run localagent -- search-gitcrawl --format jsonl
+localagent --model gemma-local -p "write a detailed implementation plan"
 ```
 
-The taxonomy lives at `data/local-model-keywords.json`. Scores are a recall signal, not a final classifier.
+Point at a different OpenAI-compatible local server:
 
-## Project Commands
+```bash
+localagent --base-url http://127.0.0.1:8000/v1 -p "review the src directory"
+```
+
+Pass a Pi flag that localagent also owns after `--`:
+
+```bash
+localagent --model gemma-local -- --model some-pi-level-value
+```
+
+## Options
+
+- `--base-url <url>`: local OpenAI-compatible endpoint. Default: `http://127.0.0.1:1234/v1`
+- `--model <id|auto>`: model id. Default: `auto`, meaning first id returned by `/v1/models`
+- `--status`: print model/config status and exit
+- `--provider-id <id>`: generated Pi provider id. Default: `local-openai`
+- `--state-dir <path>`: runtime state directory. Default: `~/.local/state/localagent`
+- `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
+- `--pi-command <command>`: Pi launch command. Default: `npx -y @earendil-works/pi-coding-agent@latest`
+- `--thinking <level>`: Pi thinking level. Default: `off`
+- `--context-window <n>`: generated model context window. Default: `65536`
+- `--max-tokens <n>`: generated model max output tokens. Default: `8192`
+- `--timeout-ms <n>`: `/v1/models` probe timeout. Default: `3000`
+
+## Environment
+
+- `LOCALAGENT_BASE_URL`
+- `LOCALAGENT_MODEL`
+- `LOCALAGENT_PROVIDER_ID`
+- `LOCALAGENT_STATE_DIR`
+- `LOCALAGENT_SESSION_DIR`
+- `LOCALAGENT_PI_CMD`
+- `LOCALAGENT_THINKING`
+- `LOCALAGENT_CONTEXT_WINDOW`
+- `LOCALAGENT_MAX_TOKENS`
+- `LOCALAGENT_TIMEOUT_MS`
+
+## Development
 
 ```bash
 npm run format

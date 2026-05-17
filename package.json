@@ -1,7 +1,7 @@
 {
   "name": "@dutifuldev/localagent",
   "version": "0.1.0",
-  "description": "Local model workflow CLI for OpenAI-compatible endpoints and gitcrawl triage.",
+  "description": "Pi-compatible local model launcher for OpenAI-compatible endpoints.",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -9,7 +9,6 @@
   },
   "files": [
     "dist/src/**",
-    "data/**",
     "README.md",
     "LICENSE"
   ],

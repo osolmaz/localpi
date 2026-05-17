@@ -1,5 +1,4 @@
-import { asArray, asObject, optionalString, requiredString } from "../common/json.js";
-import type { ChatMessage, CompletionOptions, CompletionResult } from "./types.js";
+import { asArray, asObject, optionalString } from "../common/json.js";
 
 type Fetcher = typeof fetch;
 
@@ -26,58 +25,24 @@ export async function listModels(
     .filter((id): id is string => id !== undefined);
 }
 
-export async function resolveModel(
+export async function resolveLocalModel(
   baseUrl: string,
   requestedModel: string,
   timeoutMs = 3000,
   fetcher: Fetcher = fetch
-): Promise<string> {
-  if (requestedModel !== "auto") {
-    return requestedModel;
+): Promise<{ readonly model: string; readonly availableModels: readonly string[] }> {
+  const availableModels = await listModels(baseUrl, timeoutMs, fetcher);
+  if (requestedModel === "auto") {
+    const first = availableModels[0];
+    if (first === undefined) {
+      throw new Error(`no models returned by ${normalizeBaseUrl(baseUrl)}/models`);
+    }
+    return { model: first, availableModels };
   }
-  const models = await listModels(baseUrl, timeoutMs, fetcher);
-  const model = models[0];
-  if (model === undefined) {
-    throw new Error(`no models returned by ${normalizeBaseUrl(baseUrl)}/models`);
-  }
-  return model;
-}
-
-export async function complete(
-  options: CompletionOptions,
-  fetcher: Fetcher = fetch
-): Promise<CompletionResult> {
-  const messages: readonly ChatMessage[] = options.messages;
-  const body = {
-    model: options.model,
-    messages,
-    max_tokens: options.maxTokens,
-    temperature: options.temperature,
-    stream: false
-  };
-  const response = await fetcher(`${normalizeBaseUrl(options.baseUrl)}/chat/completions`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(options.timeoutMs)
-  });
-  if (!response.ok) {
-    const text = await response.text();
+  if (availableModels.length > 0 && !availableModels.includes(requestedModel)) {
     throw new Error(
-      `completion failed with HTTP ${String(response.status)}: ${text.slice(0, 500)}`
+      `model ${requestedModel} is not reported by ${normalizeBaseUrl(baseUrl)}/models; available: ${availableModels.join(", ")}`
     );
   }
-  const payload: unknown = await response.json();
-  const root = asObject(payload, "completion response");
-  const choices = asArray(root["choices"], "completion choices");
-  const first = choices[0];
-  if (first === undefined) {
-    throw new Error("completion response had no choices");
-  }
-  const choice = asObject(first, "completion choice");
-  const message = asObject(choice["message"], "completion message");
-  return {
-    model: optionalString(root["model"]) ?? options.model,
-    content: requiredString(message["content"], "completion content")
-  };
+  return { model: requestedModel, availableModels };
 }
