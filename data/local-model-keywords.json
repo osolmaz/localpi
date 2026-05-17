@@ -1,0 +1,250 @@
+{
+  "schema": "openclaw-maintainer.local-model-keywords.v1",
+  "description": "Machine-readable keyword groups for detecting local-model and self-hosted OpenClaw signals in maintainer workflows.",
+  "tag": "local-models",
+  "interestTag": "i0",
+  "matchPolicy": {
+    "caseSensitive": false,
+    "normalizeUnicode": true,
+    "matchOn": [
+      "title",
+      "body",
+      "labels",
+      "channelName",
+      "threadName",
+      "repoName",
+      "sourceUrl"
+    ],
+    "recommendation": "Use these keywords as a recall filter. Apply INTERESTS.md before tagging an item as i0."
+  },
+  "keywordGroups": [
+    {
+      "id": "core-local-models",
+      "weight": 10,
+      "keywords": [
+        "local model",
+        "local models",
+        "local llm",
+        "local inference",
+        "local ai",
+        "open-weight",
+        "open weight",
+        "open weights",
+        "self-hosted model",
+        "self hosted model",
+        "selfhosted model",
+        "self-hosted ai",
+        "on-device model",
+        "offline model",
+        "bring your own model",
+        "byom"
+      ]
+    },
+    {
+      "id": "openclaw-provider-routing",
+      "weight": 9,
+      "keywords": [
+        "provider prefix",
+        "provider prefixes",
+        "model override",
+        "channel model",
+        "channel override",
+        "model routing",
+        "model router",
+        "default model",
+        "fallback model",
+        "auth profile",
+        "openai-compatible",
+        "openai compatible",
+        "openai-compatible endpoint",
+        "openai compatible endpoint",
+        "/v1/chat/completions",
+        "/v1/models",
+        "/models"
+      ]
+    },
+    {
+      "id": "serving-runtimes",
+      "weight": 9,
+      "keywords": [
+        "vllm",
+        "lm studio",
+        "ollama",
+        "llama.cpp",
+        "llamacpp",
+        "text-generation-inference",
+        "tgi",
+        "sglang",
+        "exllama",
+        "exllamav2",
+        "mlx",
+        "mlx-lm",
+        "transformers server",
+        "open webui",
+        "koboldcpp",
+        "localai",
+        "tabbyapi"
+      ]
+    },
+    {
+      "id": "model-families",
+      "weight": 8,
+      "keywords": [
+        "gemma",
+        "gemma 3",
+        "gemma 4",
+        "qwen",
+        "qwen2",
+        "qwen2.5",
+        "qwen3",
+        "llama",
+        "llama 3",
+        "llama 4",
+        "deepseek",
+        "mistral",
+        "mixtral",
+        "codestral",
+        "glm",
+        "chatglm",
+        "minimax",
+        "phi",
+        "phi-4",
+        "yi",
+        "command-r",
+        "starcoder",
+        "starcoder2",
+        "smollm",
+        "granite",
+        "falcon",
+        "olmo",
+        "openchat",
+        "devstral"
+      ]
+    },
+    {
+      "id": "local-inference-constraints",
+      "weight": 7,
+      "keywords": [
+        "context length",
+        "context window",
+        "ctx",
+        "token limit",
+        "prompt bloat",
+        "context bloat",
+        "kv cache",
+        "quantization",
+        "quantized",
+        "gguf",
+        "awq",
+        "gptq",
+        "fp8",
+        "int4",
+        "int8",
+        "throughput",
+        "tokens/sec",
+        "tok/s",
+        "latency",
+        "batch size",
+        "gpu memory",
+        "vram",
+        "unified memory",
+        "cuda",
+        "metal",
+        "jetson"
+      ]
+    },
+    {
+      "id": "agent-capability-signals",
+      "weight": 7,
+      "keywords": [
+        "tool calling",
+        "tool-call",
+        "function calling",
+        "json mode",
+        "structured output",
+        "reasoning model",
+        "thinking tokens",
+        "system prompt",
+        "prompt template",
+        "chat template",
+        "instruction tuned",
+        "agent benchmark",
+        "coding benchmark"
+      ]
+    },
+    {
+      "id": "hugging-face-local-models",
+      "weight": 7,
+      "keywords": [
+        "hugging face",
+        "hf hub",
+        "model card",
+        "safetensors",
+        "transformers",
+        "tokenizers",
+        "accelerate",
+        "bitsandbytes",
+        "optimum",
+        "hub cache",
+        "hf cache",
+        "model weights",
+        "license",
+        "commercial use"
+      ]
+    },
+    {
+      "id": "deployment-and-ops",
+      "weight": 6,
+      "keywords": [
+        "local endpoint",
+        "localhost:8000",
+        "127.0.0.1:8000",
+        "model server",
+        "inference server",
+        "served model",
+        "service profile",
+        "docker gpu",
+        "nvidia container",
+        "gpu utilization",
+        "cold start",
+        "warmup",
+        "timeout",
+        "streaming",
+        "sse"
+      ]
+    }
+  ],
+  "regexGroups": [
+    {
+      "id": "openclaw-local-provider-ids",
+      "weight": 9,
+      "patterns": [
+        "\\b(vllm|ollama|lmstudio|localai)/[A-Za-z0-9._:-]+",
+        "\\b(openai-compatible|openai compatible)\\b",
+        "\\bhttps?://(127\\.0\\.0\\.1|localhost):[0-9]+/v1\\b"
+      ]
+    },
+    {
+      "id": "quantized-model-artifacts",
+      "weight": 7,
+      "patterns": [
+        "\\b[A-Za-z0-9._-]+\\.(gguf|safetensors)\\b",
+        "\\b(Q[2-8]_K(_[MSL])?|IQ[1-4]_[A-Z]+|AWQ|GPTQ|FP8|INT4|INT8)\\b"
+      ]
+    },
+    {
+      "id": "model-size-and-context",
+      "weight": 6,
+      "patterns": [
+        "\\b[0-9]+(\\.[0-9]+)?[Bb]\\b",
+        "\\b[0-9]+[kK] context\\b",
+        "\\b[0-9]+[kK] ctx\\b",
+        "\\b[0-9]+[kK] tokens?\\b"
+      ]
+    }
+  ],
+  "negativeHints": [
+    "Do not tag generic gateway, docs, Discord integration, or maintainer activity unless it overlaps a keyword group and passes INTERESTS.md.",
+    "Do not tag remote closed-weight provider chatter unless it affects OpenClaw local/self-hosted model usage."
+  ]
+}
