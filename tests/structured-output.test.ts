@@ -22,6 +22,7 @@ describe("structured output", () => {
       expect(runtime.instruction).toContain("call the final_json tool exactly once");
       expect(source).toContain('name: "final_json"');
       expect(source).toContain('"is_local_model_related"');
+      expect(source).toContain('"interest"');
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -31,10 +32,8 @@ describe("structured output", () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localagent-structured-"));
     try {
       const outputPath = path.join(stateDir, "final-output.json");
-      await writeFile(outputPath, '{"relevance":"relevant"}\n', "utf8");
-      await expect(readFinalSchemaOutput(outputPath)).resolves.toBe(
-        '{\n  "relevance": "relevant"\n}\n'
-      );
+      await writeFile(outputPath, '{"interest":"i0"}\n', "utf8");
+      await expect(readFinalSchemaOutput(outputPath)).resolves.toBe('{\n  "interest": "i0"\n}\n');
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -123,10 +122,10 @@ function schema(): unknown {
   return {
     type: "object",
     additionalProperties: false,
-    required: ["is_local_model_related", "relevance"],
+    required: ["is_local_model_related", "interest"],
     properties: {
       is_local_model_related: { type: "boolean" },
-      relevance: { type: "string", enum: ["irrelevant", "somewhat_relevant", "relevant"] }
+      interest: { type: "string", enum: ["i0", "i1", "i2", "i3", "i4"] }
     }
   };
 }

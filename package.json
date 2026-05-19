@@ -10,6 +10,7 @@
   "files": [
     "dist/src/**",
     "docs/**",
+    "schemas/**",
     "README.md",
     "LICENSE"
   ],

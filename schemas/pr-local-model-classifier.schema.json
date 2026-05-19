@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PR Local Model Classifier",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["is_local_model_related", "interest", "confidence", "description", "caveats"],
+  "properties": {
+    "is_local_model_related": {
+      "type": "boolean",
+      "description": "Whether the PR is about local models, local model providers, or local model runtime support."
+    },
+    "interest": {
+      "type": "string",
+      "enum": ["i0", "i1", "i2", "i3", "i4"],
+      "description": "Editorial/research interest tag. i0 is highest interest; i4 is lowest."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

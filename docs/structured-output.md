@@ -1,8 +1,10 @@
 # Structured Output
 
-Localagent supports structured final answers for workflows that need machine-readable metadata from a local model.
+Localagent supports structured final answers for workflows that need machine-readable output from a local model.
 
 Example: inspect a GitHub PR with Pi tools, then classify whether the PR is related to local models.
+
+The bundled PR classifier schema uses an `interest` tag from `i0` to `i4`, where `i0` is highest interest and `i4` is lowest interest.
 
 ## How It Works
 
@@ -22,19 +24,19 @@ This keeps the agent loop freeform while making the final answer structured.
 ## CLI
 
 ```bash
-localagent --final-schema ./schemas/local-model-classifier.schema.json -p "inspect https://github.com/openclaw/openclaw/pull/80568 and classify it"
+localagent --final-schema ./schemas/pr-local-model-classifier.schema.json -p "inspect https://github.com/openclaw/openclaw/pull/80568 and classify it"
 ```
 
 Alias:
 
 ```bash
-localagent --schema ./schemas/local-model-classifier.schema.json -p "inspect the PR and classify it"
+localagent --schema ./schemas/pr-local-model-classifier.schema.json -p "inspect the PR and classify it"
 ```
 
 You can also set a default schema with:
 
 ```bash
-export LOCALAGENT_FINAL_SCHEMA=./schemas/local-model-classifier.schema.json
+export LOCALAGENT_FINAL_SCHEMA=./schemas/pr-local-model-classifier.schema.json
 ```
 
 ## Tool Allow Lists
@@ -63,35 +65,16 @@ bash,final_json
 {
   "type": "object",
   "additionalProperties": false,
-  "required": [
-    "is_local_model_related",
-    "relevance",
-    "confidence",
-    "description",
-    "evidence",
-    "caveats",
-    "metadata"
-  ],
+  "required": ["is_local_model_related", "interest", "confidence", "description", "caveats"],
   "properties": {
     "is_local_model_related": { "type": "boolean" },
-    "relevance": {
+    "interest": {
       "type": "string",
-      "enum": ["not_local_models", "tangential", "relevant", "highly_relevant"]
+      "enum": ["i0", "i1", "i2", "i3", "i4"]
     },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "description": { "type": "string" },
-    "evidence": { "type": "array", "items": { "type": "string" } },
-    "caveats": { "type": "array", "items": { "type": "string" } },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["topic", "provider_or_area", "actionability"],
-      "properties": {
-        "topic": { "type": "string" },
-        "provider_or_area": { "type": "string" },
-        "actionability": { "type": "string" }
-      }
-    }
+    "caveats": { "type": "array", "items": { "type": "string" } }
   }
 }
 ```
@@ -101,19 +84,10 @@ bash,final_json
 ```json
 {
   "is_local_model_related": true,
-  "relevance": "relevant",
+  "interest": "i0",
   "confidence": 0.9,
   "description": "This PR fixes LM Studio auth resolution, which affects using local model servers from OpenClaw.",
-  "evidence": [
-    "The PR changes LM Studio provider/auth behavior.",
-    "The PR affects OpenClaw's ability to use local model servers."
-  ],
-  "caveats": ["This is provider integration work, not model inference behavior."],
-  "metadata": {
-    "topic": "local model provider integration",
-    "provider_or_area": "LM Studio",
-    "actionability": "track or review if working on local model support"
-  }
+  "caveats": ["This is provider integration work, not model inference behavior."]
 }
 ```
 
