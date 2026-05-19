@@ -2,7 +2,7 @@
 
 Localagent supports structured final answers for workflows that need machine-readable output from a local model.
 
-Example: inspect a GitHub PR with Pi tools, then classify whether the PR is related to local models.
+Example: inspect a document, issue, or pull request with Pi tools, then classify whether it matches a criterion.
 
 ## How It Works
 
@@ -22,19 +22,19 @@ This keeps the agent loop freeform while making the final answer structured.
 ## CLI
 
 ```bash
-localagent --final-schema ./schema.json -p "inspect https://github.com/openclaw/openclaw/pull/80568 and classify it"
+localagent --final-schema ./examples/schemas/binary-classifier.schema.json -p "classify whether this issue is release-blocking: <text>"
 ```
 
 Alias:
 
 ```bash
-localagent --schema ./schema.json -p "inspect the PR and classify it"
+localagent --schema ./examples/schemas/binary-classifier.schema.json -p "classify whether this issue is release-blocking: <text>"
 ```
 
 You can also set a default schema with:
 
 ```bash
-export LOCALAGENT_FINAL_SCHEMA=./schema.json
+export LOCALAGENT_FINAL_SCHEMA=./examples/schemas/binary-classifier.schema.json
 ```
 
 ## Tool Allow Lists
@@ -44,7 +44,7 @@ If you pass Pi a tool allow list with `--tools` or `-t`, localagent automaticall
 For example, this:
 
 ```bash
-localagent --final-schema ./schema.json --tools bash -p "inspect the PR"
+localagent --final-schema ./examples/schemas/binary-classifier.schema.json --tools bash -p "inspect the repository and classify the issue"
 ```
 
 is passed to Pi as if the tool list were:
@@ -63,15 +63,16 @@ bash,final_json
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["is_local_model_related", "interest", "confidence", "description", "caveats"],
+  "required": ["is_match", "label", "confidence", "summary", "reasons", "caveats"],
   "properties": {
-    "is_local_model_related": { "type": "boolean" },
-    "interest": {
+    "is_match": { "type": "boolean" },
+    "label": {
       "type": "string",
-      "enum": ["i0", "i1", "i2", "i3", "i4"]
+      "enum": ["match", "partial_match", "no_match", "unclear"]
     },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-    "description": { "type": "string" },
+    "summary": { "type": "string" },
+    "reasons": { "type": "array", "items": { "type": "string" } },
     "caveats": { "type": "array", "items": { "type": "string" } }
   }
 }
@@ -81,11 +82,15 @@ bash,final_json
 
 ```json
 {
-  "is_local_model_related": true,
-  "interest": "i0",
-  "confidence": 0.9,
-  "description": "This PR fixes LM Studio auth resolution, which affects using local model servers from OpenClaw.",
-  "caveats": ["This is provider integration work, not model inference behavior."]
+  "is_match": true,
+  "label": "match",
+  "confidence": 0.86,
+  "summary": "The issue describes a startup crash that blocks the release candidate path.",
+  "reasons": [
+    "The issue affects the release branch.",
+    "The failure happens before the main UI can load."
+  ],
+  "caveats": ["The impact on patch releases was not checked."]
 }
 ```
 

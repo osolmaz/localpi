@@ -85,7 +85,7 @@ See [docs/structured-output.md](docs/structured-output.md).
 Example:
 
 ```bash
-localagent --final-schema ./schema.json -p "inspect https://github.com/openclaw/openclaw/pull/80568 and classify it"
+localagent --final-schema ./examples/schemas/binary-classifier.schema.json -p "classify whether this issue is release-blocking: <text>"
 ```
 
 ## Options

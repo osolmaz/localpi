@@ -10,6 +10,34 @@ import { createLaunchPlan } from "../src/pi/launch.js";
 import { createFinalSchemaRuntime, readFinalSchemaOutput } from "../src/structured/final-schema.js";
 
 describe("structured output", () => {
+  it("ships a context-agnostic example schema", async () => {
+    const raw = await readFile(
+      path.join(process.cwd(), "examples", "schemas", "binary-classifier.schema.json"),
+      "utf8"
+    );
+    const parsed = JSON.parse(raw) as {
+      type?: string;
+      required?: string[];
+      properties?: { label?: { enum?: string[] } };
+    };
+
+    expect(parsed.type).toBe("object");
+    expect(parsed.required).toEqual([
+      "is_match",
+      "label",
+      "confidence",
+      "summary",
+      "reasons",
+      "caveats"
+    ]);
+    expect(parsed.properties?.label?.enum).toEqual([
+      "match",
+      "partial_match",
+      "no_match",
+      "unclear"
+    ]);
+  });
+
   it("creates a final_json extension from a schema", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localagent-structured-"));
     try {
