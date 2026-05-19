@@ -20,4 +20,11 @@ describe("localagent option parsing", () => {
     expect(options.model).toBe("gemma-local");
     expect(options.forwardedArgs).toEqual(["--model", "ignored-by-wrapper"]);
   });
+
+  it("parses final schema flags as localagent options", () => {
+    expect(parseLocalagentArgs(["--final-schema", "schema.json"]).finalSchemaPath).toBe(
+      "schema.json"
+    );
+    expect(parseLocalagentArgs(["--schema", "schema.json"]).finalSchemaPath).toBe("schema.json");
+  });
 });

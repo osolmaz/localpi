@@ -35,6 +35,7 @@ function options(stateDir: string): LocalagentOptions {
     contextWindow: 65536,
     maxTokens: 8192,
     timeoutMs: 1000,
+    finalSchemaPath: undefined,
     status: false,
     forwardedArgs: []
   };

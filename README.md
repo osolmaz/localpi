@@ -78,9 +78,15 @@ localagent --model gemma-local -- --model some-pi-level-value
 
 ## Structured Output
 
-For workflows that need machine-readable final answers, use a final-only schema pass: let Pi use tools normally, then force JSON schema on the final answer and validate it.
+For workflows that need machine-readable final answers, use a final-only schema pass in Pi print mode: let Pi use tools normally, then force JSON schema on the final answer and validate it.
 
 See [docs/structured-output.md](docs/structured-output.md).
+
+Example:
+
+```bash
+localagent --final-schema ./schemas/local-model-classifier.schema.json -p "inspect https://github.com/openclaw/openclaw/pull/80568 and classify it"
+```
 
 ## Options
 
@@ -95,6 +101,8 @@ See [docs/structured-output.md](docs/structured-output.md).
 - `--context-window <n>`: generated model context window. Default: `65536`
 - `--max-tokens <n>`: generated model max output tokens. Default: `8192`
 - `--timeout-ms <n>`: `/v1/models` probe timeout. Default: `3000`
+- `--final-schema <path>`: force the final answer through a JSON schema; requires Pi print mode (`-p` or `--print`)
+- `--schema <path>`: alias for `--final-schema`
 
 ## Environment
 
@@ -108,6 +116,7 @@ See [docs/structured-output.md](docs/structured-output.md).
 - `LOCALAGENT_CONTEXT_WINDOW`
 - `LOCALAGENT_MAX_TOKENS`
 - `LOCALAGENT_TIMEOUT_MS`
+- `LOCALAGENT_FINAL_SCHEMA`
 
 ## Development
 

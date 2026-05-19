@@ -3,6 +3,7 @@ import { parseLocalagentArgs, usage } from "../localagent/options.js";
 import { resolveLocalModel } from "../llm/openai.js";
 import { writeRuntimeConfig } from "../pi/config.js";
 import { createLaunchPlan, execLaunchPlan } from "../pi/launch.js";
+import { createFinalSchemaRuntime, readFinalSchemaOutput } from "../structured/final-schema.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
@@ -28,8 +29,16 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       );
     }
 
-    const plan = await createLaunchPlan(options, runtimeConfig, resolved.model);
-    return { code: await execLaunchPlan(plan), stdout: "", stderr: "" };
+    const finalSchemaRuntime =
+      options.finalSchemaPath === undefined
+        ? undefined
+        : await createFinalSchemaRuntime(options.finalSchemaPath, options.stateDir);
+    const plan = await createLaunchPlan(options, runtimeConfig, resolved.model, finalSchemaRuntime);
+    const code = await execLaunchPlan(plan);
+    if (code !== 0 || plan.finalSchemaOutputPath === undefined) {
+      return { code, stdout: "", stderr: "" };
+    }
+    return ok(await readFinalSchemaOutput(plan.finalSchemaOutputPath));
   } catch (error) {
     return fail(`localagent: ${errorMessage(error)}`);
   }

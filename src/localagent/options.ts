@@ -13,6 +13,7 @@ export type LocalagentOptions = {
   readonly contextWindow: number;
   readonly maxTokens: number;
   readonly timeoutMs: number;
+  readonly finalSchemaPath: string | undefined;
   readonly status: boolean;
   readonly forwardedArgs: readonly string[];
 };
@@ -31,6 +32,7 @@ export function defaultOptions(): LocalagentOptions {
     contextWindow: envPositiveInteger("LOCALAGENT_CONTEXT_WINDOW", "65536"),
     maxTokens: envPositiveInteger("LOCALAGENT_MAX_TOKENS", "8192"),
     timeoutMs: envPositiveInteger("LOCALAGENT_TIMEOUT_MS", "3000"),
+    finalSchemaPath: process.env["LOCALAGENT_FINAL_SCHEMA"],
     status: false,
     forwardedArgs: []
   };
@@ -81,6 +83,8 @@ export function usage(): string {
     "  --context-window <n>      generated model context window",
     "  --max-tokens <n>          generated model max output tokens",
     "  --timeout-ms <n>          /v1/models probe timeout",
+    "  --final-schema <path>     force final schema output; requires Pi -p/--print",
+    "  --schema <path>           alias for --final-schema",
     "  -h, --help                show this help",
     "",
     "examples:",
@@ -123,7 +127,9 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
     contextWindow: parsePositiveInteger(value)
   }),
   "--max-tokens": (options, value) => ({ ...options, maxTokens: parsePositiveInteger(value) }),
-  "--timeout-ms": (options, value) => ({ ...options, timeoutMs: parsePositiveInteger(value) })
+  "--timeout-ms": (options, value) => ({ ...options, timeoutMs: parsePositiveInteger(value) }),
+  "--final-schema": (options, value) => ({ ...options, finalSchemaPath: value }),
+  "--schema": (options, value) => ({ ...options, finalSchemaPath: value })
 };
 
 function parseValueFlag(
