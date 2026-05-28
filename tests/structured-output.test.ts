@@ -79,7 +79,7 @@ describe("structured output", () => {
         forwardedArgs: ["--tools", "bash", "-p", "classify"]
       },
       runtimeConfig("/tmp/localagent-state"),
-      "gemma-local",
+      "gemma-4-e4b-it",
       runtime
     );
 
@@ -88,7 +88,7 @@ describe("structured output", () => {
       "--provider",
       "local-openai",
       "--model",
-      "gemma-local",
+      "gemma-4-e4b-it",
       "--thinking",
       "off",
       "--extension",
@@ -107,7 +107,7 @@ describe("structured output", () => {
       createLaunchPlan(
         { ...options("/tmp/localagent-state"), forwardedArgs: ["--no-tools"] },
         runtimeConfig("/tmp/localagent-state"),
-        "gemma-local",
+        "gemma-4-e4b-it",
         {
           extensionPath: "/tmp/final-json-extension.ts",
           outputPath: "/tmp/final-output.json",
@@ -120,7 +120,7 @@ describe("structured output", () => {
       createLaunchPlan(
         { ...options("/tmp/localagent-state"), forwardedArgs: ["-nt"] },
         runtimeConfig("/tmp/localagent-state"),
-        "gemma-local",
+        "gemma-4-e4b-it",
         {
           extensionPath: "/tmp/final-json-extension.ts",
           outputPath: "/tmp/final-output.json",
@@ -135,7 +135,7 @@ describe("structured output", () => {
       createLaunchPlan(
         { ...options("/tmp/localagent-state"), forwardedArgs: ["classify"] },
         runtimeConfig("/tmp/localagent-state"),
-        "gemma-local",
+        "gemma-4-e4b-it",
         {
           extensionPath: "/tmp/final-json-extension.ts",
           outputPath: "/tmp/final-output.json",
@@ -167,7 +167,7 @@ function options(stateDir: string): LocalagentOptions {
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",
     thinking: "off",
-    contextWindow: 65536,
+    contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,
     finalSchemaPath: undefined,

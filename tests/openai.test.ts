@@ -5,16 +5,23 @@ import { listModels, resolveLocalModel } from "../src/llm/openai.js";
 describe("OpenAI-compatible model discovery", () => {
   it("lists model ids", async () => {
     const models = await listModels("http://local.test/v1", 1000, () =>
-      Promise.resolve(jsonResponse({ data: [{ id: "gemma-local" }] }))
+      Promise.resolve(jsonResponse({ data: [{ id: "gemma-4-e4b-it" }] }))
     );
-    expect(models).toEqual(["gemma-local"]);
+    expect(models).toEqual([{ id: "gemma-4-e4b-it" }]);
   });
 
   it("resolves auto to the first model id", async () => {
     const resolved = await resolveLocalModel("http://local.test/v1", "auto", 1000, () =>
-      Promise.resolve(jsonResponse({ data: [{ id: "gemma-local" }] }))
+      Promise.resolve(jsonResponse({ data: [{ id: "gemma-4-e4b-it" }] }))
     );
-    expect(resolved.model).toBe("gemma-local");
+    expect(resolved.model).toBe("gemma-4-e4b-it");
+  });
+
+  it("keeps optional context metadata when the server reports it", async () => {
+    const resolved = await resolveLocalModel("http://local.test/v1", "auto", 1000, () =>
+      Promise.resolve(jsonResponse({ data: [{ id: "gemma-4-e4b-it", context_length: 120000 }] }))
+    );
+    expect(resolved.contextWindow).toBe(120000);
   });
 });
 

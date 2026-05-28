@@ -35,7 +35,7 @@ Load Gemma in LM Studio:
 
 ```bash
 ~/.lmstudio/bin/lms server start
-~/.lmstudio/bin/lms load gemma-4-e4b-it --identifier gemma-local -y
+~/.lmstudio/bin/lms load gemma-4-e4b-it -y
 ```
 
 Check what localagent will use:
@@ -61,7 +61,7 @@ localagent -p "summarize this repo"
 Pin a specific local model id:
 
 ```bash
-localagent --model gemma-local -p "write a detailed implementation plan"
+localagent --model gemma-4-e4b-it -p "write a detailed implementation plan"
 ```
 
 Point at a different OpenAI-compatible local server:
@@ -73,7 +73,7 @@ localagent --base-url http://127.0.0.1:8000/v1 -p "review the src directory"
 Pass a Pi flag that localagent also owns after `--`:
 
 ```bash
-localagent --model gemma-local -- --model some-pi-level-value
+localagent --model gemma-4-e4b-it -- --model some-pi-level-value
 ```
 
 ## Structured Output
@@ -98,7 +98,7 @@ localagent --final-schema ./examples/schemas/binary-classifier.schema.json -p "c
 - `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
 - `--pi-command <command>`: Pi launch command. Default: `npx -y @earendil-works/pi-coding-agent@latest`
 - `--thinking <level>`: Pi thinking level. Default: `off`
-- `--context-window <n>`: generated model context window. Default: `65536`
+- `--context-window <n>`: generated model context window override. By default, localagent uses model metadata when the server reports it and otherwise leaves this unset.
 - `--max-tokens <n>`: generated model max output tokens. Default: `8192`
 - `--timeout-ms <n>`: `/v1/models` probe timeout. Default: `3000`
 - `--final-schema <path>`: force the final answer through a JSON schema; requires Pi print mode (`-p` or `--print`)

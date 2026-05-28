@@ -10,7 +10,7 @@ export type LocalagentOptions = {
   readonly sessionDir: string;
   readonly piCommand: string;
   readonly thinking: string;
-  readonly contextWindow: number;
+  readonly contextWindow: number | undefined;
   readonly maxTokens: number;
   readonly timeoutMs: number;
   readonly finalSchemaPath: string | undefined;
@@ -29,7 +29,7 @@ export function defaultOptions(): LocalagentOptions {
     sessionDir: defaultSessionDir(stateDir),
     piCommand: envString("LOCALAGENT_PI_CMD", "npx -y @earendil-works/pi-coding-agent@latest"),
     thinking: envString("LOCALAGENT_THINKING", "off"),
-    contextWindow: envPositiveInteger("LOCALAGENT_CONTEXT_WINDOW", "65536"),
+    contextWindow: envOptionalPositiveInteger("LOCALAGENT_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALAGENT_MAX_TOKENS", "8192"),
     timeoutMs: envPositiveInteger("LOCALAGENT_TIMEOUT_MS", "3000"),
     finalSchemaPath: process.env["LOCALAGENT_FINAL_SCHEMA"],
@@ -90,7 +90,7 @@ export function usage(): string {
     "examples:",
     "  localagent --status",
     '  localagent -p "summarize this repo"',
-    '  localagent --model gemma-local -p "write a long implementation plan"',
+    '  localagent --model gemma-4-e4b-it -p "write a long implementation plan"',
     "  localagent -- --help"
   ].join("\n")}\n`;
 }
@@ -151,6 +151,11 @@ function envString(name: string, fallback: string): string {
 
 function envPositiveInteger(name: string, fallback: string): number {
   return parsePositiveInteger(envString(name, fallback));
+}
+
+function envOptionalPositiveInteger(name: string): number | undefined {
+  const value = process.env[name];
+  return value === undefined ? undefined : parsePositiveInteger(value);
 }
 
 function defaultSessionDir(stateDir: string): string {
