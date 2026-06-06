@@ -1,30 +1,45 @@
 import { describe, expect, it } from "vitest";
 
-import { parseLocalagentArgs } from "../src/localagent/options.js";
+import { parseLocalpiArgs } from "../src/localpi/options.js";
 
-describe("localagent option parsing", () => {
+describe("localpi option parsing", () => {
   it("keeps pi args as pass-through arguments", () => {
-    const options = parseLocalagentArgs(["--model", "gemma-4-e4b-it", "-p", "write a plan"]);
-    expect(options.model).toBe("gemma-4-e4b-it");
+    const options = parseLocalpiArgs(["--model", "gemma-e4b", "-p", "write a plan"]);
+    expect(options.model).toBe("gemma-e4b");
     expect(options.forwardedArgs).toEqual(["-p", "write a plan"]);
   });
 
-  it("uses -- to forward pi flags that localagent also owns", () => {
-    const options = parseLocalagentArgs([
-      "--model",
-      "gemma-4-e4b-it",
-      "--",
-      "--model",
-      "ignored-by-wrapper"
-    ]);
-    expect(options.model).toBe("gemma-4-e4b-it");
-    expect(options.forwardedArgs).toEqual(["--model", "ignored-by-wrapper"]);
+  it("uses -- to forward pi flags that localpi also owns", () => {
+    const options = parseLocalpiArgs(["--model", "gemma-e4b", "--", "--model", "pi-level"]);
+    expect(options.model).toBe("gemma-e4b");
+    expect(options.forwardedArgs).toEqual(["--model", "pi-level"]);
   });
 
-  it("parses final schema flags as localagent options", () => {
-    expect(parseLocalagentArgs(["--final-schema", "schema.json"]).finalSchemaPath).toBe(
-      "schema.json"
+  it("parses runtime and llama-server options", () => {
+    const options = parseLocalpiArgs([
+      "--runtime",
+      "lmstudio",
+      "--base-url",
+      "http://127.0.0.1:1234/v1/",
+      "--ctx",
+      "32768",
+      "--port",
+      "18195",
+      "--no-approval",
+      "--no-token-status"
+    ]);
+    expect(options.runtime).toBe("lmstudio");
+    expect(options.baseUrl).toBe("http://127.0.0.1:1234/v1");
+    expect(options.contextWindow).toBe(32768);
+    expect(options.port).toBe(18195);
+    expect(options.approval).toBe(false);
+    expect(options.tokenStatus).toBe(false);
+  });
+
+  it("rejects removed final schema flags", () => {
+    expect(() => parseLocalpiArgs(["--final-schema", "schema.json"])).toThrow(
+      "was removed from localpi"
     );
-    expect(parseLocalagentArgs(["--schema", "schema.json"]).finalSchemaPath).toBe("schema.json");
+    expect(() => parseLocalpiArgs(["--schema", "schema.json"])).toThrow("was removed from localpi");
   });
 });

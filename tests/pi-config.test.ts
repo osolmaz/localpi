@@ -4,14 +4,18 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import type { LocalagentOptions } from "../src/localagent/options.js";
+import type { LocalpiOptions } from "../src/localpi/options.js";
+import type { RuntimeConnection } from "../src/localpi/runtime.js";
 import { writeRuntimeConfig } from "../src/pi/config.js";
 
 describe("Pi runtime config", () => {
   it("writes a local OpenAI-compatible provider config", async () => {
-    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localagent-test-"));
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
     try {
-      const runtime = await writeRuntimeConfig(options(stateDir), "gemma-4-e4b-it");
+      const runtime = await writeRuntimeConfig(
+        options(stateDir),
+        connection("gemma-4-e4b-it", "http://127.0.0.1:1234/v1")
+      );
       const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
         providers: Record<string, { baseUrl: string; models: readonly { id: string }[] }>;
       };
@@ -28,9 +32,12 @@ describe("Pi runtime config", () => {
   });
 
   it("writes context window only from an override or discovered metadata", async () => {
-    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localagent-test-"));
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
     try {
-      const runtime = await writeRuntimeConfig(options(stateDir), "gemma-4-e4b-it", 120000);
+      const runtime = await writeRuntimeConfig(
+        options(stateDir),
+        connection("gemma-4-e4b-it", "http://127.0.0.1:1234/v1", 120000)
+      );
       const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
         providers: Record<string, { models: readonly { contextWindow?: number }[] }>;
       };
@@ -49,11 +56,11 @@ describe("Pi runtime config", () => {
   });
 
   it("scales Pi compaction settings below small local context windows", async () => {
-    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localagent-test-"));
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
     try {
       const runtime = await writeRuntimeConfig(
         { ...options(stateDir), contextWindow: 4096 },
-        "gemma-4-e4b-it"
+        connection("gemma-4-e4b-it", "http://127.0.0.1:1234/v1")
       );
       const settings = JSON.parse(await readFile(runtime.settingsPath, "utf8")) as {
         compaction?: { enabled?: boolean; reserveTokens?: number; keepRecentTokens?: number };
@@ -69,8 +76,9 @@ describe("Pi runtime config", () => {
   });
 });
 
-function options(stateDir: string): LocalagentOptions {
+function options(stateDir: string): LocalpiOptions {
   return {
+    runtime: "lmstudio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "auto",
     providerId: "local-openai",
@@ -81,8 +89,29 @@ function options(stateDir: string): LocalagentOptions {
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,
-    finalSchemaPath: undefined,
+    serverCommand: "llama-server",
+    host: "127.0.0.1",
+    port: 18194,
+    gpuLayers: 999,
+    parallel: 1,
+    chatTemplate: undefined,
+    tools: "read,bash,edit,write,grep,find,ls",
+    approval: true,
+    tokenStatus: true,
     status: false,
+    stop: false,
+    list: false,
     forwardedArgs: []
+  };
+}
+
+function connection(model: string, baseUrl: string, contextWindow?: number): RuntimeConnection {
+  return {
+    runtime: "lmstudio",
+    baseUrl,
+    model,
+    availableModels: [model],
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    warnings: []
   };
 }

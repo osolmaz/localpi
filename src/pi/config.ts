@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { LocalagentOptions } from "../localagent/options.js";
+import type { LocalpiOptions } from "../localpi/options.js";
+import type { RuntimeConnection } from "../localpi/runtime.js";
 
 export type RuntimeConfig = {
   readonly configDir: string;
@@ -10,35 +11,27 @@ export type RuntimeConfig = {
 };
 
 export async function writeRuntimeConfig(
-  options: LocalagentOptions,
-  model: string,
-  discoveredContextWindow?: number
+  options: LocalpiOptions,
+  connection: RuntimeConnection
 ): Promise<RuntimeConfig> {
   const configDir = path.join(options.stateDir, "pi-config-runtime");
   await mkdir(configDir, { recursive: true });
   const modelsPath = path.join(configDir, "models.json");
   const settingsPath = path.join(configDir, "settings.json");
-  await writeFile(
-    modelsPath,
-    `${JSON.stringify(modelsConfig(options, model, discoveredContextWindow), null, 2)}\n`
-  );
+  await writeFile(modelsPath, `${JSON.stringify(modelsConfig(options, connection), null, 2)}\n`);
   await writeFile(
     settingsPath,
-    `${JSON.stringify(settingsConfig(options, model, discoveredContextWindow), null, 2)}\n`
+    `${JSON.stringify(settingsConfig(options, connection), null, 2)}\n`
   );
   return { configDir, modelsPath, settingsPath };
 }
 
-function modelsConfig(
-  options: LocalagentOptions,
-  model: string,
-  discoveredContextWindow?: number
-): unknown {
-  const contextWindow = options.contextWindow ?? discoveredContextWindow;
+function modelsConfig(options: LocalpiOptions, connection: RuntimeConnection): unknown {
+  const contextWindow = options.contextWindow ?? connection.contextWindow;
   return {
     providers: {
       [options.providerId]: {
-        baseUrl: options.baseUrl,
+        baseUrl: connection.baseUrl,
         api: "openai-completions",
         apiKey: "local",
         compat: {
@@ -47,8 +40,8 @@ function modelsConfig(
         },
         models: [
           withoutUndefined({
-            id: model,
-            name: `Local model (${model})`,
+            id: connection.model,
+            name: `Local model (${connection.model})`,
             reasoning: false,
             input: ["text"],
             contextWindow,
@@ -72,15 +65,11 @@ function withoutUndefined(value: Record<string, unknown>): Record<string, unknow
   );
 }
 
-function settingsConfig(
-  options: LocalagentOptions,
-  model: string,
-  discoveredContextWindow?: number
-): unknown {
-  const contextWindow = options.contextWindow ?? discoveredContextWindow;
+function settingsConfig(options: LocalpiOptions, connection: RuntimeConnection): unknown {
+  const contextWindow = options.contextWindow ?? connection.contextWindow;
   return {
     defaultProvider: options.providerId,
-    defaultModel: model,
+    defaultModel: connection.model,
     defaultThinkingLevel: options.thinking,
     enableInstallTelemetry: false,
     quietStartup: true,

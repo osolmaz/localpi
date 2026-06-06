@@ -1,61 +1,49 @@
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
-import { parseLocalagentArgs, usage } from "../localagent/options.js";
-import { resolveLocalModel } from "../llm/openai.js";
+import { parseLocalpiArgs, usage } from "../localpi/options.js";
+import {
+  aliasListOutput,
+  connectionStatus,
+  resolveRuntime,
+  statusOutput,
+  stopRuntime
+} from "../localpi/runtime.js";
 import { writeRuntimeConfig } from "../pi/config.js";
-import type { RuntimeConfig } from "../pi/config.js";
+import { writeDefaultExtensions } from "../pi/extensions.js";
 import { createLaunchPlan, execLaunchPlan } from "../pi/launch.js";
-import { createFinalSchemaRuntime, readFinalSchemaOutput } from "../structured/final-schema.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
-    const options = parseLocalagentArgs(args);
-    if (options.forwardedArgs.length === 1 && options.forwardedArgs[0] === "--help") {
-      return ok(usage());
+    const options = parseLocalpiArgs(args);
+    const commandResult = await immediateCommandResult(options);
+    if (commandResult !== undefined) {
+      return commandResult;
     }
 
-    const resolved = await resolveLocalModel(options.baseUrl, options.model, options.timeoutMs);
-    const runtimeConfig = await writeRuntimeConfig(options, resolved.model, resolved.contextWindow);
-
-    if (options.status) {
-      return ok(statusOutput(options, resolved, runtimeConfig));
-    }
-
-    const finalSchemaRuntime =
-      options.finalSchemaPath === undefined
-        ? undefined
-        : await createFinalSchemaRuntime(options.finalSchemaPath, options.stateDir);
-    const plan = await createLaunchPlan(options, runtimeConfig, resolved.model, finalSchemaRuntime);
+    const connection = await resolveRuntime(options);
+    const runtimeConfig = await writeRuntimeConfig(options, connection);
+    const extensions = await writeDefaultExtensions(options);
+    const plan = await createLaunchPlan(options, runtimeConfig, connection, extensions);
     const code = await execLaunchPlan(plan);
-    if (code !== 0 || plan.finalSchemaOutputPath === undefined) {
+    if (code !== 0) {
       return { code, stdout: "", stderr: "" };
     }
-    return ok(await readFinalSchemaOutput(plan.finalSchemaOutputPath));
+    return ok(connection.warnings.length === 0 ? "" : connectionStatus(connection));
   } catch (error) {
-    return fail(`localagent: ${errorMessage(error)}`);
+    return fail(`localpi: ${errorMessage(error)}`);
   }
 }
 
-type ResolvedModel = {
-  readonly model: string;
-  readonly availableModels: readonly string[];
-  readonly contextWindow?: number;
-};
+type ParsedOptions = ReturnType<typeof parseLocalpiArgs>;
 
-function statusOutput(
-  options: ReturnType<typeof parseLocalagentArgs>,
-  resolved: ResolvedModel,
-  runtimeConfig: RuntimeConfig
-): string {
-  return (
-    [
-      `base url: ${options.baseUrl}`,
-      `model: ${resolved.model}`,
-      `available models: ${resolved.availableModels.join(", ")}`,
-      `context window: ${String(options.contextWindow ?? resolved.contextWindow ?? "unspecified")}`,
-      `provider id: ${options.providerId}`,
-      `pi config dir: ${runtimeConfig.configDir}`,
-      `session dir: ${options.sessionDir}`,
-      `pi command: ${options.piCommand}`
-    ].join("\n") + "\n"
-  );
+async function immediateCommandResult(options: ParsedOptions): Promise<CommandResult | undefined> {
+  if (options.forwardedArgs.length === 1 && options.forwardedArgs[0] === "--help") {
+    return ok(usage());
+  }
+  if (options.list) {
+    return ok(`${await aliasListOutput()}\n`);
+  }
+  if (options.stop) {
+    return ok(`${await stopRuntime(options)}\n`);
+  }
+  return options.status ? ok(`${await statusOutput(options)}\n`) : undefined;
 }

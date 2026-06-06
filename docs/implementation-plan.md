@@ -1,63 +1,65 @@
 # Implementation Plan
 
-This plan migrates the renamed repository from `localagent` to `localpi` and changes the product from a generic OpenAI-compatible wrapper into a polished local Pi launcher.
+This plan tracks the migration from `localagent` to `localpi` and changes the product from a generic OpenAI-compatible wrapper into a polished local Pi launcher.
 
 ## 1. Rename The Public Surface
 
-- Rename package metadata from `@dutifuldev/localagent` to `@dutifuldev/localpi`.
-- Rename the installed binary from `localagent` to `localpi`.
-- Rename source namespaces from `localagent` to `localpi`.
-- Rename default state from `~/.local/state/localagent` to `~/.local/state/localpi`.
-- Replace `LOCALAGENT_*` environment variables with `LOCALPI_*`.
-- Decide whether to keep a short compatibility shim for `localagent`; if kept, it should warn and call `localpi`.
+- [x] Rename package metadata from `@dutifuldev/localagent` to `@dutifuldev/localpi`.
+- [x] Rename the installed binary from `localagent` to `localpi`.
+- [x] Rename source namespaces from `localagent` to `localpi`.
+- [x] Rename default state from `~/.local/state/localagent` to `~/.local/state/localpi`.
+- [x] Replace `LOCALAGENT_*` environment variables with `LOCALPI_*`.
+- [x] Do not keep a `localagent` compatibility shim.
 
 ## 2. Remove Structured Output
 
-- Remove `--final-schema` and `--schema` from option parsing.
-- Remove `LOCALAGENT_FINAL_SCHEMA`.
-- Delete `src/structured/final-schema.ts`.
-- Delete structured-output tests and example schemas.
-- Keep a migration note that schema-constrained classifier runs belong in `localpager-agent`.
-- Update known internal callers that still use `localagent --final-schema` to call `localpager-agent` instead.
+- [x] Remove `--final-schema` and `--schema` from option parsing.
+- [x] Remove `LOCALAGENT_FINAL_SCHEMA`.
+- [x] Delete `src/structured/final-schema.ts`.
+- [x] Delete structured-output tests and example schemas.
+- [x] Keep a migration note that schema-constrained classifier runs belong in `localpager-agent`.
+- [x] Confirm the current localpager classifier uses `localpager-agent --final-schema`, not localpi.
+
+Older workspace wrappers outside this repository still mention `localagent --final-schema`; those should be migrated separately if they are still used.
 
 ## 3. Add Runtime Backends
 
-- Add a runtime option with default `llama-server`.
-- Implement a managed `llama-server` backend:
-  - model alias resolution
-  - custom GGUF path support
-  - context window configuration
-  - chat template file support
-  - pid file and metadata file under localpi state
-  - start, reuse, status, and stop
-- Implement explicit `lmstudio` backend:
-  - default base URL `http://127.0.0.1:1234/v1`
-  - model probing through `/v1/models`
-  - clear failures when LM Studio is not running or the model is not loaded
-- Keep a generic `openai-compatible` backend for externally managed servers.
+- [x] Add a runtime option with default `llama-server`.
+- [x] Implement a managed `llama-server` backend:
+  - [x] model alias resolution
+  - [x] custom GGUF path support
+  - [x] context window configuration
+  - [x] chat template file support
+  - [x] pid file and metadata file under localpi state
+  - [x] start, reuse, status, and stop
+- [x] Implement explicit `lmstudio` backend:
+  - [x] default base URL `http://127.0.0.1:1234/v1`
+  - [x] model probing through `/v1/models`
+  - [x] clear failures when LM Studio is not running or the model is not loaded
+- [x] Keep a generic `openai-compatible` backend for externally managed servers.
 
 ## 4. Add Default Pi Extensions
 
-- Add a tool approval extension.
-- Add a token status extension.
-- Package both extensions with localpi or generate them under localpi state.
-- Pass them to Pi by default.
-- Add `--no-approval` for trusted sessions.
-- Add `--no-token-status` if the status UI causes problems in print or non-interactive mode.
+- [x] Add a tool approval extension.
+- [x] Add a token status extension.
+- [x] Generate both extensions under localpi state.
+- [x] Pass them to Pi by default.
+- [x] Add `--no-approval` for trusted sessions.
+- [x] Add `--no-token-status` if the status UI causes problems in print or non-interactive mode.
 
 ## 5. Add Default Tooling
 
-- Default Pi tool allow list: `read,bash,edit,write,grep,find,ls`.
-- Allow override with `--tools`.
-- Preserve `--` forwarding for raw Pi flags.
-- Keep the system prompt short and generic.
+- [x] Default Pi tool allow list: `read,bash,edit,write,grep,find,ls`.
+- [x] Allow override with `--tools`.
+- [x] Preserve `--` forwarding for raw Pi flags.
+- [x] Keep the system prompt short and generic.
 
 ## 6. Memory Safety
 
-- Only manage localpi-owned `llama-server` processes.
-- Stop the previous localpi-owned server before starting a different managed model.
-- In `llama-server` mode, detect loaded LM Studio models where possible and warn before starting a large model.
-- Never silently start both LM Studio and managed `llama-server` for the same localpi command.
+- [x] Only manage localpi-owned `llama-server` processes.
+- [x] Stop the previous localpi-owned server before starting a different managed model.
+- [x] In `llama-server` mode, detect loaded LM Studio models where possible and warn before starting a large model.
+- [x] Never silently start both LM Studio and managed `llama-server` for the same localpi command.
 
 ## 7. Verification
 

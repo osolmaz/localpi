@@ -18,37 +18,37 @@ It should make the common local-model path one command while keeping the backend
 
 Default runtime.
 
-Localpi should:
+Localpi:
 
-- resolve a model alias or GGUF path
-- start `llama-server` if the selected model is not already served by localpi
-- reuse the existing localpi-owned server if it matches the selected model and context
-- expose the server through an OpenAI-compatible `/v1` endpoint
-- write Pi config that points at that endpoint
-- stop the old localpi-owned server before starting a different managed model
-- report any detected LM Studio loaded models before starting a large managed model
+- resolves a model alias or GGUF path
+- starts `llama-server` if the selected model is not already served
+- reuses an existing server on the configured port if it is already serving the requested model
+- exposes the server through an OpenAI-compatible `/v1` endpoint
+- writes Pi config that points at that endpoint
+- stops the old localpi-owned server before starting a different managed model
+- reports any detected LM Studio loaded models before starting a large managed model
 
 ### LM Studio
 
 Explicit alternate runtime.
 
-Localpi should:
+Localpi:
 
-- require `--runtime lmstudio`
-- default to `http://127.0.0.1:1234/v1`
-- not start or stop LM Studio unless a future explicit flag adds that behavior
-- probe `/v1/models` and fail clearly if the requested model is not available
+- requires `--runtime lmstudio`
+- defaults to `http://127.0.0.1:1234/v1`
+- does not start or stop LM Studio
+- probes `/v1/models` and fails clearly if the requested model is not available
 
 ### Custom OpenAI-Compatible Endpoint
 
 Explicit alternate runtime.
 
-Localpi should:
+Localpi:
 
-- require `--runtime openai-compatible`
-- require `--base-url`
-- use `/v1/models` for discovery when possible
-- avoid assuming it can start, stop, or unload the backend
+- requires `--runtime openai-compatible`
+- requires `--base-url`
+- uses `/v1/models` for discovery
+- avoids assuming it can start, stop, or unload the backend
 
 ## Model Selection
 
@@ -59,11 +59,11 @@ Localpi should:
 - an absolute or relative GGUF path for `llama-server`
 - `auto`, which selects the first model reported by the backend
 
-Model aliases should be configurable without code changes. The built-in defaults should be small and easy to override.
+Model aliases are configurable with `LOCALPI_MODELS_FILE`. The built-in defaults cover the local Gemma GGUF paths commonly used on this machine and are easy to override.
 
 ## Pi Defaults
 
-Localpi should pass these defaults to Pi unless the user overrides them:
+Localpi passes these defaults to Pi unless the user overrides them:
 
 ```text
 tools: read,bash,edit,write,grep,find,ls
@@ -72,14 +72,14 @@ state dir: ~/.local/state/localpi
 session dir: ~/.local/state/localpi/sessions
 ```
 
-Localpi should install two default extensions:
+Localpi installs two default extensions:
 
 - tool approval gate: ask before each tool call, and tell the model clearly when a tool call was blocked
 - token status: show live output token estimate while streaming and final exact token stats when usage data is available
 
 ## System Prompt
 
-Localpi should append a short system prompt that tells the model:
+Localpi appends a short system prompt that tells the model:
 
 - it is running through Pi on a local model
 - tool calls require user approval

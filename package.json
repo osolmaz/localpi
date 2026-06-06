@@ -1,11 +1,11 @@
 {
-  "name": "@dutifuldev/localagent",
+  "name": "@dutifuldev/localpi",
   "version": "0.1.0",
-  "description": "Pi-compatible local model launcher for OpenAI-compatible endpoints.",
+  "description": "Pi-compatible local model launcher with managed llama-server support.",
   "type": "module",
   "license": "MIT",
   "bin": {
-    "localagent": "./dist/src/cli/main.js"
+    "localpi": "./dist/src/cli/main.js"
   },
   "files": [
     "dist/src/**",
@@ -23,7 +23,7 @@
     "coverage": "vitest run --coverage --coverage.thresholds.lines 85 --coverage.thresholds.functions 85 --coverage.thresholds.branches 85 --coverage.thresholds.statements 85",
     "dry": "slophammer-ts dry .",
     "mutate": "stryker run",
-    "localagent": "tsx src/cli/main.ts",
+    "localpi": "tsx src/cli/main.ts",
     "check": "npm run format && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {},
