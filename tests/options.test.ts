@@ -36,6 +36,14 @@ describe("localpi option parsing", () => {
     expect(options.tokenStatus).toBe(false);
   });
 
+  it("parses and validates thinking levels", () => {
+    expect(parseLocalpiArgs(["--thinking", "low"]).thinking).toBe("low");
+    expect(parseLocalpiArgs(["--thinking", "xhigh"]).thinking).toBe("xhigh");
+    expect(() => parseLocalpiArgs(["--thinking", "banana"])).toThrow(
+      "unknown thinking level banana"
+    );
+  });
+
   it("rejects removed final schema flags", () => {
     expect(() => parseLocalpiArgs(["--final-schema", "schema.json"])).toThrow(
       "was removed from localpi"

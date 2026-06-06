@@ -64,6 +64,7 @@ Localpi launches Pi with:
 - a system prompt that explains local tool approval and local-model limits
 - an approval gate before every tool call
 - token speed and token count status while responses stream
+- bounded Gemma/llama-server reasoning controlled by `--thinking`
 - local state under `~/.local/state/localpi`
 
 The approval gate makes failed or denied tool calls explicit to the model so the model does not claim that a blocked command ran.
@@ -109,6 +110,25 @@ Pin a model alias:
 localpi --model gemma-e4b -p "write a detailed implementation plan"
 ```
 
+Use a bounded reasoning budget with managed `llama-server`:
+
+```bash
+localpi --model gemma-12b --thinking low -p "classify this item"
+```
+
+For managed `llama-server`, thinking levels map to server-side reasoning:
+
+| Level     | llama-server reasoning                   |
+| --------- | ---------------------------------------- |
+| `off`     | `--reasoning off`                        |
+| `minimal` | `--reasoning on --reasoning-budget 32`   |
+| `low`     | `--reasoning on --reasoning-budget 128`  |
+| `medium`  | `--reasoning on --reasoning-budget 512`  |
+| `high`    | `--reasoning on --reasoning-budget 2048` |
+| `xhigh`   | `--reasoning on --reasoning-budget 8192` |
+
+The default is `off`.
+
 Point at a different OpenAI-compatible local server:
 
 ```bash
@@ -145,6 +165,7 @@ localpi --stop
 - `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
 - `--pi-command <command>`: Pi launch command
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
+- `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: `off`
 - `--no-approval`: disable the tool approval gate
 - `--no-token-status`: disable the token status extension
 - `--status`: print runtime, model, and Pi config status
@@ -168,6 +189,7 @@ localpi --stop
 - `LOCALPI_PARALLEL`
 - `LOCALPI_CHAT_TEMPLATE`
 - `LOCALPI_TOOLS`
+- `LOCALPI_THINKING`
 - `LOCALPI_MODELS_FILE`
 
 `LOCALPI_MODELS_FILE` may point at a JSON file with this shape:

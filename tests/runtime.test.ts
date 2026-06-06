@@ -189,6 +189,37 @@ describe("runtime resolution", () => {
     await stopManagedLlamaServer({ ...options(), stateDir });
   });
 
+  it("maps low thinking to a bounded llama-server reasoning budget", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await unusedBaseUrl();
+    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
+    await ensureLlamaServer(
+      {
+        ...options(),
+        stateDir,
+        baseUrl,
+        thinking: "low",
+        serverCommand
+      },
+      { id: "custom-model", modelPath }
+    );
+
+    const args = JSON.parse(
+      await readFile(path.join(stateDir, "fake-openai-server.args.json"), "utf8")
+    ) as string[];
+    expect(args).toContain("--reasoning");
+    expect(args[args.indexOf("--reasoning") + 1]).toBe("on");
+    expect(args).toContain("--reasoning-budget");
+    expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("128");
+
+    const metadata = JSON.parse(
+      await readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
+    ) as { readonly reasoningMode?: string; readonly reasoningBudget?: number };
+    expect(metadata.reasoningMode).toBe("on");
+    expect(metadata.reasoningBudget).toBe(128);
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
   it("does not fast-reuse managed alias runs after startup options change", async () => {
     const { stateDir, modelPath } = await tempRuntimeState();
     const baseUrl = await startModelServer("custom-model", 32768);
@@ -351,6 +382,8 @@ describe("runtime resolution", () => {
       readonly gpuLayers?: number;
       readonly parallel?: number;
       readonly chatTemplate?: string;
+      readonly reasoningMode?: "off" | "on";
+      readonly reasoningBudget?: number;
     }
   ): Promise<void> {
     const serverDir = path.join(stateDir, "server");
@@ -376,6 +409,7 @@ describe("runtime resolution", () => {
   async function fakeOpenAiLlamaServerCommand(stateDir: string): Promise<string> {
     const commandPath = path.join(stateDir, "fake-openai-llama-server");
     const pidPath = path.join(stateDir, "fake-openai-server.pid");
+    const argsPath = path.join(stateDir, "fake-openai-server.args.json");
     await writeFile(
       commandPath,
       [
@@ -385,6 +419,7 @@ describe("runtime resolution", () => {
         "const args = process.argv.slice(2);",
         "const value = (flag) => args[args.indexOf(flag) + 1];",
         `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
+        `fs.writeFileSync(${JSON.stringify(argsPath)}, JSON.stringify(args));`,
         'const host = value("--host") || "127.0.0.1";',
         'const port = Number(value("--port"));',
         'const alias = value("--alias") || "custom-model";',
