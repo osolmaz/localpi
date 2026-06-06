@@ -4,6 +4,7 @@ import {
   getManagedLlamaServerMetadata,
   getLlamaServerModels,
   llamaBaseUrl,
+  managedLlamaServerNeedsRestart,
   llamaServerStatus,
   stopManagedLlamaServer
 } from "./llama-server.js";
@@ -84,8 +85,9 @@ async function resolveLlamaRuntime(options: LocalpiOptions): Promise<RuntimeConn
   if (existing !== undefined) {
     return existing;
   }
+  const model = await resolveLlamaModelForStart(requested, options);
   const runtime = await ensureLlamaServer(options, {
-    ...llamaModelForStart(await resolveLlamaModel(requested, options.chatTemplate), options)
+    ...llamaModelForStart(model, options)
   });
   return {
     runtime: runtime.managed ? "llama-server" : "llama-server/external",
@@ -97,6 +99,28 @@ async function resolveLlamaRuntime(options: LocalpiOptions): Promise<RuntimeConn
   };
 }
 
+async function resolveLlamaModelForStart(
+  requested: string,
+  options: LocalpiOptions
+): Promise<Awaited<ReturnType<typeof resolveLlamaModel>>> {
+  try {
+    return await resolveLlamaModel(requested, options.chatTemplate);
+  } catch (error) {
+    const managed = await getManagedLlamaServerMetadata(options);
+    if (managed !== undefined && (requested === "auto" || requested === managed.modelId)) {
+      return {
+        source: "path",
+        name: managed.modelId,
+        id: managed.modelId,
+        modelPath: managed.modelPath,
+        contextWindow: managed.contextWindow,
+        ...optionalChatTemplate(options.chatTemplate ?? managed.chatTemplate)
+      };
+    }
+    throw error;
+  }
+}
+
 async function existingLlamaRuntime(
   options: LocalpiOptions,
   requested: string
@@ -106,19 +130,47 @@ async function existingLlamaRuntime(
     return undefined;
   }
   const managed = await getManagedLlamaServerMetadata(options);
-  const reportedContextWindow = managed?.contextWindow ?? match.info?.contextWindow;
+  const reportedContextWindow = reportedRuntimeContext(managed, match);
+  if (
+    managed !== undefined &&
+    shouldResolveManagedThroughStartPath(managed, options, requested, match.modelId)
+  ) {
+    return undefined;
+  }
   if (shouldRestartManagedForContext(options, managed, reportedContextWindow)) {
     return undefined;
   }
   assertCompatibleRuntimeContext(options, match.modelId, reportedContextWindow);
+  return existingRuntimeConnection(options, match, managed, reportedContextWindow);
+}
+
+function existingRuntimeConnection(
+  options: LocalpiOptions,
+  match: ExistingModelMatch,
+  managed: Awaited<ReturnType<typeof getManagedLlamaServerMetadata>>,
+  reportedContextWindow: number | undefined
+): RuntimeConnection {
   return {
-    runtime: managed !== undefined ? "llama-server" : "llama-server/external",
+    runtime: runtimeName(managed),
     baseUrl: llamaBaseUrl(options),
     model: match.modelId,
     availableModels: match.models.map((model) => model.id),
     warnings: [],
     ...optionalContextWindow(options.contextWindow ?? reportedContextWindow)
   };
+}
+
+function reportedRuntimeContext(
+  managed: Awaited<ReturnType<typeof getManagedLlamaServerMetadata>>,
+  match: ExistingModelMatch
+): number | undefined {
+  return managed?.contextWindow ?? match.info?.contextWindow;
+}
+
+function runtimeName(
+  managed: Awaited<ReturnType<typeof getManagedLlamaServerMetadata>>
+): "llama-server" | "llama-server/external" {
+  return managed === undefined ? "llama-server/external" : "llama-server";
 }
 
 type ExistingModelMatch = {
@@ -156,6 +208,18 @@ function shouldRestartManagedForContext(
     options.contextWindow !== undefined &&
     reportedContextWindow !== undefined &&
     reportedContextWindow !== options.contextWindow
+  );
+}
+
+function shouldResolveManagedThroughStartPath(
+  managed: NonNullable<Awaited<ReturnType<typeof getManagedLlamaServerMetadata>>>,
+  options: LocalpiOptions,
+  requested: string,
+  modelId: string
+): boolean {
+  return (
+    managedLlamaServerNeedsRestart(options, managed) ||
+    (requested !== "auto" && requested !== modelId)
   );
 }
 

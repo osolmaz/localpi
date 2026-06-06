@@ -100,6 +100,7 @@ type Usage = {
 
 type TurnState = {
   startedAt: number;
+  outputText: string;
   estimatedOutputTokens: number;
   lastStatusAt: number;
 };
@@ -110,6 +111,7 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
   pi.on("turn_start", () => {
     currentTurn = {
       startedAt: Date.now(),
+      outputText: "",
       estimatedOutputTokens: 0,
       lastStatusAt: 0
     };
@@ -120,8 +122,13 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
     if (!ctx.hasUI || state === undefined) {
       return;
     }
-    const text = textFromUnknown(event.assistantMessageEvent ?? event.message ?? event);
-    state.estimatedOutputTokens = Math.max(state.estimatedOutputTokens, Math.ceil(text.length / 4));
+    const update = textUpdateFromUnknown(event.assistantMessageEvent ?? event.message ?? event);
+    if (update.kind === "delta") {
+      state.outputText += update.text;
+    } else if (update.text.length > state.outputText.length) {
+      state.outputText = update.text;
+    }
+    state.estimatedOutputTokens = Math.ceil(state.outputText.length / 4);
     if (Date.now() - state.lastStatusAt < 250) {
       return;
     }
@@ -132,6 +139,7 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
   pi.on("turn_end", (event, ctx) => {
     const state = currentTurn ?? {
       startedAt: Date.now(),
+      outputText: "",
       estimatedOutputTokens: 0,
       lastStatusAt: 0
     };
@@ -188,22 +196,27 @@ function elapsed(state: TurnState): number {
   return Math.max((Date.now() - state.startedAt) / 1000, 0.001);
 }
 
-function textFromUnknown(value: unknown): string {
+type TextUpdate = {
+  kind: "delta" | "snapshot";
+  text: string;
+};
+
+function textUpdateFromUnknown(value: unknown): TextUpdate {
   if (typeof value === "string") {
-    return value;
+    return { kind: "snapshot", text: value };
   }
   if (value && typeof value === "object") {
     const object = value as Record<string, unknown>;
     const delta = object["delta"];
     const text = object["text"] ?? object["content"];
     if (typeof delta === "string") {
-      return delta;
+      return { kind: "delta", text: delta };
     }
     if (typeof text === "string") {
-      return text;
+      return { kind: "snapshot", text };
     }
   }
-  return "";
+  return { kind: "snapshot", text: "" };
 }
 `;
 }

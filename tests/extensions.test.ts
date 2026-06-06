@@ -20,6 +20,8 @@ describe("Pi extensions", () => {
       expect(status).toContain("tok/s");
       expect(status).toContain("message_update");
       expect(status).toContain("currentTurn");
+      expect(status).toContain("outputText += update.text");
+      expect(status).toContain('kind: "delta"');
       expect(status).not.toContain("turns.get(event.turnIndex)");
     } finally {
       await rm(stateDir, { recursive: true, force: true });

@@ -44,7 +44,7 @@ export async function ensureLlamaServer(
     availableModels: models.map((entry) => entry.id),
     managed: true,
     warnings,
-    ...optionalContextWindow(model.contextWindow)
+    contextWindow: requestedContextWindow(options, model)
   };
 }
 
@@ -116,8 +116,7 @@ async function handleMatchingExistingServer(
   owned: ManagedLlamaServerMetadata | undefined,
   matchingModel: ModelInfo
 ): Promise<ExistingServerResult> {
-  const contextWindow = requestedContextWindow(options, model);
-  if (owned !== undefined && owned.contextWindow !== contextWindow) {
+  if (owned !== undefined && managedLlamaServerNeedsRestart(options, owned, model)) {
     await stopManagedLlamaServer(options);
     return {};
   }
@@ -267,11 +266,12 @@ async function startManagedServer(
 }
 
 function serverArgs(options: LocalpiOptions, model: LlamaServerModel): readonly string[] {
+  const endpoint = managedEndpoint(options);
   return [
     "--host",
-    options.host,
+    endpoint.host,
     "--port",
-    String(options.port),
+    String(endpoint.port),
     "--model",
     model.modelPath,
     "--alias",
@@ -340,15 +340,18 @@ async function probe(
 }
 
 function metadata(options: LocalpiOptions, model: LlamaServerModel, pid: number): ServerMetadata {
+  const endpoint = managedEndpoint(options);
   return {
     pid,
-    baseUrl: llamaBaseUrl(options),
+    baseUrl: endpoint.baseUrl,
     modelId: model.id,
     modelPath: model.modelPath,
     contextWindow: requestedContextWindow(options, model),
     serverCommand: options.serverCommand,
-    host: options.host,
-    port: options.port,
+    host: endpoint.host,
+    port: endpoint.port,
+    gpuLayers: options.gpuLayers,
+    parallel: options.parallel,
     ...optionalChatTemplate(model.chatTemplate)
   };
 }
@@ -363,6 +366,8 @@ export type ManagedLlamaServerMetadata = {
   readonly serverCommand: string;
   readonly host: string;
   readonly port: number;
+  readonly gpuLayers: number;
+  readonly parallel: number;
 };
 
 type ServerMetadata = ManagedLlamaServerMetadata;
@@ -420,6 +425,8 @@ function parseMetadata(raw: string): ServerMetadata {
     serverCommand: metadataString(value.serverCommand),
     host: metadataString(value.host),
     port: metadataNumber(value.port),
+    gpuLayers: metadataNumber(value.gpuLayers),
+    parallel: metadataNumber(value.parallel),
     ...optionalChatTemplate(value.chatTemplate)
   };
 }
@@ -466,6 +473,66 @@ function signalProcess(pid: number, signal: NodeJS.Signals): void {
 
 function requestedContextWindow(options: LocalpiOptions, model: LlamaServerModel): number {
   return options.contextWindow ?? model.contextWindow ?? 32768;
+}
+
+export function managedLlamaServerNeedsRestart(
+  options: LocalpiOptions,
+  info: ManagedLlamaServerMetadata,
+  model?: LlamaServerModel
+): boolean {
+  const endpoint = managedEndpoint(options);
+  const fieldsChanged = [
+    info.baseUrl !== endpoint.baseUrl,
+    info.serverCommand !== options.serverCommand,
+    info.host !== endpoint.host,
+    info.port !== endpoint.port,
+    info.gpuLayers !== options.gpuLayers,
+    info.parallel !== options.parallel
+  ].some(Boolean);
+  return fieldsChanged || chatTemplateChanged(options, info) || modelChanged(options, info, model);
+}
+
+function chatTemplateChanged(options: LocalpiOptions, info: ManagedLlamaServerMetadata): boolean {
+  return options.chatTemplate !== undefined && info.chatTemplate !== options.chatTemplate;
+}
+
+function modelChanged(
+  options: LocalpiOptions,
+  info: ManagedLlamaServerMetadata,
+  model: LlamaServerModel | undefined
+): boolean {
+  return model === undefined ? false : !managedModelMatches(options, info, model);
+}
+
+function managedModelMatches(
+  options: LocalpiOptions,
+  info: ManagedLlamaServerMetadata,
+  model: LlamaServerModel
+): boolean {
+  return (
+    info.modelId === model.id &&
+    info.modelPath === model.modelPath &&
+    info.contextWindow === requestedContextWindow(options, model) &&
+    info.chatTemplate === model.chatTemplate
+  );
+}
+
+function managedEndpoint(options: LocalpiOptions): {
+  readonly baseUrl: string;
+  readonly host: string;
+  readonly port: number;
+} {
+  const baseUrl = llamaBaseUrl(options);
+  if (options.baseUrl === undefined) {
+    return { baseUrl, host: options.host, port: options.port };
+  }
+  const url = new URL(baseUrl);
+  const defaultPort = url.protocol === "https:" ? 443 : 80;
+  const port = url.port === "" ? defaultPort : Number.parseInt(url.port, 10);
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error(`cannot derive llama-server port from --base-url ${baseUrl}`);
+  }
+  return { baseUrl, host: url.hostname, port };
 }
 
 function assertCompatibleExternalContext(

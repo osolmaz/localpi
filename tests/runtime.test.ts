@@ -9,7 +9,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";
-import { ensureLlamaServer } from "../src/localpi/llama-server.js";
+import { ensureLlamaServer, stopManagedLlamaServer } from "../src/localpi/llama-server.js";
 import { resolveRuntime } from "../src/localpi/runtime.js";
 
 describe("runtime resolution", () => {
@@ -114,6 +114,74 @@ describe("runtime resolution", () => {
       )
     ).rejects.toThrow(/failed to start llama-server|LM Studio also reports loaded models/);
     await waitForDead(child.pid ?? 0);
+  });
+
+  it("starts managed llama-server on the selected base URL and reports default context", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await unusedBaseUrl();
+    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
+    const runtime = await ensureLlamaServer(
+      {
+        ...options(),
+        stateDir,
+        baseUrl,
+        serverCommand
+      },
+      { id: "custom-model", modelPath }
+    );
+
+    expect(runtime).toMatchObject({
+      baseUrl,
+      contextWindow: 32768,
+      managed: true,
+      model: "custom-model"
+    });
+    const metadata = JSON.parse(
+      await readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
+    ) as { readonly port?: number };
+    expect(metadata.port).toBe(Number.parseInt(new URL(baseUrl).port, 10));
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("does not fast-reuse managed alias runs after startup options change", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("custom-model", 32768);
+    const child = spawnFakeLlamaServer(modelPath);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({ models: { custom: { id: "custom-model", path: modelPath } } })
+    );
+    await writeMetadata(stateDir, {
+      pid: child.pid ?? 0,
+      baseUrl,
+      modelId: "custom-model",
+      modelPath,
+      contextWindow: 32768,
+      serverCommand: "llama-server",
+      host: "127.0.0.1",
+      port: Number.parseInt(new URL(baseUrl).port, 10),
+      gpuLayers: 999,
+      parallel: 1
+    });
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          stateDir,
+          baseUrl,
+          model: "custom",
+          gpuLayers: 998,
+          serverCommand: "/definitely/missing/localpi-llama-server"
+        })
+      ).rejects.toThrow(/failed to start llama-server|LM Studio also reports loaded models/);
+      await waitForDead(child.pid ?? 0);
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
   });
 
   it("reports missing llama-server commands as controlled startup errors", async () => {
@@ -230,6 +298,9 @@ describe("runtime resolution", () => {
       readonly serverCommand: string;
       readonly host: string;
       readonly port: number;
+      readonly gpuLayers?: number;
+      readonly parallel?: number;
+      readonly chatTemplate?: string;
     }
   ): Promise<void> {
     const serverDir = path.join(stateDir, "server");
@@ -246,6 +317,39 @@ describe("runtime resolution", () => {
         `echo $$ > ${shellQuote(path.join(stateDir, "fake-server.pid"))}`,
         "trap 'exit 0' TERM",
         "while true; do sleep 1; done"
+      ].join("\n")
+    );
+    await chmod(commandPath, 0o755);
+    return commandPath;
+  }
+
+  async function fakeOpenAiLlamaServerCommand(stateDir: string): Promise<string> {
+    const commandPath = path.join(stateDir, "fake-openai-llama-server");
+    const pidPath = path.join(stateDir, "fake-openai-server.pid");
+    await writeFile(
+      commandPath,
+      [
+        "#!/usr/bin/env node",
+        'const http = require("node:http");',
+        'const fs = require("node:fs");',
+        "const args = process.argv.slice(2);",
+        "const value = (flag) => args[args.indexOf(flag) + 1];",
+        `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
+        'const host = value("--host") || "127.0.0.1";',
+        'const port = Number(value("--port"));',
+        'const alias = value("--alias") || "custom-model";',
+        'const ctx = Number(value("--ctx-size") || "32768");',
+        "const server = http.createServer((request, response) => {",
+        '  if (request.url === "/v1/models") {',
+        '    response.writeHead(200, { "content-type": "application/json" });',
+        "    response.end(JSON.stringify({ data: [{ id: alias, context_length: ctx }] }));",
+        "    return;",
+        "  }",
+        "  response.writeHead(404);",
+        "  response.end();",
+        "});",
+        "server.listen(port, host);",
+        'process.on("SIGTERM", () => server.close(() => process.exit(0)));'
       ].join("\n")
     );
     await chmod(commandPath, 0o755);
@@ -313,11 +417,15 @@ async function fileExists(filePath: string): Promise<boolean> {
 }
 
 function restoreStartupTimeout(value: string | undefined): void {
+  restoreOptionalEnv("LOCALPI_SERVER_STARTUP_TIMEOUT_MS", value);
+}
+
+function restoreOptionalEnv(name: string, value: string | undefined): void {
   if (value === undefined) {
-    Reflect.deleteProperty(process.env, "LOCALPI_SERVER_STARTUP_TIMEOUT_MS");
+    Reflect.deleteProperty(process.env, name);
     return;
   }
-  process.env["LOCALPI_SERVER_STARTUP_TIMEOUT_MS"] = value;
+  process.env[name] = value;
 }
 
 function shellQuote(value: string): string {
