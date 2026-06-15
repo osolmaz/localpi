@@ -13,6 +13,7 @@ import { providerConfigs } from "./provider-registry.js";
 export type ModelAvailability = "loaded" | "startable";
 export type ModelCapability = "text";
 export type CatalogRuntime = "openai-compatible" | "managed-llama-server";
+export type CatalogThinkingFormat = "deepseek" | "qwen-chat-template";
 
 export type CatalogModel = {
   readonly providerId: string;
@@ -25,6 +26,7 @@ export type CatalogModel = {
   readonly contextWindow?: number;
   readonly maxTokens?: number;
   readonly reasoning?: boolean;
+  readonly thinkingFormat?: CatalogThinkingFormat;
   readonly capabilities: readonly ModelCapability[];
   readonly availability: ModelAvailability;
 };
@@ -99,7 +101,7 @@ function openAiCatalogModel(
     aliases: [],
     displayName: `${config.name} / ${model.id}`,
     maxTokens: options.maxTokens,
-    reasoning: modelSupportsReasoning(model.id),
+    ...externalReasoningConfig(model.id),
     capabilities: ["text"],
     availability: "loaded",
     ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow })
@@ -169,7 +171,7 @@ async function loadedLlamaModels(
         aliases: aliases.filter((alias) => alias.id === model.id).map((alias) => alias.name),
         displayName: `${config.name} / ${model.id}`,
         maxTokens: options.maxTokens,
-        reasoning: modelSupportsReasoning(model.id),
+        reasoning: managedModelSupportsReasoning(model.id),
         capabilities: ["text"],
         availability: "loaded",
         ...(contextWindow === undefined ? {} : { contextWindow })
@@ -203,7 +205,7 @@ async function startableLlamaModels(
           aliases: [alias.name],
           displayName: `${config.name} / ${alias.name}`,
           maxTokens: options.maxTokens,
-          reasoning: modelSupportsReasoning(resolved.id),
+          reasoning: managedModelSupportsReasoning(resolved.id),
           capabilities: ["text"] as const,
           availability: "startable" as const,
           ...(resolved.contextWindow === undefined ? {} : { contextWindow: resolved.contextWindow })
@@ -216,7 +218,21 @@ async function startableLlamaModels(
   return startable.filter((model): model is CatalogModel => model !== undefined);
 }
 
-function modelSupportsReasoning(modelId: string): boolean {
+function externalReasoningConfig(modelId: string): {
+  readonly reasoning?: true;
+  readonly thinkingFormat?: CatalogThinkingFormat;
+} {
+  const normalized = modelId.toLowerCase();
+  if (normalized.includes("qwen")) {
+    return { reasoning: true, thinkingFormat: "qwen-chat-template" };
+  }
+  if (normalized.includes("deepseek")) {
+    return { reasoning: true, thinkingFormat: "deepseek" };
+  }
+  return {};
+}
+
+function managedModelSupportsReasoning(modelId: string): boolean {
   const normalized = modelId.toLowerCase();
   return (
     normalized.includes("reason") ||

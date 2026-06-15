@@ -86,6 +86,8 @@ function modelConfig(
     id: model.modelId,
     name: model.displayName,
     reasoning: model.reasoning ?? false,
+    compat:
+      model.thinkingFormat === undefined ? undefined : { thinkingFormat: model.thinkingFormat },
     input: ["text"],
     contextWindow: modelContextWindow(options, connection, model),
     maxTokens: model.maxTokens ?? options.maxTokens,
