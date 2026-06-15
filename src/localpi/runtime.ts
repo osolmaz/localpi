@@ -382,7 +382,9 @@ async function selectCatalogModel(
     if (customPath !== undefined) {
       return customPath;
     }
-    throw new Error(`provider ${selection.provider ?? ""} did not report usable models`);
+    if (selection.provider !== undefined) {
+      throw new Error(`provider ${selection.provider} did not report usable models`);
+    }
   }
   if (selection.model !== "auto") {
     return selectExplicitCatalogModel(

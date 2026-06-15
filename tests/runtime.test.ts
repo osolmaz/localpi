@@ -805,6 +805,27 @@ describe("runtime resolution", () => {
     ).resolves.toContain("loaded models: lmstudio/first, lmstudio/second");
   });
 
+  it("reports no loaded models when auto discovery finds no usable models", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const providersFile = await disabledBuiltInProvidersFile(stateDir);
+    const previousHome = process.env["HOME"];
+    process.env["HOME"] = stateDir;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          model: "auto",
+          providersFile,
+          timeoutMs: 10
+        })
+      ).rejects.toThrow("no loaded models available");
+    } finally {
+      restoreOptionalEnv("HOME", previousHome);
+    }
+  });
+
   it("computes the effective base URL per runtime", () => {
     expect(effectiveBaseUrl(options())).toBe("http://127.0.0.1:18194/v1");
     expect(effectiveBaseUrl({ ...options(), runtime: "lmstudio" })).toBe(
