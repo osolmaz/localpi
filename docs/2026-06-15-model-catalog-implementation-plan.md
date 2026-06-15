@@ -17,6 +17,7 @@ The goal is that plain `localpi` can show every usable local model, let the user
 - If multiple usable models are available, localpi shows an interactive provider/model picker.
 - If no external model is available, localpi can fall back to the managed `llama-server` default.
 - Explicit `--provider` and `--model` flags bypass the startup picker.
+- `--runtime vllm` should be accepted as a direct shortcut for the built-in vLLM provider.
 - Pi receives a generated `models.json` containing every discovered usable model, not just the selected one.
 - Pi receives a generated `settings.json` with the selected provider and model as the defaults.
 - Pi `/model` can switch among the launch-time catalog entries without localpi-specific extension behavior.
@@ -59,12 +60,13 @@ Add a provider registry that combines built-in providers with user config.
 Built-in providers:
 
 - `lmstudio`: OpenAI-compatible, default base URL `http://127.0.0.1:1234/v1`, discovery enabled.
+- `vllm`: OpenAI-compatible, default base URL `http://127.0.0.1:8000/v1`, discovery enabled.
 - `llama-server`: managed localpi runtime, exposes configured aliases as startable models.
 
 Config-backed providers:
 
-- vLLM and other OpenAI-compatible servers should be configured by provider id and base URL.
-- Localpi should not scan random ports for vLLM.
+- Additional vLLM and other OpenAI-compatible servers should be configured by provider id and base URL.
+- Localpi should not scan random ports for vLLM beyond the explicit built-in default.
 - A provider config can opt into or out of discovery.
 
 Example config:
@@ -126,6 +128,7 @@ Explicit flags:
 
 - `--provider <id> --model <id>` selects an exact catalog entry.
 - `--model <provider>/<model>` can be added as a shorthand once provider ids are stable.
+- `--runtime lmstudio` and `--runtime vllm` select those built-in external providers directly.
 - Existing managed llama-server aliases should continue to work.
 
 ## Pi Config Generation

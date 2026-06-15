@@ -88,6 +88,8 @@ describe("localpi cli", () => {
     const baseUrl = await unusedBaseUrl();
     const result = await run([
       "--status",
+      "--runtime",
+      "llama-server",
       "--state-dir",
       stateDir,
       "--base-url",

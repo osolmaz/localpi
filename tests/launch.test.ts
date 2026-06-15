@@ -21,7 +21,7 @@ describe("Pi launch plan", () => {
 
     expect(plan.args).toEqual([
       "--provider",
-      "local-openai",
+      "lmstudio",
       "--model",
       "gemma-4-e4b-it",
       "--thinking",
@@ -65,7 +65,9 @@ function options(stateDir: string): LocalpiOptions {
     runtime: "lmstudio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "auto",
+    provider: undefined,
     providerId: "local-openai",
+    providersFile: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",
@@ -92,9 +94,12 @@ function options(stateDir: string): LocalpiOptions {
 function connection(model: string): RuntimeConnection {
   return {
     runtime: "lmstudio",
+    providerId: "lmstudio",
+    providerName: "LM Studio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model,
     availableModels: [model],
+    catalogModels: [],
     warnings: []
   };
 }

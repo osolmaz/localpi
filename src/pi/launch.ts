@@ -24,7 +24,7 @@ export async function createLaunchPlan(
     command: options.piCommand,
     args: [
       "--provider",
-      options.providerId,
+      connection.providerId,
       "--model",
       connection.model,
       "--thinking",

@@ -34,6 +34,7 @@ describe("localpi option parsing", () => {
     expect(options.port).toBe(18195);
     expect(options.approval).toBe(false);
     expect(options.tokenStatus).toBe(false);
+    expect(parseLocalpiArgs(["--runtime", "vllm"]).runtime).toBe("vllm");
   });
 
   it("parses and validates thinking levels", () => {
@@ -66,8 +67,12 @@ describe("localpi option parsing", () => {
     const options = parseLocalpiArgs([
       "--model",
       "custom",
+      "--provider",
+      "vllm",
       "--provider-id",
       "my-provider",
+      "--providers-file",
+      "/tmp/localpi-providers.json",
       "--state-dir",
       "/tmp/localpi-state",
       "--session-dir",
@@ -95,7 +100,9 @@ describe("localpi option parsing", () => {
     ]);
     expect(options).toMatchObject({
       model: "custom",
+      provider: "vllm",
       providerId: "my-provider",
+      providersFile: "/tmp/localpi-providers.json",
       stateDir: "/tmp/localpi-state",
       sessionDir: "/tmp/localpi-sessions",
       piCommand: "my-pi",
@@ -138,6 +145,8 @@ describe("localpi environment defaults", () => {
     "LOCALPI_APPROVAL",
     "LOCALPI_TOKEN_STATUS",
     "LOCALPI_MODEL",
+    "LOCALPI_PROVIDER",
+    "LOCALPI_PROVIDERS_FILE",
     "LOCALPI_SESSION_DIR"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
@@ -159,6 +168,8 @@ describe("localpi environment defaults", () => {
     process.env["LOCALPI_APPROVAL"] = "no";
     process.env["LOCALPI_TOKEN_STATUS"] = "1";
     process.env["LOCALPI_MODEL"] = "env-model";
+    process.env["LOCALPI_PROVIDER"] = "env-provider";
+    process.env["LOCALPI_PROVIDERS_FILE"] = "/tmp/env-providers.json";
     process.env["LOCALPI_SESSION_DIR"] = "/tmp/localpi-env-sessions";
 
     expect(parseLocalpiArgs([])).toMatchObject({
@@ -167,6 +178,8 @@ describe("localpi environment defaults", () => {
       approval: false,
       tokenStatus: true,
       model: "env-model",
+      provider: "env-provider",
+      providersFile: "/tmp/env-providers.json",
       sessionDir: "/tmp/localpi-env-sessions"
     });
   });

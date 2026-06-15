@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import type { CatalogModel } from "../localpi/catalog.js";
 import type { LocalpiOptions } from "../localpi/options.js";
 import type { RuntimeConnection } from "../localpi/runtime.js";
 
@@ -27,36 +28,82 @@ export async function writeRuntimeConfig(
 }
 
 function modelsConfig(options: LocalpiOptions, connection: RuntimeConnection): unknown {
-  const contextWindow = options.contextWindow ?? connection.contextWindow;
+  const models =
+    connection.catalogModels.length === 0 ? fallbackCatalog(connection) : connection.catalogModels;
   return {
-    providers: {
-      [options.providerId]: {
-        baseUrl: connection.baseUrl,
-        api: "openai-completions",
-        apiKey: "local",
-        compat: {
-          supportsDeveloperRole: false,
-          supportsReasoningEffort: false
-        },
-        models: [
-          withoutUndefined({
-            id: connection.model,
-            name: `Local model (${connection.model})`,
-            reasoning: false,
-            input: ["text"],
-            contextWindow,
-            maxTokens: options.maxTokens,
-            cost: {
-              input: 0,
-              output: 0,
-              cacheRead: 0,
-              cacheWrite: 0
-            }
-          })
-        ]
-      }
-    }
+    providers: Object.fromEntries(
+      groupedByProvider(models).map((entry) => [entry.providerId, providerConfig(options, entry)])
+    )
   };
+}
+
+type ProviderGroup = {
+  readonly providerId: string;
+  readonly baseUrl: string;
+  readonly models: readonly CatalogModel[];
+};
+
+function groupedByProvider(models: readonly CatalogModel[]): readonly ProviderGroup[] {
+  const groups = new Map<string, ProviderGroup>();
+  for (const model of models) {
+    const existing = groups.get(model.providerId);
+    groups.set(
+      model.providerId,
+      existing === undefined
+        ? { providerId: model.providerId, baseUrl: model.baseUrl, models: [model] }
+        : { ...existing, models: [...existing.models, model] }
+    );
+  }
+  return [...groups.values()];
+}
+
+function providerConfig(options: LocalpiOptions, group: ProviderGroup): unknown {
+  return {
+    baseUrl: group.baseUrl,
+    api: "openai-completions",
+    apiKey: "local",
+    compat: {
+      supportsDeveloperRole: false,
+      supportsReasoningEffort: false
+    },
+    models: group.models.map((model) => modelConfig(options, model))
+  };
+}
+
+function modelConfig(options: LocalpiOptions, model: CatalogModel): unknown {
+  return withoutUndefined({
+    id: model.modelId,
+    name: model.displayName,
+    reasoning: false,
+    input: ["text"],
+    contextWindow: options.contextWindow ?? model.contextWindow,
+    maxTokens: model.maxTokens ?? options.maxTokens,
+    cost: {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0
+    }
+  });
+}
+
+function fallbackCatalog(connection: RuntimeConnection): readonly CatalogModel[] {
+  return [
+    {
+      providerId: connection.providerId,
+      providerName: connection.providerName,
+      runtime: connection.runtime.startsWith("llama-server")
+        ? "managed-llama-server"
+        : "openai-compatible",
+      baseUrl: connection.baseUrl,
+      modelId: connection.model,
+      aliases: [],
+      displayName: `Local model (${connection.model})`,
+      capabilities: ["text"],
+      availability: "loaded",
+      ...(connection.contextWindow === undefined ? {} : { contextWindow: connection.contextWindow })
+    }
+  ];
 }
 
 function withoutUndefined(value: Record<string, unknown>): Record<string, unknown> {
@@ -68,7 +115,7 @@ function withoutUndefined(value: Record<string, unknown>): Record<string, unknow
 function settingsConfig(options: LocalpiOptions, connection: RuntimeConnection): unknown {
   const contextWindow = options.contextWindow ?? connection.contextWindow;
   return {
-    defaultProvider: options.providerId,
+    defaultProvider: connection.providerId,
     defaultModel: connection.model,
     defaultThinkingLevel: options.thinking,
     enableInstallTelemetry: false,

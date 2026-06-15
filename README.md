@@ -2,16 +2,15 @@
 
 Localpi is a local Pi launcher for open-weight models.
 
-The default runtime is a managed `llama-server` process. Localpi can start or reuse that server, point Pi at it, install a small set of default tools, require approval before tool calls, and show local generation speed while the session runs.
+By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
 
-LM Studio remains supported as an alternate runtime for people who already have an OpenAI-compatible LM Studio server running.
+Localpi supports LM Studio, vLLM, custom OpenAI-compatible servers, and a managed `llama-server` fallback.
 
 Localpi is intentionally generic. It does not contain classifier prompts, dataset workflows, GitHub routing logic, or final-schema output machinery. Structured classifier runs belong in caller tools such as `localpager-agent`.
 
 See:
 
 - [Runtime Specification](docs/runtime-specification.md)
-- [Implementation Plan](docs/implementation-plan.md)
 
 ## Install
 
@@ -40,12 +39,18 @@ Target default:
 localpi --model gemma-12b
 ```
 
-This uses `llama-server` by default.
+This uses the default `auto` runtime. If exactly one model is loaded locally, Localpi selects it. If multiple models are loaded in an interactive terminal, Localpi shows a numbered picker. If no external model is loaded, Localpi can fall back to the managed `llama-server` default.
 
 LM Studio is explicit:
 
 ```bash
 localpi --runtime lmstudio --model gemma-4-e4b-it
+```
+
+vLLM is explicit:
+
+```bash
+localpi --runtime vllm --model qwen
 ```
 
 Custom OpenAI-compatible endpoints are also supported:
@@ -54,7 +59,7 @@ Custom OpenAI-compatible endpoints are also supported:
 localpi --runtime openai-compatible --base-url http://127.0.0.1:8000/v1 --model my-model
 ```
 
-Localpi avoids loading multiple heavyweight local runtimes at the same time. When using the managed `llama-server` runtime, it either stops its previous managed server or clearly reports what is already running before starting another model.
+Use `--provider <id>` with `--model <id>` to select a catalog entry without opening the picker. Localpi avoids loading multiple heavyweight local runtimes at the same time. When using the managed `llama-server` runtime, it either stops its previous managed server or clearly reports what is already running before starting another model.
 
 ## Default Pi Behavior
 
@@ -129,6 +134,12 @@ For managed `llama-server`, thinking levels map to server-side reasoning:
 
 The default is `off`.
 
+Point at vLLM:
+
+```bash
+localpi --runtime vllm --model qwen -p "review the src directory"
+```
+
 Point at a different OpenAI-compatible local server:
 
 ```bash
@@ -149,7 +160,8 @@ localpi --stop
 
 ## Options
 
-- `--runtime <llama-server|lmstudio|openai-compatible>`: runtime backend. Default: `llama-server`
+- `--runtime <auto|llama-server|lmstudio|vllm|openai-compatible>`: runtime backend. Default: `auto`
+- `--provider <id>`: catalog provider id to use, for example `lmstudio` or `vllm`
 - `--model <alias|id|path|auto>`: model alias, model id, or GGUF path
 - `--ctx <n>` / `--context-window <n>`: model context window
 - `--max-tokens <n>`: generated model max output tokens
@@ -164,6 +176,7 @@ localpi --stop
 - `--state-dir <path>`: runtime state directory. Default: `~/.local/state/localpi`
 - `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
 - `--pi-command <command>`: Pi launch command
+- `--providers-file <path>`: provider registry JSON
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
 - `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: `off`
 - `--no-approval`: disable the tool approval gate
@@ -176,7 +189,9 @@ localpi --stop
 
 - `LOCALPI_RUNTIME`
 - `LOCALPI_MODEL`
+- `LOCALPI_PROVIDER`
 - `LOCALPI_BASE_URL`
+- `LOCALPI_PROVIDERS_FILE`
 - `LOCALPI_STATE_DIR`
 - `LOCALPI_SESSION_DIR`
 - `LOCALPI_PI_CMD`

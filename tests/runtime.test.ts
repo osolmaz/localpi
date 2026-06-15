@@ -295,11 +295,61 @@ describe("runtime resolution", () => {
     ).rejects.toThrow("--runtime openai-compatible requires --base-url");
   });
 
+  it("resolves direct vLLM runtimes as externally managed providers", async () => {
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "vllm", baseUrl, model: "auto" })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl,
+      model: "qwen-vllm",
+      contextWindow: 131072
+    });
+  });
+
+  it("discovers and selects configured vLLM providers in auto runtime", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl,
+            discover: true
+          }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        provider: "vllm",
+        model: "auto",
+        providersFile
+      })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl,
+      model: "qwen-vllm",
+      contextWindow: 131072
+    });
+  });
+
   it("computes the effective base URL per runtime", () => {
     expect(effectiveBaseUrl(options())).toBe("http://127.0.0.1:18194/v1");
     expect(effectiveBaseUrl({ ...options(), runtime: "lmstudio" })).toBe(
       "http://127.0.0.1:1234/v1"
     );
+    expect(effectiveBaseUrl({ ...options(), runtime: "vllm" })).toBe("http://127.0.0.1:8000/v1");
     expect(
       effectiveBaseUrl({ ...options(), runtime: "lmstudio", baseUrl: "http://10.0.0.5:1/v1" })
     ).toBe("http://10.0.0.5:1/v1");
@@ -741,7 +791,9 @@ function options(): LocalpiOptions {
     runtime: "llama-server",
     baseUrl: undefined,
     model: "gemma-12b",
+    provider: undefined,
     providerId: "local-openai",
+    providersFile: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",
