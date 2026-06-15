@@ -227,16 +227,18 @@ async function providerConfigs(options: LocalpiOptions): Promise<readonly Provid
       return [lmStudioProvider(options.baseUrl)];
     case "vllm":
       return [vllmProvider(options.baseUrl)];
-    case "openai-compatible":
+    case "openai-compatible": {
+      const providerId = options.provider ?? options.providerId;
       return [
         {
-          id: options.providerId,
-          name: options.providerId,
+          id: providerId,
+          name: providerId,
           type: "openai-compatible",
           baseUrl: requiredBaseUrl(options),
           discover: true
         }
       ];
+    }
     case "llama-server":
       return [managedLlamaProvider()];
   }

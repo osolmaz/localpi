@@ -354,6 +354,25 @@ describe("runtime resolution", () => {
     ).rejects.toThrow("--runtime openai-compatible requires --base-url");
   });
 
+  it("uses --provider as the direct OpenAI-compatible provider id", async () => {
+    const baseUrl = await startModelServer("served-model");
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "openai-compatible",
+        provider: "custom-provider",
+        baseUrl,
+        model: "served-model"
+      })
+    ).resolves.toMatchObject({
+      runtime: "openai-compatible",
+      providerId: "custom-provider",
+      providerName: "custom-provider",
+      model: "served-model"
+    });
+  });
+
   it("preserves explicit OpenAI-compatible models when /models is empty", async () => {
     const baseUrl = await startModelListServer([]);
 

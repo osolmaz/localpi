@@ -115,6 +115,9 @@ async function configuredAliases(home: string): Promise<readonly ModelAlias[]> {
   }
   const raw = await readFile(expandHome(configPath, home), "utf8");
   const root = asObject(JSON.parse(raw) as unknown, "model alias config");
+  if (root["models"] === undefined) {
+    return [];
+  }
   const models = asObject(root["models"], "model alias config models");
   return Object.entries(models).map(([name, value]) => configuredAlias(name, value, home));
 }
