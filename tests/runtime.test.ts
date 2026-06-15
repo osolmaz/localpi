@@ -435,6 +435,14 @@ describe("runtime resolution", () => {
     }
   });
 
+  it("reports catalog status without selecting among multiple external models", async () => {
+    const baseUrl = await startModelListServer([{ id: "first" }, { id: "second" }]);
+
+    await expect(
+      statusOutput({ ...options(), runtime: "lmstudio", baseUrl, model: undefined })
+    ).resolves.toContain("loaded models: lmstudio/first, lmstudio/second");
+  });
+
   it("computes the effective base URL per runtime", () => {
     expect(effectiveBaseUrl(options())).toBe("http://127.0.0.1:18194/v1");
     expect(effectiveBaseUrl({ ...options(), runtime: "lmstudio" })).toBe(
