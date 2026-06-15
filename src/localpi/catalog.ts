@@ -69,8 +69,12 @@ async function discoverOpenAiCompatibleProvider(
   config: ProviderConfig,
   options: LocalpiOptions
 ): Promise<ModelCatalog> {
-  if (config.baseUrl === undefined || !config.discover) {
+  if (config.baseUrl === undefined) {
     return { models: [], warnings: [] };
+  }
+  if (!config.discover) {
+    const explicitModel = explicitOpenAiCatalogModel(config, [], options);
+    return { models: explicitModel === undefined ? [] : [explicitModel], warnings: [] };
   }
   try {
     const models = await listModels(config.baseUrl, options.timeoutMs);

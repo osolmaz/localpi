@@ -472,6 +472,40 @@ describe("runtime resolution", () => {
     });
   });
 
+  it("selects explicitly configured providers with discovery disabled", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        provider: "vllm",
+        model: "qwen",
+        providersFile
+      })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl: "http://127.0.0.1:8000/v1",
+      model: "qwen",
+      availableModels: ["qwen"]
+    });
+  });
+
   it("starts explicit GGUF paths through the auto runtime", async () => {
     const { stateDir, modelPath } = await tempRuntimeState();
     const baseUrl = await unusedBaseUrl();

@@ -2,21 +2,36 @@
 
 Localpi is the local runtime launcher for Pi.
 
-It should make the common local-model path one command while keeping the backend choice explicit and inspectable.
+It should make the common local-model path one command while keeping the selected provider and model explicit and inspectable.
 
 ## Goals
 
 - Run Pi against local open-weight models without hand-editing Pi config.
-- Use managed `llama-server` by default.
-- Support LM Studio as an alternate OpenAI-compatible runtime.
+- Discover local providers by default and select from the loaded model catalog.
+- Support LM Studio and vLLM as built-in OpenAI-compatible providers.
+- Keep managed `llama-server` as the fallback when no external model is loaded.
 - Keep the tool generic: no classifier prompts, topic schemas, dataset generation, or final-schema output.
 - Keep large model memory usage predictable by managing only one localpi-owned `llama-server` process at a time.
 
 ## Runtimes
 
-### `llama-server`
+### `auto`
 
 Default runtime.
+
+Localpi:
+
+- probes built-in LM Studio and vLLM endpoints
+- loads configured OpenAI-compatible providers from `--providers-file`, `LOCALPI_PROVIDERS_FILE`, or `LOCALPI_MODELS_FILE`
+- includes the localpi-owned `llama-server` catalog as startable fallback entries
+- selects the only loaded model automatically
+- shows an interactive model picker when multiple loaded models are available in a TTY
+- fails with concrete `--provider` and `--model` choices instead of prompting in non-interactive runs
+- writes Pi config for all launch-time loaded catalog entries so Pi `/model` can switch among them
+
+### `llama-server`
+
+Managed runtime.
 
 Localpi:
 
@@ -30,13 +45,24 @@ Localpi:
 
 ### LM Studio
 
-Explicit alternate runtime.
+Built-in external OpenAI-compatible provider.
 
 Localpi:
 
 - requires `--runtime lmstudio`
 - defaults to `http://127.0.0.1:1234/v1`
 - does not start or stop LM Studio
+- probes `/v1/models` and fails clearly if the requested model is not available
+
+### vLLM
+
+Built-in external OpenAI-compatible provider.
+
+Localpi:
+
+- requires `--runtime vllm`
+- defaults to `http://127.0.0.1:8000/v1`
+- does not start or stop vLLM
 - probes `/v1/models` and fails clearly if the requested model is not available
 
 ### Custom OpenAI-Compatible Endpoint
@@ -47,8 +73,28 @@ Localpi:
 
 - requires `--runtime openai-compatible`
 - requires `--base-url`
+- can use `--provider <id>` to name the generated Pi provider
 - uses `/v1/models` for discovery
 - avoids assuming it can start, stop, or unload the backend
+
+### Configured Providers
+
+Provider registry JSON can define additional OpenAI-compatible providers:
+
+```json
+{
+  "providers": {
+    "vllm-qwen": {
+      "type": "openai-compatible",
+      "name": "vLLM Qwen",
+      "baseUrl": "http://127.0.0.1:8000/v1",
+      "discover": true
+    }
+  }
+}
+```
+
+Set `discover: false` when the endpoint should not be probed during startup. Explicit `--provider <id> --model <id>` can still select that provider and generate Pi config.
 
 ## Model Selection
 
@@ -56,6 +102,7 @@ Localpi:
 
 - a configured alias such as `gemma-12b` or `gemma-e4b`
 - an LM Studio model id
+- a vLLM model id
 - an absolute or relative GGUF path for `llama-server`
 - `auto`, which selects the first model reported by the backend
 
