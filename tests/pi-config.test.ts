@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import type { CatalogModel } from "../src/localpi/catalog.js";
 import type { LocalpiOptions } from "../src/localpi/options.js";
 import type { RuntimeConnection } from "../src/localpi/runtime.js";
 import { writeRuntimeConfig } from "../src/pi/config.js";
@@ -19,9 +20,9 @@ describe("Pi runtime config", () => {
       const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
         providers: Record<string, { baseUrl: string; models: readonly { id: string }[] }>;
       };
-      expect(models.providers["local-openai"]?.baseUrl).toBe("http://127.0.0.1:1234/v1");
-      expect(models.providers["local-openai"]?.models[0]?.id).toBe("gemma-4-e4b-it");
-      expect(models.providers["local-openai"]?.models[0]).not.toHaveProperty("contextWindow");
+      expect(models.providers["lmstudio"]?.baseUrl).toBe("http://127.0.0.1:1234/v1");
+      expect(models.providers["lmstudio"]?.models[0]?.id).toBe("gemma-4-e4b-it");
+      expect(models.providers["lmstudio"]?.models[0]).not.toHaveProperty("contextWindow");
       const settings = JSON.parse(await readFile(runtime.settingsPath, "utf8")) as {
         compaction?: { enabled?: boolean };
       };
@@ -41,7 +42,7 @@ describe("Pi runtime config", () => {
       const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
         providers: Record<string, { models: readonly { contextWindow?: number }[] }>;
       };
-      expect(models.providers["local-openai"]?.models[0]?.contextWindow).toBe(120000);
+      expect(models.providers["lmstudio"]?.models[0]?.contextWindow).toBe(120000);
       const settings = JSON.parse(await readFile(runtime.settingsPath, "utf8")) as {
         compaction?: { enabled?: boolean; reserveTokens?: number; keepRecentTokens?: number };
       };
@@ -74,6 +75,53 @@ describe("Pi runtime config", () => {
       await rm(stateDir, { recursive: true, force: true });
     }
   });
+
+  it("writes every loaded catalog provider for Pi model switching", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
+    try {
+      const runtime = await writeRuntimeConfig(
+        { ...options(stateDir), contextWindow: 4096 },
+        {
+          runtime: "vllm",
+          providerId: "vllm",
+          providerName: "vLLM",
+          baseUrl: "http://127.0.0.1:8000/v1",
+          model: "qwen",
+          availableModels: ["qwen"],
+          catalogModels: [
+            catalogModel("lmstudio", "LM Studio", "http://127.0.0.1:1234/v1", "gemma", 120000),
+            catalogModel("vllm", "vLLM", "http://127.0.0.1:8000/v1", "qwen", 32768)
+          ],
+          warnings: []
+        }
+      );
+      const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
+        providers: Record<
+          string,
+          { baseUrl: string; models: readonly { id: string; contextWindow?: number }[] }
+        >;
+      };
+      const lmstudio = models.providers["lmstudio"] as {
+        readonly models: readonly { readonly id: string; readonly contextWindow?: number }[];
+      };
+      const vllm = models.providers["vllm"] as {
+        readonly models: readonly { readonly id: string; readonly contextWindow?: number }[];
+      };
+      expect(Object.keys(models.providers).sort()).toEqual(["lmstudio", "vllm"]);
+      expect(lmstudio.models[0]?.id).toBe("gemma");
+      expect(vllm.models[0]?.id).toBe("qwen");
+      expect(lmstudio.models[0]?.contextWindow).toBe(120000);
+      expect(vllm.models[0]?.contextWindow).toBe(4096);
+      const settings = JSON.parse(await readFile(runtime.settingsPath, "utf8")) as {
+        defaultProvider?: string;
+        defaultModel?: string;
+      };
+      expect(settings.defaultProvider).toBe("vllm");
+      expect(settings.defaultModel).toBe("qwen");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
 });
 
 function options(stateDir: string): LocalpiOptions {
@@ -81,7 +129,9 @@ function options(stateDir: string): LocalpiOptions {
     runtime: "lmstudio",
     baseUrl: "http://127.0.0.1:1234/v1",
     model: "auto",
+    provider: undefined,
     providerId: "local-openai",
+    providersFile: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",
@@ -105,12 +155,37 @@ function options(stateDir: string): LocalpiOptions {
   };
 }
 
+function catalogModel(
+  providerId: string,
+  providerName: string,
+  baseUrl: string,
+  modelId: string,
+  contextWindow?: number
+): CatalogModel {
+  return {
+    providerId,
+    providerName,
+    runtime: "openai-compatible",
+    baseUrl,
+    modelId,
+    aliases: [],
+    displayName: `${providerName} / ${modelId}`,
+    maxTokens: 8192,
+    capabilities: ["text"],
+    availability: "loaded",
+    ...(contextWindow === undefined ? {} : { contextWindow })
+  };
+}
+
 function connection(model: string, baseUrl: string, contextWindow?: number): RuntimeConnection {
   return {
     runtime: "lmstudio",
+    providerId: "lmstudio",
+    providerName: "LM Studio",
     baseUrl,
     model,
     availableModels: [model],
+    catalogModels: [],
     ...(contextWindow === undefined ? {} : { contextWindow }),
     warnings: []
   };

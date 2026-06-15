@@ -73,14 +73,13 @@ describe("localpi cli", () => {
     expect(result.stdout).toBe("no localpi-owned llama-server metadata found\n");
   });
 
-  it("prints connection status for externally managed runtimes", async () => {
+  it("prints catalog status for externally managed runtimes", async () => {
     const baseUrl = await startModelServer("served-model", 4096);
     const result = await run(["--status", "--runtime", "lmstudio", "--base-url", baseUrl]);
     expect(result.code).toBe(0);
     expect(result.stdout).toContain("runtime: lmstudio");
-    expect(result.stdout).toContain("model: served-model");
-    expect(result.stdout).toContain("available models: served-model");
-    expect(result.stdout).toContain("context window: 4096");
+    expect(result.stdout).toContain("loaded models: lmstudio/served-model");
+    expect(result.stdout).toContain("startable models: none");
   });
 
   it("prints llama-server status and aliases for --status", async () => {
@@ -88,6 +87,8 @@ describe("localpi cli", () => {
     const baseUrl = await unusedBaseUrl();
     const result = await run([
       "--status",
+      "--runtime",
+      "llama-server",
       "--state-dir",
       stateDir,
       "--base-url",

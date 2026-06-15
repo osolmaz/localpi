@@ -2,14 +2,16 @@ import path from "node:path";
 
 import { normalizeBaseUrl } from "../llm/openai.js";
 
-export type RuntimeKind = "llama-server" | "lmstudio" | "openai-compatible";
+export type RuntimeKind = "auto" | "llama-server" | "lmstudio" | "vllm" | "openai-compatible";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
 export type LocalpiOptions = {
   readonly runtime: RuntimeKind;
   readonly baseUrl: string | undefined;
   readonly model: string | undefined;
+  readonly provider: string | undefined;
   readonly providerId: string;
+  readonly providersFile: string | undefined;
   readonly stateDir: string;
   readonly sessionDir: string;
   readonly piCommand: string;
@@ -36,10 +38,12 @@ export function defaultOptions(): LocalpiOptions {
   const home = envString("HOME", ".");
   const stateDir = envString("LOCALPI_STATE_DIR", path.join(home, ".local/state/localpi"));
   return {
-    runtime: parseRuntime(envString("LOCALPI_RUNTIME", "llama-server")),
+    runtime: parseRuntime(envString("LOCALPI_RUNTIME", "auto")),
     baseUrl: envOptionalBaseUrl("LOCALPI_BASE_URL"),
     model: process.env["LOCALPI_MODEL"],
+    provider: process.env["LOCALPI_PROVIDER"],
     providerId: envString("LOCALPI_PROVIDER_ID", "local-openai"),
+    providersFile: process.env["LOCALPI_PROVIDERS_FILE"],
     stateDir,
     sessionDir: defaultSessionDir(stateDir),
     piCommand: envString("LOCALPI_PI_CMD", "npx -y @earendil-works/pi-coding-agent@latest"),
@@ -97,7 +101,8 @@ export function usage(): string {
     "  localpi [localpi options] [pi options/messages]",
     "",
     "localpi options:",
-    "  --runtime <kind>         llama-server, lmstudio, or openai-compatible",
+    "  --runtime <kind>         auto, llama-server, lmstudio, vllm, or openai-compatible",
+    "  --provider <id>          catalog provider id to use",
     "  --model <alias|id|path>  model alias, backend id, or GGUF path",
     "  --base-url <url>         OpenAI-compatible endpoint",
     "  --ctx <n>                model context window",
@@ -111,6 +116,7 @@ export function usage(): string {
     "  --parallel <n>           llama-server parallel slots",
     "  --chat-template <path>   llama.cpp chat template file",
     "  --tools <list>           Pi tools allow list",
+    "  --providers-file <path>  localpi provider registry JSON",
     "  --no-approval           do not ask before tool calls",
     "  --no-token-status       do not install token status extension",
     "  --status                print runtime status and exit",
@@ -177,7 +183,9 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--runtime": (options, value) => ({ ...options, runtime: parseRuntime(value) }),
   "--base-url": (options, value) => ({ ...options, baseUrl: normalizeBaseUrl(value) }),
   "--model": (options, value) => ({ ...options, model: value }),
+  "--provider": (options, value) => ({ ...options, provider: value }),
   "--provider-id": (options, value) => ({ ...options, providerId: value }),
+  "--providers-file": (options, value) => ({ ...options, providersFile: value }),
   "--state-dir": (options, value) => ({ ...options, stateDir: value }),
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: value }),
@@ -213,11 +221,17 @@ function parseValueFlag(
 }
 
 function parseRuntime(value: string): RuntimeKind {
-  if (value === "llama-server" || value === "lmstudio" || value === "openai-compatible") {
+  if (
+    value === "auto" ||
+    value === "llama-server" ||
+    value === "lmstudio" ||
+    value === "vllm" ||
+    value === "openai-compatible"
+  ) {
     return value;
   }
   throw new Error(
-    `unknown runtime ${value}; expected llama-server, lmstudio, or openai-compatible`
+    `unknown runtime ${value}; expected auto, llama-server, lmstudio, vllm, or openai-compatible`
   );
 }
 

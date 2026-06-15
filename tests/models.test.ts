@@ -71,6 +71,32 @@ describe("model aliases", () => {
     }
   });
 
+  it("allows provider-only LOCALPI_MODELS_FILE configs", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "localpi-models-"));
+    try {
+      const configPath = path.join(dir, "models.json");
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          providers: {
+            vllm: {
+              type: "openai-compatible",
+              baseUrl: "http://127.0.0.1:8000/v1"
+            }
+          }
+        }),
+        "utf8"
+      );
+      process.env["LOCALPI_MODELS_FILE"] = configPath;
+
+      await expect(listModelAliases(dir)).resolves.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "gemma-12b" })])
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("treats a GGUF path as a custom model", async () => {
     const resolved = await resolveLlamaModel("/models/My Model.gguf");
     expect(resolved).toMatchObject({

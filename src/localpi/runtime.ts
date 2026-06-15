@@ -1,4 +1,3 @@
-import { resolveLocalModel } from "../llm/openai.js";
 import {
   ensureLlamaServer,
   getManagedLlamaServerMetadata,
@@ -8,6 +7,8 @@ import {
   llamaServerStatus,
   stopManagedLlamaServer
 } from "./llama-server.js";
+import type { CatalogModel, ModelCatalog } from "./catalog.js";
+import { discoverModelCatalog } from "./catalog.js";
 import {
   defaultLlamaModelName,
   findModelAlias,
@@ -18,30 +19,47 @@ import type { LocalpiOptions } from "./options.js";
 
 export type RuntimeConnection = {
   readonly runtime: string;
+  readonly providerId: string;
+  readonly providerName: string;
   readonly baseUrl: string;
   readonly model: string;
   readonly availableModels: readonly string[];
+  readonly catalogModels: readonly CatalogModel[];
   readonly contextWindow?: number;
   readonly warnings: readonly string[];
 };
 
-export async function resolveRuntime(options: LocalpiOptions): Promise<RuntimeConnection> {
+export type ModelSelectionRequest = {
+  readonly models: readonly CatalogModel[];
+};
+
+export type ModelSelector = (request: ModelSelectionRequest) => Promise<CatalogModel | undefined>;
+
+export async function resolveRuntime(
+  options: LocalpiOptions,
+  selectModel?: ModelSelector
+): Promise<RuntimeConnection> {
+  if (options.runtime === "auto") {
+    return resolveCatalogRuntime(options, selectModel);
+  }
   switch (options.runtime) {
     case "llama-server":
       return resolveLlamaRuntime(options);
     case "lmstudio":
-      return resolveOpenAiRuntime(
-        options,
-        options.baseUrl ?? "http://127.0.0.1:1234/v1",
-        "lmstudio"
-      );
+      return resolveCatalogRuntime(options, selectModel);
+    case "vllm":
+      return resolveCatalogRuntime(options, selectModel);
     case "openai-compatible":
-      return resolveOpenAiRuntime(options, requiredBaseUrl(options), "openai-compatible");
+      return resolveCatalogRuntime(options, selectModel);
   }
 }
 
 export async function stopRuntime(options: LocalpiOptions): Promise<string> {
-  if (options.runtime !== "llama-server") {
+  if (
+    options.runtime === "lmstudio" ||
+    options.runtime === "vllm" ||
+    options.runtime === "openai-compatible"
+  ) {
     return `runtime ${options.runtime} is externally managed; nothing stopped`;
   }
   return stopManagedLlamaServer(options);
@@ -50,6 +68,9 @@ export async function stopRuntime(options: LocalpiOptions): Promise<string> {
 export async function statusOutput(options: LocalpiOptions): Promise<string> {
   if (options.runtime === "llama-server") {
     return `${await llamaServerStatus(options)}\n${await aliasListOutput()}`;
+  }
+  if (statusShouldUseCatalog(options)) {
+    return catalogStatusOutput(options);
   }
   const connection = await resolveRuntime(options);
   return connectionStatus(connection);
@@ -70,6 +91,7 @@ export function connectionStatus(connection: RuntimeConnection): string {
   return (
     [
       `runtime: ${connection.runtime}`,
+      `provider: ${connection.providerId}`,
       `base url: ${connection.baseUrl}`,
       `model: ${connection.model}`,
       `available models: ${connection.availableModels.join(", ")}`,
@@ -79,6 +101,30 @@ export function connectionStatus(connection: RuntimeConnection): string {
   );
 }
 
+function statusShouldUseCatalog(options: LocalpiOptions): boolean {
+  return options.runtime === "auto" || options.model === undefined || options.model === "auto";
+}
+
+async function catalogStatusOutput(options: LocalpiOptions): Promise<string> {
+  const catalog = await discoverModelCatalog(options);
+  const loaded = catalog.models.filter((model) => model.availability === "loaded");
+  const startable = catalog.models.filter((model) => model.availability === "startable");
+  return (
+    [
+      `runtime: ${options.runtime}`,
+      `loaded models: ${statusModelList(loaded)}`,
+      `startable models: ${statusModelList(startable)}`,
+      ...catalog.warnings.map((warning) => `warning: ${warning}`)
+    ].join("\n") + "\n"
+  );
+}
+
+function statusModelList(models: readonly CatalogModel[]): string {
+  return models.length === 0
+    ? "none"
+    : models.map((model) => `${model.providerId}/${model.modelId}`).join(", ");
+}
+
 async function resolveLlamaRuntime(options: LocalpiOptions): Promise<RuntimeConnection> {
   const requested = options.model ?? defaultLlamaModelName();
   const existing = await existingLlamaRuntime(options, requested);
@@ -86,14 +132,25 @@ async function resolveLlamaRuntime(options: LocalpiOptions): Promise<RuntimeConn
     return existing;
   }
   const model = await resolveLlamaModelForStart(requested, options);
-  const runtime = await ensureLlamaServer(options, {
-    ...llamaModelForStart(model, options)
-  });
+  const modelForStart = llamaModelForStart(model, options);
+  await assertDirectLlamaStartIsSafe(options, modelForStart);
+  const runtime = await ensureLlamaServer(options, modelForStart);
   return {
     runtime: runtime.managed ? "llama-server" : "llama-server/external",
+    providerId: "llama-server",
+    providerName: "llama-server",
     baseUrl: runtime.baseUrl,
     model: runtime.model,
     availableModels: runtime.availableModels,
+    catalogModels: connectionCatalogModels(
+      "llama-server",
+      "llama-server",
+      "managed-llama-server",
+      runtime.baseUrl,
+      runtime.availableModels,
+      options,
+      runtime.contextWindow
+    ),
     warnings: runtime.warnings,
     ...optionalContextWindow(options.contextWindow ?? runtime.contextWindow)
   };
@@ -152,9 +209,22 @@ function existingRuntimeConnection(
 ): RuntimeConnection {
   return {
     runtime: runtimeName(managed),
+    providerId: "llama-server",
+    providerName: "llama-server",
     baseUrl: llamaBaseUrl(options),
     model: match.modelId,
     availableModels: match.models.map((model) => model.id),
+    catalogModels: match.models.map((model) =>
+      catalogModelFromModelInfo(
+        "llama-server",
+        "llama-server",
+        "managed-llama-server",
+        llamaBaseUrl(options),
+        model,
+        options,
+        model.id === match.modelId ? reportedContextWindow : model.contextWindow
+      )
+    ),
     warnings: [],
     ...optionalContextWindow(options.contextWindow ?? reportedContextWindow)
   };
@@ -267,38 +337,403 @@ function llamaModelForStart(
   };
 }
 
-async function resolveOpenAiRuntime(
-  options: LocalpiOptions,
-  baseUrl: string,
-  runtime: string
-): Promise<RuntimeConnection> {
-  const resolved = await resolveLocalModel(baseUrl, options.model ?? "auto", options.timeoutMs);
-  return {
-    runtime,
-    baseUrl,
-    model: resolved.model,
-    availableModels: resolved.availableModels,
-    warnings: [],
-    ...optionalContextWindow(options.contextWindow ?? resolved.contextWindow)
-  };
+export function effectiveBaseUrl(options: LocalpiOptions): string {
+  if (options.runtime === "llama-server") {
+    return llamaBaseUrl(options);
+  }
+  if (options.runtime === "openai-compatible") {
+    return requiredOpenAiBaseUrl(options);
+  }
+  return options.baseUrl ?? defaultExternalBaseUrl(options.runtime);
 }
 
-function requiredBaseUrl(options: LocalpiOptions): string {
+function requiredOpenAiBaseUrl(options: LocalpiOptions): string {
   if (options.baseUrl === undefined) {
     throw new Error("--runtime openai-compatible requires --base-url");
   }
   return options.baseUrl;
 }
 
-export function effectiveBaseUrl(options: LocalpiOptions): string {
-  switch (options.runtime) {
-    case "llama-server":
-      return llamaBaseUrl(options);
-    case "lmstudio":
-      return options.baseUrl ?? "http://127.0.0.1:1234/v1";
-    case "openai-compatible":
-      return requiredBaseUrl(options);
+function defaultExternalBaseUrl(runtime: "auto" | "lmstudio" | "vllm"): string {
+  return runtime === "vllm" ? "http://127.0.0.1:8000/v1" : "http://127.0.0.1:1234/v1";
+}
+
+async function resolveCatalogRuntime(
+  options: LocalpiOptions,
+  selectModel: ModelSelector | undefined
+): Promise<RuntimeConnection> {
+  const catalog = await discoverModelCatalog(options);
+  const selected = await selectCatalogModel(options, catalog, selectModel);
+  if (selected.runtime === "managed-llama-server") {
+    return resolveSelectedLlamaRuntime(options, selected, catalog);
   }
+  return catalogRuntimeConnection(options, selected, catalog);
+}
+
+async function selectCatalogModel(
+  options: LocalpiOptions,
+  catalog: ModelCatalog,
+  selectModel: ModelSelector | undefined
+): Promise<CatalogModel> {
+  const selection = normalizedSelection(options, catalog.models);
+  const providerFiltered = modelsForProvider(catalog.models, selection.provider);
+  if (providerFiltered.length === 0) {
+    const customPath = await customPathCatalogModel(options, selection.provider, selection.model);
+    if (customPath !== undefined) {
+      return customPath;
+    }
+    if (selection.provider !== undefined) {
+      throw new Error(`provider ${selection.provider} did not report usable models`);
+    }
+  }
+  if (selection.model !== "auto") {
+    return selectExplicitCatalogModel(
+      options,
+      providerFiltered,
+      selection.provider,
+      selection.model
+    );
+  }
+  return selectAutomaticCatalogModel(providerFiltered, catalog.warnings, selectModel);
+}
+
+async function selectExplicitCatalogModel(
+  options: LocalpiOptions,
+  models: readonly CatalogModel[],
+  provider: string | undefined,
+  requested: string
+): Promise<CatalogModel> {
+  const matches = matchingCatalogModels(models, requested);
+  const [onlyMatch] = matches;
+  if (onlyMatch !== undefined && matches.length === 1) {
+    return onlyMatch;
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `model ${requested} is available from multiple providers; choose one with --provider:\n${modelChoiceList(matches)}`
+    );
+  }
+  const customPath = await customPathCatalogModel(options, provider, requested);
+  if (customPath !== undefined) {
+    return customPath;
+  }
+  throw new Error(`model ${requested} is not available; choices:\n${modelChoiceList(models)}`);
+}
+
+async function selectAutomaticCatalogModel(
+  models: readonly CatalogModel[],
+  warnings: readonly string[],
+  selectModel: ModelSelector | undefined
+): Promise<CatalogModel> {
+  const loaded = models.filter((model) => model.availability === "loaded");
+  const [onlyLoaded] = loaded;
+  if (onlyLoaded !== undefined && loaded.length === 1) {
+    return onlyLoaded;
+  }
+  if (loaded.length > 1) {
+    const selected = selectModel === undefined ? undefined : await selectModel({ models: loaded });
+    if (selected !== undefined) {
+      return selected;
+    }
+    throw new Error(
+      `multiple loaded models available; choose one with --provider and --model:\n${modelChoiceList(loaded)}`
+    );
+  }
+  const fallback = startableFallback(models);
+  if (fallback !== undefined) {
+    return fallback;
+  }
+  throw new Error(
+    `no loaded models available${warnings.length === 0 ? "" : `; ${warnings.join("; ")}`}`
+  );
+}
+
+function modelsForProvider(
+  models: readonly CatalogModel[],
+  provider: string | undefined
+): readonly CatalogModel[] {
+  return provider === undefined ? models : models.filter((model) => model.providerId === provider);
+}
+
+function normalizedSelection(
+  options: LocalpiOptions,
+  models: readonly CatalogModel[]
+): { readonly provider: string | undefined; readonly model: string } {
+  const requested = options.model ?? "auto";
+  if (options.provider !== undefined || requested === "auto" || isGgufFilePathRequest(requested)) {
+    return { provider: options.provider, model: requested };
+  }
+  const separator = requested.indexOf("/");
+  if (separator <= 0) {
+    return { provider: options.provider, model: requested };
+  }
+  const provider = requested.slice(0, separator);
+  if (!models.some((model) => model.providerId === provider)) {
+    return { provider: options.provider, model: requested };
+  }
+  return { provider, model: requested.slice(separator + 1) };
+}
+
+function matchingCatalogModels(
+  models: readonly CatalogModel[],
+  requested: string
+): readonly CatalogModel[] {
+  return models.filter((model) => model.modelId === requested || model.aliases.includes(requested));
+}
+
+async function customPathCatalogModel(
+  options: LocalpiOptions,
+  provider: string | undefined,
+  requested: string
+): Promise<CatalogModel | undefined> {
+  if (
+    options.runtime !== "auto" ||
+    (provider !== undefined && provider !== "llama-server") ||
+    !isGgufPathRequest(requested)
+  ) {
+    return undefined;
+  }
+  const resolved = await resolveLlamaModelForStart(requested, options);
+  return {
+    providerId: "llama-server",
+    providerName: "llama-server",
+    runtime: "managed-llama-server",
+    baseUrl: llamaBaseUrl(options),
+    modelId: resolved.id,
+    aliases: [requested],
+    displayName: `llama-server / ${resolved.name}`,
+    maxTokens: options.maxTokens,
+    capabilities: ["text"],
+    availability: "startable",
+    ...optionalContextWindow(options.contextWindow ?? resolved.contextWindow)
+  };
+}
+
+function isGgufPathRequest(value: string): boolean {
+  return value.endsWith(".gguf") || value.includes("/") || value.includes("\\");
+}
+
+function isGgufFilePathRequest(value: string): boolean {
+  return value.toLowerCase().endsWith(".gguf") || value.includes("\\");
+}
+
+function startableFallback(models: readonly CatalogModel[]): CatalogModel | undefined {
+  const startable = models.filter((model) => model.availability === "startable");
+  return (
+    startable.find(
+      (model) =>
+        model.aliases.includes(defaultLlamaModelName()) || model.modelId === defaultLlamaModelName()
+    ) ?? startable[0]
+  );
+}
+
+async function resolveSelectedLlamaRuntime(
+  options: LocalpiOptions,
+  selected: CatalogModel,
+  catalog: ModelCatalog
+): Promise<RuntimeConnection> {
+  const existing =
+    selected.availability === "loaded"
+      ? await existingLlamaRuntime(options, selected.modelId)
+      : undefined;
+  if (existing !== undefined) {
+    const selectedModel = managedCatalogModelFromConnection(options, selected, existing);
+    return catalogRuntimeConnection(options, selectedModel, {
+      models: replaceManagedLoadedModels(catalog.models, selected, existing.catalogModels),
+      warnings: [...catalog.warnings, ...existing.warnings]
+    });
+  }
+  return startSelectedLlamaRuntime(options, selected, catalog);
+}
+
+async function startSelectedLlamaRuntime(
+  options: LocalpiOptions,
+  selected: CatalogModel,
+  catalog: ModelCatalog
+): Promise<RuntimeConnection> {
+  const model = await resolveLlamaModelForStart(selected.aliases[0] ?? selected.modelId, options);
+  const modelForStart = llamaModelForStart(model, options);
+  await stopStaleManagedLlamaServer(options, modelForStart);
+  assertNoLoadedExternalModels(catalog);
+  const runtime = await ensureLlamaServer(options, modelForStart);
+  const loadedSelected = runtimeSelectedCatalogModel(options, selected, runtime);
+  return catalogRuntimeConnection(options, loadedSelected, {
+    models: replaceManagedLoadedModels(catalog.models, selected, [loadedSelected]),
+    warnings: [...catalog.warnings, ...runtime.warnings]
+  });
+}
+
+async function assertDirectLlamaStartIsSafe(
+  options: LocalpiOptions,
+  model: ReturnType<typeof llamaModelForStart>
+): Promise<void> {
+  const catalog = await discoverModelCatalog({
+    ...options,
+    runtime: "auto",
+    provider: undefined,
+    model: "auto"
+  });
+  try {
+    assertNoLoadedExternalModels(catalog);
+  } catch (error) {
+    await stopStaleManagedLlamaServer(options, model);
+    throw error;
+  }
+}
+
+async function stopStaleManagedLlamaServer(
+  options: LocalpiOptions,
+  model: ReturnType<typeof llamaModelForStart>
+): Promise<void> {
+  const managed = await getManagedLlamaServerMetadata(options);
+  if (managed !== undefined && managedLlamaServerNeedsRestart(options, managed, model)) {
+    await stopManagedLlamaServer(options);
+  }
+}
+
+function runtimeSelectedCatalogModel(
+  options: LocalpiOptions,
+  selected: CatalogModel,
+  runtime: Awaited<ReturnType<typeof ensureLlamaServer>>
+): CatalogModel {
+  return catalogModelFromModelInfo(
+    selected.providerId,
+    selected.providerName,
+    "managed-llama-server",
+    runtime.baseUrl,
+    runtime.contextWindow === undefined
+      ? { id: runtime.model }
+      : { id: runtime.model, contextWindow: runtime.contextWindow },
+    options,
+    runtime.contextWindow
+  );
+}
+
+function managedCatalogModelFromConnection(
+  options: LocalpiOptions,
+  selected: CatalogModel,
+  connection: RuntimeConnection
+): CatalogModel {
+  return catalogModelFromModelInfo(
+    selected.providerId,
+    selected.providerName,
+    "managed-llama-server",
+    connection.baseUrl,
+    connection.contextWindow === undefined
+      ? { id: connection.model }
+      : { id: connection.model, contextWindow: connection.contextWindow },
+    options,
+    connection.contextWindow
+  );
+}
+
+function assertNoLoadedExternalModels(catalog: ModelCatalog): void {
+  const external = catalog.models.filter(
+    (model) => model.runtime !== "managed-llama-server" && model.availability === "loaded"
+  );
+  if (external.length === 0) {
+    return;
+  }
+  throw new Error(
+    `external local models are already loaded; choose one or unload them before starting llama-server:\n${modelChoiceList(external)}`
+  );
+}
+
+function catalogRuntimeConnection(
+  options: LocalpiOptions,
+  selected: CatalogModel,
+  catalog: ModelCatalog
+): RuntimeConnection {
+  const providerModels = catalog.models.filter(
+    (model) => model.providerId === selected.providerId && model.availability === "loaded"
+  );
+  return {
+    runtime: connectionRuntimeName(selected),
+    providerId: selected.providerId,
+    providerName: selected.providerName,
+    baseUrl: selected.baseUrl,
+    model: selected.modelId,
+    availableModels: providerModels.map((model) => model.modelId),
+    catalogModels: catalog.models.filter((model) => model.availability === "loaded"),
+    warnings: catalog.warnings,
+    ...optionalContextWindow(options.contextWindow ?? selected.contextWindow)
+  };
+}
+
+function connectionRuntimeName(selected: CatalogModel): string {
+  if (selected.runtime === "managed-llama-server") {
+    return "llama-server";
+  }
+  return selected.providerId === "lmstudio" || selected.providerId === "vllm"
+    ? selected.providerId
+    : selected.runtime;
+}
+
+function replaceManagedLoadedModels(
+  models: readonly CatalogModel[],
+  selected: CatalogModel,
+  loaded: readonly CatalogModel[]
+): readonly CatalogModel[] {
+  return [
+    ...models.filter(
+      (model) =>
+        model !== selected &&
+        !(model.providerId === "llama-server" && model.availability === "loaded")
+    ),
+    ...loaded
+  ];
+}
+
+function modelChoiceList(models: readonly CatalogModel[]): string {
+  return models
+    .map((model) => `  ${model.providerId}/${model.modelId} (${model.displayName})`)
+    .join("\n");
+}
+
+function catalogModelFromModelInfo(
+  providerId: string,
+  providerName: string,
+  runtime: "openai-compatible" | "managed-llama-server",
+  baseUrl: string,
+  model: { readonly id: string; readonly contextWindow?: number },
+  options: LocalpiOptions,
+  contextWindow?: number
+): CatalogModel {
+  return {
+    providerId,
+    providerName,
+    runtime,
+    baseUrl,
+    modelId: model.id,
+    aliases: [],
+    displayName: `${providerName} / ${model.id}`,
+    maxTokens: options.maxTokens,
+    capabilities: ["text"],
+    availability: "loaded",
+    ...optionalContextWindow(contextWindow ?? model.contextWindow)
+  };
+}
+
+function connectionCatalogModels(
+  providerId: string,
+  providerName: string,
+  runtime: "openai-compatible" | "managed-llama-server",
+  baseUrl: string,
+  modelIds: readonly string[],
+  options: LocalpiOptions,
+  contextWindow?: number
+): readonly CatalogModel[] {
+  return modelIds.map((modelId) =>
+    catalogModelFromModelInfo(
+      providerId,
+      providerName,
+      runtime,
+      baseUrl,
+      contextWindow === undefined ? { id: modelId } : { id: modelId, contextWindow },
+      options,
+      contextWindow
+    )
+  );
 }
 
 function optionalContextWindow(contextWindow: number | undefined): {

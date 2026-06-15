@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";
 import { ensureLlamaServer, stopManagedLlamaServer } from "../src/localpi/llama-server.js";
-import { effectiveBaseUrl, resolveRuntime } from "../src/localpi/runtime.js";
+import { effectiveBaseUrl, resolveRuntime, statusOutput } from "../src/localpi/runtime.js";
 
 describe("runtime resolution", () => {
   const servers: ReturnType<typeof createServer>[] = [];
@@ -254,7 +254,66 @@ describe("runtime resolution", () => {
           gpuLayers: 998,
           serverCommand: "/definitely/missing/localpi-llama-server"
         })
-      ).rejects.toThrow(/failed to start llama-server|LM Studio also reports loaded models/);
+      ).rejects.toThrow(
+        /failed to start llama-server|LM Studio also reports loaded models|external local models are already loaded/
+      );
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("does not fast-reuse auto catalog managed selections after startup options change", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("custom-model", 32768);
+    const externalBaseUrl = await startModelServer("qwen-vllm", 131072);
+    const child = spawnFakeLlamaServer(modelPath);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl: externalBaseUrl,
+            discover: true
+          }
+        },
+        models: { custom: { id: "custom-model", path: modelPath } }
+      })
+    );
+    await writeMetadata(stateDir, {
+      pid: child.pid ?? 0,
+      baseUrl,
+      modelId: "custom-model",
+      modelPath,
+      contextWindow: 32768,
+      serverCommand: "llama-server",
+      host: "127.0.0.1",
+      port: Number.parseInt(new URL(baseUrl).port, 10),
+      gpuLayers: 999,
+      parallel: 1
+    });
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          stateDir,
+          baseUrl,
+          model: "custom",
+          gpuLayers: 998,
+          serverCommand: "/definitely/missing/localpi-llama-server"
+        })
+      ).rejects.toThrow("external local models are already loaded");
       await waitForDead(child.pid ?? 0);
     } finally {
       restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
@@ -295,11 +354,484 @@ describe("runtime resolution", () => {
     ).rejects.toThrow("--runtime openai-compatible requires --base-url");
   });
 
+  it("uses --provider as the direct OpenAI-compatible provider id", async () => {
+    const baseUrl = await startModelServer("served-model");
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "openai-compatible",
+        provider: "custom-provider",
+        baseUrl,
+        model: "served-model"
+      })
+    ).resolves.toMatchObject({
+      runtime: "openai-compatible",
+      providerId: "custom-provider",
+      providerName: "custom-provider",
+      model: "served-model"
+    });
+  });
+
+  it("preserves explicit OpenAI-compatible models when /models is empty", async () => {
+    const baseUrl = await startModelListServer([]);
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "openai-compatible",
+        baseUrl,
+        model: "explicit-model"
+      })
+    ).resolves.toMatchObject({
+      runtime: "openai-compatible",
+      model: "explicit-model",
+      availableModels: ["explicit-model"]
+    });
+  });
+
+  it("does not treat external model ids with slashes as GGUF paths", async () => {
+    const baseUrl = await startModelServer("other-model");
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "lmstudio", baseUrl, model: "org/model" })
+    ).rejects.toThrow("model org/model is not available");
+  });
+
+  it("resolves direct vLLM runtimes as externally managed providers", async () => {
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "vllm", baseUrl, model: "auto" })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl,
+      model: "qwen-vllm",
+      contextWindow: 131072
+    });
+  });
+
+  it("preserves connection errors for explicit provider runtimes", async () => {
+    const baseUrl = await unusedBaseUrl();
+
+    let message = "";
+    try {
+      await resolveRuntime({
+        ...options(),
+        runtime: "vllm",
+        baseUrl,
+        model: "auto",
+        timeoutMs: 50
+      });
+    } catch (error) {
+      message = String(error);
+    }
+
+    expect(message).toMatch(/fetch failed|ECONNREFUSED|connect/i);
+    expect(message).not.toContain("provider  did not report usable models");
+  });
+
+  it("discovers and selects configured vLLM providers in auto runtime", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl,
+            discover: true
+          }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        provider: "vllm",
+        model: "auto",
+        providersFile
+      })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl,
+      model: "qwen-vllm",
+      contextWindow: 131072
+    });
+  });
+
+  it("selects explicitly configured providers with discovery disabled", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        provider: "vllm",
+        model: "qwen",
+        providersFile
+      })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      providerId: "vllm",
+      baseUrl: "http://127.0.0.1:8000/v1",
+      model: "qwen",
+      availableModels: ["qwen"]
+    });
+  });
+
+  it("starts explicit GGUF paths through the auto runtime", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await unusedBaseUrl();
+    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
+    const providersFile = await disabledBuiltInProvidersFile(stateDir);
+
+    await expectAutoGgufResult(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        stateDir,
+        baseUrl,
+        model: modelPath,
+        providersFile,
+        serverCommand
+      }),
+      {
+        runtime: "llama-server",
+        providerId: "llama-server",
+        model: "custom-model",
+        catalogModels: [
+          expect.objectContaining({ providerId: "llama-server", modelId: "custom-model" })
+        ]
+      }
+    );
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("preserves provider-prefixed relative GGUF paths in auto runtime", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await unusedBaseUrl();
+    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
+    const providersFile = await disabledBuiltInProvidersFile(stateDir);
+
+    const result = await autoGgufResult(
+      resolveRuntime({
+        ...options(),
+        runtime: "auto",
+        stateDir,
+        baseUrl,
+        model: "llama-server/custom-model.gguf",
+        providersFile,
+        serverCommand
+      })
+    );
+    if (result === "blocked-by-loaded-provider") {
+      return;
+    }
+    expect(result).toMatchObject({
+      runtime: "llama-server",
+      providerId: "llama-server",
+      model: "custom-model"
+    });
+    const args = JSON.parse(
+      await readFile(path.join(stateDir, "fake-openai-server.args.json"), "utf8")
+    ) as string[];
+    expect(args[args.indexOf("--model") + 1]).toBe("llama-server/custom-model.gguf");
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  async function expectAutoGgufResult(
+    promise: Promise<Awaited<ReturnType<typeof resolveRuntime>>>,
+    expected: Record<string, unknown>
+  ): Promise<void> {
+    const result = await autoGgufResult(promise);
+    if (result === "blocked-by-loaded-provider") {
+      return;
+    }
+    expect(result).toMatchObject(expected);
+  }
+
+  async function autoGgufResult(
+    promise: Promise<Awaited<ReturnType<typeof resolveRuntime>>>
+  ): Promise<Awaited<ReturnType<typeof resolveRuntime>> | "blocked-by-loaded-provider"> {
+    try {
+      return await promise;
+    } catch (error) {
+      expect(String(error)).toMatch(
+        /LM Studio also reports loaded models|external local models are already loaded/
+      );
+      return "blocked-by-loaded-provider";
+    }
+  }
+
+  it("does not start managed llama-server while external providers have loaded models", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl,
+            discover: true
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          model: "custom",
+          providersFile: modelsFile,
+          serverCommand: "/definitely/missing/localpi-llama-server"
+        })
+      ).rejects.toThrow("external local models are already loaded");
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("does not start direct llama-server while external providers have loaded models", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("qwen-vllm", 131072);
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl,
+            discover: true
+          }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "llama-server",
+        stateDir,
+        model: modelPath,
+        providersFile,
+        serverCommand: "/definitely/missing/localpi-llama-server"
+      })
+    ).rejects.toThrow("external local models are already loaded");
+  });
+
+  it("selects already-loaded llama-server models by alias in auto runtime", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("custom-id", 4096);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({ models: { custom: { id: "custom-id", path: modelPath } } })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({ ...options(), runtime: "auto", stateDir, baseUrl, model: "custom" })
+      ).resolves.toMatchObject({
+        runtime: "llama-server",
+        providerId: "llama-server",
+        model: "custom-id",
+        contextWindow: 4096
+      });
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("does not probe the managed endpoint as an external provider", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("custom-id", 4096);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl,
+            discover: true
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          stateDir,
+          baseUrl,
+          model: "auto",
+          providersFile: modelsFile
+        })
+      ).resolves.toMatchObject({
+        runtime: "llama-server",
+        providerId: "llama-server",
+        model: "custom-id"
+      });
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("reuses loaded llama-server aliases while external providers are loaded", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await startModelServer("custom-id", 4096);
+    const externalBaseUrl = await startModelServer("qwen-vllm", 131072);
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({
+        providers: {
+          vllm: {
+            type: "openai-compatible",
+            name: "vLLM",
+            baseUrl: externalBaseUrl,
+            discover: true
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          stateDir,
+          baseUrl,
+          provider: "llama-server",
+          model: "custom"
+        })
+      ).resolves.toMatchObject({
+        runtime: "llama-server",
+        providerId: "llama-server",
+        model: "custom-id",
+        contextWindow: 4096
+      });
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("reports auto status without starting startable llama-server models", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({ models: { custom: { id: "custom-id", path: modelPath } } })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      const output = await statusOutput({
+        ...options(),
+        runtime: "auto",
+        stateDir,
+        serverCommand: "/definitely/missing/localpi-llama-server"
+      });
+      expect(output).toContain("runtime: auto");
+      expect(output).toContain("startable models: llama-server/custom-id");
+      await expect(
+        readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
+      ).rejects.toThrow();
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
+    }
+  });
+
+  it("reports catalog status without selecting among multiple external models", async () => {
+    const baseUrl = await startModelListServer([{ id: "first" }, { id: "second" }]);
+
+    await expect(
+      statusOutput({ ...options(), runtime: "lmstudio", baseUrl, model: undefined })
+    ).resolves.toContain("loaded models: lmstudio/first, lmstudio/second");
+  });
+
+  it("reports no loaded models when auto discovery finds no usable models", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const providersFile = await disabledBuiltInProvidersFile(stateDir);
+    const previousHome = process.env["HOME"];
+    process.env["HOME"] = stateDir;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          model: "auto",
+          providersFile,
+          timeoutMs: 10
+        })
+      ).rejects.toThrow("no loaded models available");
+    } finally {
+      restoreOptionalEnv("HOME", previousHome);
+    }
+  });
+
   it("computes the effective base URL per runtime", () => {
     expect(effectiveBaseUrl(options())).toBe("http://127.0.0.1:18194/v1");
     expect(effectiveBaseUrl({ ...options(), runtime: "lmstudio" })).toBe(
       "http://127.0.0.1:1234/v1"
     );
+    expect(effectiveBaseUrl({ ...options(), runtime: "vllm" })).toBe("http://127.0.0.1:8000/v1");
     expect(
       effectiveBaseUrl({ ...options(), runtime: "lmstudio", baseUrl: "http://10.0.0.5:1/v1" })
     ).toBe("http://10.0.0.5:1/v1");
@@ -589,10 +1121,14 @@ describe("runtime resolution", () => {
   });
 
   async function startModelServer(model: string, contextWindow = 4096): Promise<string> {
+    return startModelListServer([{ id: model, context_length: contextWindow }]);
+  }
+
+  async function startModelListServer(models: readonly Record<string, unknown>[]): Promise<string> {
     const server = createServer((request, response) => {
       if (request.url === "/v1/models") {
         response.writeHead(200, { "content-type": "application/json" });
-        response.end(JSON.stringify({ data: [{ id: model, context_length: contextWindow }] }));
+        response.end(JSON.stringify({ data: models }));
         return;
       }
       response.writeHead(404);
@@ -634,6 +1170,28 @@ describe("runtime resolution", () => {
     const modelPath = path.join(stateDir, "custom-model.gguf");
     await writeFile(modelPath, "");
     return { stateDir, modelPath };
+  }
+
+  async function disabledBuiltInProvidersFile(stateDir: string): Promise<string> {
+    const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersFile,
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        }
+      })
+    );
+    return providersFile;
   }
 
   function spawnFakeLlamaServer(modelPath: string): ChildProcess {
@@ -741,7 +1299,9 @@ function options(): LocalpiOptions {
     runtime: "llama-server",
     baseUrl: undefined,
     model: "gemma-12b",
+    provider: undefined,
     providerId: "local-openai",
+    providersFile: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",
