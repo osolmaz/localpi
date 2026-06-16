@@ -19,4 +19,7 @@ jobs:
       - run: npm run coverage
       - run: npm run dry
       - run: npm run mutate:scan
-      - run: npm run slophammer
+      - uses: dutifuldev/slophammer@main
+        with:
+          checker: ts
+          version: 0.3.0
