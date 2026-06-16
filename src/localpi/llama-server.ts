@@ -1,6 +1,6 @@
 import { execFile, spawn } from "node:child_process";
-import { closeSync, openSync } from "node:fs";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { closeSync, constants, openSync } from "node:fs";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { listModels, normalizeBaseUrl } from "../llm/openai.js";
@@ -46,6 +46,15 @@ export async function ensureLlamaServer(
     warnings,
     contextWindow: requestedContextWindow(options, model)
   };
+}
+
+export async function managedLlamaServerUnavailableWarning(
+  options: LocalpiOptions
+): Promise<string | undefined> {
+  if (await executableExists(options.serverCommand)) {
+    return undefined;
+  }
+  return `llama-server command ${options.serverCommand} is not available; managed llama-server fallback disabled`;
 }
 
 type ExistingServerResult = {
@@ -219,6 +228,7 @@ async function startManagedServer(
   options: LocalpiOptions,
   model: LlamaServerModel
 ): Promise<number> {
+  await assertManagedLlamaServerAvailable(options);
   await mkdir(serverDir(options), { recursive: true });
   const logPath = path.join(serverDir(options), "llama-server.log");
   const logFd = openSync(logPath, "a");
@@ -262,6 +272,40 @@ async function startManagedServer(
     });
   } finally {
     closeSync(logFd);
+  }
+}
+
+async function assertManagedLlamaServerAvailable(options: LocalpiOptions): Promise<void> {
+  if (await executableExists(options.serverCommand)) {
+    return;
+  }
+  throw new Error(
+    `failed to start llama-server: executable not found: ${options.serverCommand}; install llama-server or pass --server-command`
+  );
+}
+
+async function executableExists(command: string): Promise<boolean> {
+  if (command.length === 0) {
+    return false;
+  }
+  if (command.includes("/") || command.includes("\\")) {
+    return canExecute(command);
+  }
+  const entries = (process.env["PATH"] ?? "").split(path.delimiter).filter((entry) => entry !== "");
+  for (const entry of entries) {
+    if (await canExecute(path.join(entry, command))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function canExecute(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.X_OK);
+    return true;
+  } catch {
+    return false;
   }
 }
 

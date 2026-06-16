@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "checkers": ["typescript"],
+  "tsconfigFile": "tsconfig.json",
+  "mutate": ["src/localpi/options.ts", "src/pi/config.ts"],
+  "thresholds": {
+    "high": 60,
+    "low": 50,
+    "break": 50
+  }
+}

@@ -3,7 +3,8 @@ import type { ModelInfo } from "../llm/openai.js";
 import {
   getManagedLlamaServerMetadata,
   getLlamaServerModels,
-  llamaBaseUrl
+  llamaBaseUrl,
+  managedLlamaServerUnavailableWarning
 } from "./llama-server.js";
 import type { LocalpiOptions } from "./options.js";
 import { listModelAliases, resolveLlamaModel } from "./models.js";
@@ -140,10 +141,12 @@ async function discoverManagedLlamaProvider(
   const baseUrl = llamaBaseUrl(options);
   const aliases = await listModelAliases();
   const loaded = await loadedLlamaModels(config, options, baseUrl, aliases);
+  const unavailableWarning = await managedLlamaServerUnavailableWarning(options);
   const startable = await startableLlamaModels(config, options, baseUrl, loaded.models, aliases);
   return {
     models: [...loaded.models, ...startable],
-    warnings: loaded.warnings
+    warnings:
+      unavailableWarning === undefined ? loaded.warnings : [...loaded.warnings, unavailableWarning]
   };
 }
 

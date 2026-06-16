@@ -718,7 +718,21 @@ describe("runtime resolution", () => {
     const modelsFile = path.join(stateDir, "models.json");
     await writeFile(
       modelsFile,
-      JSON.stringify({ models: { custom: { id: "custom-id", path: modelPath } } })
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
     );
     const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
     process.env["LOCALPI_MODELS_FILE"] = modelsFile;
@@ -847,7 +861,21 @@ describe("runtime resolution", () => {
     const modelsFile = path.join(stateDir, "models.json");
     await writeFile(
       modelsFile,
-      JSON.stringify({ models: { custom: { id: "custom-id", path: modelPath } } })
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
     );
     const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
     process.env["LOCALPI_MODELS_FILE"] = modelsFile;
@@ -908,6 +936,51 @@ describe("runtime resolution", () => {
       ).rejects.toThrow("no loaded models available");
     } finally {
       restoreOptionalEnv("HOME", previousHome);
+    }
+  });
+
+  it("does not require llama-server for auto mode when no loaded model exists", async () => {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const modelsFile = path.join(stateDir, "models.json");
+    await writeFile(
+      modelsFile,
+      JSON.stringify({
+        providers: {
+          lmstudio: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:1234/v1",
+            discover: false
+          },
+          vllm: {
+            type: "openai-compatible",
+            baseUrl: "http://127.0.0.1:8000/v1",
+            discover: false
+          }
+        },
+        models: { custom: { id: "custom-id", path: modelPath } }
+      })
+    );
+    const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
+    process.env["LOCALPI_MODELS_FILE"] = modelsFile;
+
+    try {
+      await expect(
+        resolveRuntime({
+          ...options(),
+          runtime: "auto",
+          stateDir,
+          model: "auto",
+          providersFile: modelsFile,
+          serverCommand: "/definitely/missing/localpi-llama-server"
+        })
+      ).rejects.toThrow(
+        /no loaded models available\n\nTried engines:\n\nllama-server:\n- loaded models: none\n- startable models: .*llama-server\/custom-id.*\n- llama-server command \/definitely\/missing\/localpi-llama-server is not available; managed llama-server fallback disabled/u
+      );
+      await expect(
+        readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
+      ).rejects.toThrow();
+    } finally {
+      restoreOptionalEnv("LOCALPI_MODELS_FILE", previousModelsFile);
     }
   });
 

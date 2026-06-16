@@ -4,7 +4,7 @@ Localpi is a local Pi launcher for open-weight models.
 
 By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
 
-Localpi supports LM Studio, vLLM, custom OpenAI-compatible servers, and a managed `llama-server` fallback.
+Localpi supports LM Studio, vLLM, custom OpenAI-compatible servers, and an optional managed `llama-server` fallback.
 
 Localpi is intentionally generic. It does not contain classifier prompts, dataset workflows, GitHub routing logic, or final-schema output machinery. Structured classifier runs belong in caller tools such as `localpager-agent`.
 
@@ -38,7 +38,7 @@ Target default:
 localpi --model gemma-12b
 ```
 
-This uses the default `auto` runtime. If exactly one model is loaded locally, Localpi selects it. If multiple models are loaded in an interactive terminal, Localpi boots Pi with a temporary default and opens Pi's native model selector. If no external model is loaded, Localpi can fall back to the managed `llama-server` default. Thinking starts as `off` unless `--thinking` or `LOCALPI_THINKING` sets another startup level.
+This uses the default `auto` runtime. If exactly one model is loaded locally, Localpi selects it. If multiple models are loaded in an interactive terminal, Localpi boots Pi with a temporary default and opens Pi's native model selector. If no external model is loaded and `llama-server` is installed, Localpi can fall back to the managed `llama-server` default. Thinking starts as `off` unless `--thinking` or `LOCALPI_THINKING` sets another startup level.
 
 LM Studio is explicit:
 

@@ -62,13 +62,11 @@ function selectAutomaticCatalogModel(
   if (onlyLoaded !== undefined) {
     return onlyLoaded;
   }
-  const fallback = startableFallback(models);
+  const fallback = startableFallback(models, warnings);
   if (fallback !== undefined) {
     return fallback;
   }
-  throw new Error(
-    `no loaded models available${warnings.length === 0 ? "" : `; ${warnings.join("; ")}`}`
-  );
+  throw new Error(noLoadedModelsMessage(models, warnings));
 }
 
 function modelsForProvider(
@@ -108,12 +106,121 @@ function isGgufFilePathRequest(value: string): boolean {
   return value.toLowerCase().endsWith(".gguf") || value.includes("\\");
 }
 
-function startableFallback(models: readonly CatalogModel[]): CatalogModel | undefined {
-  const startable = models.filter((model) => model.availability === "startable");
+function startableFallback(
+  models: readonly CatalogModel[],
+  warnings: readonly string[]
+): CatalogModel | undefined {
+  const startable = models.filter(
+    (model) =>
+      model.availability === "startable" &&
+      (model.runtime !== "managed-llama-server" || managedLlamaFallbackAvailable(warnings))
+  );
   return (
     startable.find(
       (model) =>
         model.aliases.includes(defaultLlamaModelName()) || model.modelId === defaultLlamaModelName()
     ) ?? startable[0]
   );
+}
+
+function managedLlamaFallbackAvailable(warnings: readonly string[]): boolean {
+  return !warnings.some((warning) => warning.includes("managed llama-server fallback disabled"));
+}
+
+function noLoadedModelsMessage(
+  models: readonly CatalogModel[],
+  warnings: readonly string[]
+): string {
+  const sections = engineSections(models, warnings);
+  if (sections.length === 0) {
+    return "no loaded models available\n\nTried engines:\n\n- none reported usable models";
+  }
+  return [
+    "no loaded models available",
+    "",
+    "Tried engines:",
+    "",
+    sections.map(formatEngineSection).join("\n\n")
+  ].join("\n");
+}
+
+type EngineSection = {
+  readonly title: string;
+  readonly loaded: readonly string[];
+  readonly startable: readonly string[];
+  readonly warnings: readonly string[];
+};
+
+function engineSections(
+  models: readonly CatalogModel[],
+  warnings: readonly string[]
+): readonly EngineSection[] {
+  const sections = new Map<string, EngineSection>();
+  for (const model of models) {
+    const section = ensureEngineSection(sections, model.providerId, model.providerName);
+    const entry = `${model.providerId}/${model.modelId}`;
+    const updated =
+      model.availability === "loaded"
+        ? { ...section, loaded: [...section.loaded, entry] }
+        : { ...section, startable: [...section.startable, entry] };
+    sections.set(model.providerId, updated);
+  }
+  for (const warning of warnings) {
+    const parsed = warningEngine(warning);
+    const section = ensureEngineSection(sections, parsed.key, parsed.title);
+    sections.set(parsed.key, {
+      ...section,
+      warnings: [...section.warnings, parsed.message]
+    });
+  }
+  return [...sections.values()];
+}
+
+function ensureEngineSection(
+  sections: Map<string, EngineSection>,
+  key: string,
+  title: string
+): EngineSection {
+  const existing = sections.get(key);
+  if (existing !== undefined) {
+    return existing;
+  }
+  const section: EngineSection = { title, loaded: [], startable: [], warnings: [] };
+  sections.set(key, section);
+  return section;
+}
+
+function warningEngine(warning: string): {
+  readonly key: string;
+  readonly title: string;
+  readonly message: string;
+} {
+  const notResponding = /^(.*) is not responding at (.*)$/u.exec(warning);
+  if (notResponding?.[1] !== undefined && notResponding[2] !== undefined) {
+    return {
+      key: notResponding[1].toLowerCase(),
+      title: notResponding[1],
+      message: `not responding at ${notResponding[2]}`
+    };
+  }
+  if (warning.includes("llama-server")) {
+    return { key: "llama-server", title: "llama-server", message: warning };
+  }
+  return { key: "other", title: "Other", message: warning };
+}
+
+function formatEngineSection(section: EngineSection): string {
+  const lines = [`${section.title}:`];
+  if (section.loaded.length === 0) {
+    lines.push("- loaded models: none");
+  } else {
+    lines.push(`- loaded models: ${section.loaded.join(", ")}`);
+  }
+  if (section.startable.length > 0) {
+    lines.push(`- startable models: ${section.startable.join(", ")}`);
+  }
+  for (const warning of section.warnings) {
+    lines.push(`- ${warning}`);
+  }
+  return lines.join("\n");
 }

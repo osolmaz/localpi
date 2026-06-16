@@ -9,7 +9,7 @@ It should make the common local-model path one command while keeping the selecte
 - Run Pi against local open-weight models without hand-editing Pi config.
 - Discover local providers by default and select from the loaded model catalog.
 - Support LM Studio and vLLM as built-in OpenAI-compatible providers.
-- Keep managed `llama-server` as the fallback when no external model is loaded.
+- Keep managed `llama-server` as an optional fallback when no external model is loaded.
 - Keep the tool generic: no classifier prompts, topic schemas, dataset generation, or final-schema output.
 - Keep large model memory usage predictable by managing only one localpi-owned `llama-server` process at a time.
 
@@ -23,11 +23,12 @@ Localpi:
 
 - probes built-in LM Studio and vLLM endpoints
 - loads configured OpenAI-compatible providers from `--providers-file`, `LOCALPI_PROVIDERS_FILE`, or `LOCALPI_MODELS_FILE`
-- includes the localpi-owned `llama-server` catalog as startable fallback entries
+- includes the localpi-owned `llama-server` catalog as startable fallback entries when available
 - selects the only loaded model automatically
 - opens Pi's native model selector when multiple loaded models are available in an interactive TTY
 - never prompts in non-interactive runs; automation can pin a model with concrete `--provider` and `--model` values
 - treats `--provider` without `--model` as catalog scoping, not as a concrete model choice
+- skips automatic managed `llama-server` fallback when the configured `llama-server` command is unavailable
 - writes Pi config for all launch-time loaded catalog entries so Pi `/model` can switch among them
 
 ### `llama-server`
