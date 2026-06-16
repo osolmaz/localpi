@@ -6,7 +6,13 @@ import {
   managedLlamaServerNeedsRestart,
   stopManagedLlamaServer
 } from "./llama-server.js";
-import { managedModelSupportsReasoning, type CatalogModel, type ModelCatalog } from "./catalog.js";
+import {
+  managedModelSupportsReasoning,
+  runtimeCatalogWarning,
+  type CatalogModel,
+  type CatalogWarning,
+  type ModelCatalog
+} from "./catalog.js";
 import {
   catalogModelFromModelInfo,
   catalogRuntimeConnection,
@@ -63,7 +69,10 @@ export async function resolveSelectedLlamaRuntime(
     const selectedModel = managedCatalogModelFromConnection(options, selected, existing);
     return catalogRuntimeConnection(options, selectedModel, {
       models: replaceManagedLoadedModels(catalog.models, selected, existing.catalogModels),
-      warnings: [...catalog.warnings, ...existing.warnings]
+      warnings: [
+        ...catalog.warnings,
+        ...runtimeWarnings("llama-server", "llama-server", existing.warnings)
+      ]
     });
   }
   return startSelectedLlamaRuntime(options, selected, catalog);
@@ -292,7 +301,10 @@ async function startSelectedLlamaRuntime(
   const loadedSelected = runtimeSelectedCatalogModel(options, selected, runtime);
   return catalogRuntimeConnection(options, loadedSelected, {
     models: replaceManagedLoadedModels(catalog.models, selected, [loadedSelected]),
-    warnings: [...catalog.warnings, ...runtime.warnings]
+    warnings: [
+      ...catalog.warnings,
+      ...runtimeWarnings("llama-server", "llama-server", runtime.warnings)
+    ]
   });
 }
 
@@ -371,6 +383,14 @@ function assertNoLoadedExternalModels(catalog: ModelCatalog): void {
   throw new Error(
     `external local models are already loaded; choose one or unload them before starting llama-server:\n${modelChoiceList(external)}`
   );
+}
+
+function runtimeWarnings(
+  providerId: string,
+  providerName: string,
+  warnings: readonly string[]
+): readonly CatalogWarning[] {
+  return warnings.map((warning) => runtimeCatalogWarning(providerId, providerName, warning));
 }
 
 function isGgufPathRequest(value: string): boolean {

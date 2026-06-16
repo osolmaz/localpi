@@ -1,4 +1,4 @@
-import type { CatalogModel, ModelCatalog } from "./catalog.js";
+import type { CatalogModel, CatalogWarning, ModelCatalog } from "./catalog.js";
 import { customPathCatalogModel } from "./managed-runtime.js";
 import { defaultLlamaModelName } from "./models.js";
 import type { LocalpiOptions } from "./options.js";
@@ -27,7 +27,10 @@ export async function selectCatalogModel(
       selection.model
     );
   }
-  return selectAutomaticCatalogModel(providerFiltered, catalog.warnings);
+  return selectAutomaticCatalogModel(
+    providerFiltered,
+    warningsForProvider(catalog.warnings, selection.provider)
+  );
 }
 
 async function selectExplicitCatalogModel(
@@ -55,7 +58,7 @@ async function selectExplicitCatalogModel(
 
 function selectAutomaticCatalogModel(
   models: readonly CatalogModel[],
-  warnings: readonly string[]
+  warnings: readonly CatalogWarning[]
 ): CatalogModel {
   const loaded = models.filter((model) => model.availability === "loaded");
   const [onlyLoaded] = loaded;
@@ -108,7 +111,7 @@ function isGgufFilePathRequest(value: string): boolean {
 
 function startableFallback(
   models: readonly CatalogModel[],
-  warnings: readonly string[]
+  warnings: readonly CatalogWarning[]
 ): CatalogModel | undefined {
   const startable = models.filter(
     (model) =>
@@ -123,13 +126,16 @@ function startableFallback(
   );
 }
 
-function managedLlamaFallbackAvailable(warnings: readonly string[]): boolean {
-  return !warnings.some((warning) => warning.includes("managed llama-server fallback disabled"));
+function managedLlamaFallbackAvailable(warnings: readonly CatalogWarning[]): boolean {
+  return !warnings.some(
+    (warning) =>
+      warning.providerId === "llama-server" && warning.code === "managed-command-unavailable"
+  );
 }
 
 function noLoadedModelsMessage(
   models: readonly CatalogModel[],
-  warnings: readonly string[]
+  warnings: readonly CatalogWarning[]
 ): string {
   const sections = engineSections(models, warnings);
   if (sections.length === 0) {
@@ -153,7 +159,7 @@ type EngineSection = {
 
 function engineSections(
   models: readonly CatalogModel[],
-  warnings: readonly string[]
+  warnings: readonly CatalogWarning[]
 ): readonly EngineSection[] {
   const sections = new Map<string, EngineSection>();
   for (const model of models) {
@@ -166,11 +172,10 @@ function engineSections(
     sections.set(model.providerId, updated);
   }
   for (const warning of warnings) {
-    const parsed = warningEngine(warning);
-    const section = ensureEngineSection(sections, parsed.key, parsed.title);
-    sections.set(parsed.key, {
+    const section = ensureEngineSection(sections, warning.providerId, warning.providerName);
+    sections.set(warning.providerId, {
       ...section,
-      warnings: [...section.warnings, parsed.message]
+      warnings: [...section.warnings, warning.message]
     });
   }
   return [...sections.values()];
@@ -190,25 +195,6 @@ function ensureEngineSection(
   return section;
 }
 
-function warningEngine(warning: string): {
-  readonly key: string;
-  readonly title: string;
-  readonly message: string;
-} {
-  const notResponding = /^(.*) is not responding at (.*)$/u.exec(warning);
-  if (notResponding?.[1] !== undefined && notResponding[2] !== undefined) {
-    return {
-      key: notResponding[1].toLowerCase(),
-      title: notResponding[1],
-      message: `not responding at ${notResponding[2]}`
-    };
-  }
-  if (warning.includes("llama-server")) {
-    return { key: "llama-server", title: "llama-server", message: warning };
-  }
-  return { key: "other", title: "Other", message: warning };
-}
-
 function formatEngineSection(section: EngineSection): string {
   const lines = [`${section.title}:`];
   if (section.loaded.length === 0) {
@@ -223,4 +209,13 @@ function formatEngineSection(section: EngineSection): string {
     lines.push(`- ${warning}`);
   }
   return lines.join("\n");
+}
+
+function warningsForProvider(
+  warnings: readonly CatalogWarning[],
+  provider: string | undefined
+): readonly CatalogWarning[] {
+  return provider === undefined
+    ? warnings
+    : warnings.filter((warning) => warning.providerId === provider);
 }

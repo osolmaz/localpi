@@ -1,4 +1,9 @@
-import { managedModelSupportsReasoning, type CatalogModel, type ModelCatalog } from "./catalog.js";
+import {
+  formatCatalogWarning,
+  managedModelSupportsReasoning,
+  type CatalogModel,
+  type ModelCatalog
+} from "./catalog.js";
 import type { LocalpiOptions } from "./options.js";
 import type { RuntimeConnection } from "./runtime-types.js";
 
@@ -38,7 +43,7 @@ export function catalogRuntimeConnection(
     model: selected.modelId,
     availableModels: providerModels.map((model) => model.modelId),
     catalogModels: catalog.models.filter((model) => model.availability === "loaded"),
-    warnings: catalog.warnings,
+    warnings: catalog.warnings.map(formatCatalogWarning),
     ...optionalContextWindow(options.contextWindow ?? selected.contextWindow)
   };
 }

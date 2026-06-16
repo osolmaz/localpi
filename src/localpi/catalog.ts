@@ -4,7 +4,7 @@ import {
   getManagedLlamaServerMetadata,
   getLlamaServerModels,
   llamaBaseUrl,
-  managedLlamaServerUnavailableWarning
+  managedLlamaServerUnavailableMessage
 } from "./llama-server.js";
 import type { LocalpiOptions } from "./options.js";
 import { listModelAliases, resolveLlamaModel } from "./models.js";
@@ -34,7 +34,19 @@ export type CatalogModel = {
 
 export type ModelCatalog = {
   readonly models: readonly CatalogModel[];
-  readonly warnings: readonly string[];
+  readonly warnings: readonly CatalogWarning[];
+};
+
+export type CatalogWarningCode =
+  | "provider-not-responding"
+  | "managed-command-unavailable"
+  | "runtime-warning";
+
+export type CatalogWarning = {
+  readonly providerId: string;
+  readonly providerName: string;
+  readonly code: CatalogWarningCode;
+  readonly message: string;
 };
 
 export async function discoverModelCatalog(options: LocalpiOptions): Promise<ModelCatalog> {
@@ -83,7 +95,14 @@ async function discoverOpenAiCompatibleProvider(
     if (explicitOpenAiProviderSelected(options, config.id)) {
       throw error;
     }
-    return { models: [], warnings: [`${config.name} is not responding at ${config.baseUrl}`] };
+    return {
+      models: [],
+      warnings: [
+        catalogWarning(config.id, config.name, "provider-not-responding", {
+          message: `not responding at ${config.baseUrl}`
+        })
+      ]
+    };
   }
 }
 
@@ -141,12 +160,19 @@ async function discoverManagedLlamaProvider(
   const baseUrl = llamaBaseUrl(options);
   const aliases = await listModelAliases();
   const loaded = await loadedLlamaModels(config, options, baseUrl, aliases);
-  const unavailableWarning = await managedLlamaServerUnavailableWarning(options);
+  const unavailableMessage = await managedLlamaServerUnavailableMessage(options);
   const startable = await startableLlamaModels(config, options, baseUrl, loaded.models, aliases);
   return {
     models: [...loaded.models, ...startable],
     warnings:
-      unavailableWarning === undefined ? loaded.warnings : [...loaded.warnings, unavailableWarning]
+      unavailableMessage === undefined
+        ? loaded.warnings
+        : [
+            ...loaded.warnings,
+            catalogWarning(config.id, config.name, "managed-command-unavailable", {
+              message: unavailableMessage
+            })
+          ]
   };
 }
 
@@ -245,6 +271,38 @@ export function managedModelSupportsReasoning(modelId: string): boolean {
     normalized.includes("gpt-oss") ||
     normalized.includes("gemma-4")
   );
+}
+
+export function runtimeCatalogWarning(
+  providerId: string,
+  providerName: string,
+  message: string
+): CatalogWarning {
+  return catalogWarning(providerId, providerName, "runtime-warning", { message });
+}
+
+export function formatCatalogWarning(warning: CatalogWarning): string {
+  switch (warning.code) {
+    case "provider-not-responding":
+      return `${warning.providerName} is ${warning.message}`;
+    case "managed-command-unavailable":
+    case "runtime-warning":
+      return warning.message;
+  }
+}
+
+function catalogWarning(
+  providerId: string,
+  providerName: string,
+  code: CatalogWarningCode,
+  options: { readonly message: string }
+): CatalogWarning {
+  return {
+    providerId,
+    providerName,
+    code,
+    message: options.message
+  };
 }
 
 function isDeepSeekThinkingModel(normalizedModelId: string): boolean {

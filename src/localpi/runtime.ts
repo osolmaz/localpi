@@ -1,4 +1,4 @@
-import { discoverModelCatalog } from "./catalog.js";
+import { discoverModelCatalog, formatCatalogWarning } from "./catalog.js";
 import { llamaBaseUrl, llamaServerStatus, stopManagedLlamaServer } from "./llama-server.js";
 import { listModelAliases } from "./models.js";
 import {
@@ -95,7 +95,7 @@ async function catalogStatusOutput(options: LocalpiOptions): Promise<string> {
       `runtime: ${options.runtime}`,
       `loaded models: ${statusModelList(loaded)}`,
       `startable models: ${statusModelList(startable)}`,
-      ...catalog.warnings.map((warning) => `warning: ${warning}`)
+      ...catalog.warnings.map((warning) => `warning: ${formatCatalogWarning(warning)}`)
     ].join("\n") + "\n"
   );
 }

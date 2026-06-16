@@ -48,7 +48,7 @@ export async function ensureLlamaServer(
   };
 }
 
-export async function managedLlamaServerUnavailableWarning(
+export async function managedLlamaServerUnavailableMessage(
   options: LocalpiOptions
 ): Promise<string | undefined> {
   if (await executableExists(options.serverCommand)) {
