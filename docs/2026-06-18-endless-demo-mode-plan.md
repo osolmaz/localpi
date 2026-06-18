@@ -20,7 +20,7 @@ The demo orchestration is owned by a localpi-generated Pi extension. Rendering, 
 - Pi opens in normal TUI mode.
 - The demo extension sends the initial prompt after TUI `session_start`.
 - After each completed generation, the demo extension sends the followup prompt after `turn_end`.
-- The followup prompt defaults to `Continue.`
+- The followup prompt defaults to `Continue. Try to write as long as possible.`
 - The loop continues until the user exits Pi, `Ctrl-C` is pressed, or Pi stops the session normally.
 - Runtime discovery, Pi config generation, extensions, thinking, tools, and approval behavior match normal localpi launches.
 - Demo mode requires an explicit non-`auto` model through `--model` or `LOCALPI_MODEL`; it must not auto-select a model.
@@ -40,7 +40,7 @@ You are narrating a never-ending sci-fi adventure. Continue in short paragraphs.
 Followup prompt:
 
 ```text
-Continue.
+Continue. Try to write as long as possible.
 ```
 
 ## CLI Contract
@@ -188,5 +188,5 @@ localpi --demo --model gemma-e4b
 - [x] Include one override example:
 
 ```bash
-localpi --demo --model gemma-e4b --demo-initial-prompt-file ./prompts/story.txt --demo-followup-prompt "Continue."
+localpi --demo --model gemma-e4b --demo-initial-prompt-file ./prompts/story.txt --demo-followup-prompt "Continue. Try to write as long as possible."
 ```

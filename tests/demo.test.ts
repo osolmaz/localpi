@@ -20,6 +20,7 @@ describe("demo prompts", () => {
   });
 
   it("uses the built-in story and continue prompts by default", async () => {
+    expect(defaultDemoFollowupPrompt).toBe("Continue. Try to write as long as possible.");
     await expect(resolveDemoPrompts(parseLocalpiArgs(["--demo"]))).resolves.toEqual({
       initial: defaultDemoInitialPrompt,
       followup: defaultDemoFollowupPrompt

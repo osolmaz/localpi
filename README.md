@@ -120,7 +120,7 @@ Demo mode requires an explicit model, opens the normal Pi TUI, and keeps one liv
 Override the demo prompts:
 
 ```bash
-localpi --demo --model gemma-e4b --demo-initial-prompt-file ./prompts/story.txt --demo-followup-prompt "Continue."
+localpi --demo --model gemma-e4b --demo-initial-prompt-file ./prompts/story.txt --demo-followup-prompt "Continue. Try to write as long as possible."
 ```
 
 Pin a model alias:
