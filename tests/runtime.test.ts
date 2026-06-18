@@ -453,6 +453,29 @@ describe("runtime resolution", () => {
         }
       ]
     });
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "openai-compatible",
+        baseUrl,
+        model: "gemma4-26b-a4b-nvfp4",
+        modelProfileFile: profilePath
+      })
+    ).resolves.toMatchObject({
+      model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+      contextWindow: 32768,
+      catalogModels: [
+        {
+          modelId: "nvidia/Gemma-4-26B-A4B-NVFP4",
+          aliases: ["gemma4-26b-a4b-nvfp4"],
+          reasoning: true,
+          thinkingFormat: "qwen-chat-template",
+          contextWindow: 32768,
+          maxTokens: 4096
+        }
+      ]
+    });
   });
 
   it("does not mark older Qwen and DeepSeek coder model ids as reasoning models", async () => {

@@ -125,6 +125,7 @@ function openAiCatalogModel(
 ): CatalogModel {
   const baseUrl = config.baseUrl ?? "";
   const profileConfig = profileCapabilityConfig(profile, baseUrl, model.id);
+  const aliases = profileAliases(profile, baseUrl, model.id);
   const contextWindow = profileConfig.contextWindow ?? model.contextWindow;
   return {
     providerId: config.id,
@@ -132,7 +133,7 @@ function openAiCatalogModel(
     runtime: "openai-compatible",
     baseUrl,
     modelId: model.id,
-    aliases: [],
+    aliases,
     displayName: `${config.name} / ${model.id}`,
     maxTokens: profileConfig.maxTokens ?? options.maxTokens,
     ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
@@ -140,6 +141,23 @@ function openAiCatalogModel(
     availability: "loaded",
     ...(contextWindow === undefined ? {} : { contextWindow })
   };
+}
+
+function profileAliases(
+  profile: LocalModelProfile | undefined,
+  baseUrl: string,
+  modelId: string
+): readonly string[] {
+  if (
+    profile === undefined ||
+    !profileMatchesBaseUrl(profile, baseUrl) ||
+    !profileMatchesModel(profile, modelId)
+  ) {
+    return [];
+  }
+  return [profile.id, profile.model].filter(
+    (alias, index, aliases) => alias !== modelId && aliases.indexOf(alias) === index
+  );
 }
 
 function explicitOpenAiCatalogModel(
