@@ -8,6 +8,12 @@ import {
 } from "./llama-server.js";
 import type { LocalpiOptions } from "./options.js";
 import { listModelAliases, resolveLlamaModel } from "./models.js";
+import {
+  loadLocalModelProfile,
+  profileMatchesBaseUrl,
+  profileMatchesModel,
+  type LocalModelProfile
+} from "./model-profile.js";
 import type { ProviderConfig } from "./provider-registry.js";
 import { providerConfigs } from "./provider-registry.js";
 
@@ -51,7 +57,10 @@ export type CatalogWarning = {
 
 export async function discoverModelCatalog(options: LocalpiOptions): Promise<ModelCatalog> {
   const configs = await providerConfigs(options);
-  const discovered = await Promise.all(configs.map((config) => discoverProvider(config, options)));
+  const profile = await loadLocalModelProfile(options);
+  const discovered = await Promise.all(
+    configs.map((config) => discoverProvider(config, options, profile))
+  );
   return {
     models: discovered.flatMap((entry) => entry.models),
     warnings: discovered.flatMap((entry) => entry.warnings)
@@ -60,11 +69,12 @@ export async function discoverModelCatalog(options: LocalpiOptions): Promise<Mod
 
 async function discoverProvider(
   config: ProviderConfig,
-  options: LocalpiOptions
+  options: LocalpiOptions,
+  profile?: LocalModelProfile
 ): Promise<ModelCatalog> {
   switch (config.type) {
     case "openai-compatible":
-      return discoverOpenAiCompatibleProvider(config, options);
+      return discoverOpenAiCompatibleProvider(config, options, profile);
     case "managed-llama-server":
       return discoverManagedLlamaProvider(config, options);
   }
@@ -72,22 +82,23 @@ async function discoverProvider(
 
 async function discoverOpenAiCompatibleProvider(
   config: ProviderConfig,
-  options: LocalpiOptions
+  options: LocalpiOptions,
+  profile?: LocalModelProfile
 ): Promise<ModelCatalog> {
   if (config.baseUrl === undefined) {
     return { models: [], warnings: [] };
   }
   if (!config.discover) {
-    const explicitModel = explicitOpenAiCatalogModel(config, [], options);
+    const explicitModel = explicitOpenAiCatalogModel(config, [], options, profile);
     return { models: explicitModel === undefined ? [] : [explicitModel], warnings: [] };
   }
   try {
     const models = await listModels(config.baseUrl, options.timeoutMs);
-    const explicitModel = explicitOpenAiCatalogModel(config, models, options);
+    const explicitModel = explicitOpenAiCatalogModel(config, models, options, profile);
     return {
       models:
         explicitModel === undefined
-          ? models.map((model) => openAiCatalogModel(config, model, options))
+          ? models.map((model) => openAiCatalogModel(config, model, options, profile))
           : [explicitModel],
       warnings: []
     };
@@ -109,9 +120,12 @@ async function discoverOpenAiCompatibleProvider(
 function openAiCatalogModel(
   config: ProviderConfig,
   model: ModelInfo,
-  options: LocalpiOptions
+  options: LocalpiOptions,
+  profile?: LocalModelProfile
 ): CatalogModel {
   const baseUrl = config.baseUrl ?? "";
+  const profileConfig = profileCapabilityConfig(profile, baseUrl, model.id);
+  const contextWindow = profileConfig.contextWindow ?? model.contextWindow;
   return {
     providerId: config.id,
     providerName: config.name,
@@ -120,18 +134,19 @@ function openAiCatalogModel(
     modelId: model.id,
     aliases: [],
     displayName: `${config.name} / ${model.id}`,
-    maxTokens: options.maxTokens,
-    ...externalReasoningConfig(model.id),
+    maxTokens: profileConfig.maxTokens ?? options.maxTokens,
+    ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
     capabilities: ["text"],
     availability: "loaded",
-    ...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow })
+    ...(contextWindow === undefined ? {} : { contextWindow })
   };
 }
 
 function explicitOpenAiCatalogModel(
   config: ProviderConfig,
   models: readonly ModelInfo[],
-  options: LocalpiOptions
+  options: LocalpiOptions,
+  profile?: LocalModelProfile
 ): CatalogModel | undefined {
   const requested = options.model;
   if (models.length !== 0 || requested === undefined || requested === "auto") {
@@ -140,7 +155,7 @@ function explicitOpenAiCatalogModel(
   if (!explicitOpenAiProviderSelected(options, config.id)) {
     return undefined;
   }
-  return openAiCatalogModel(config, { id: requested }, options);
+  return openAiCatalogModel(config, { id: requested }, options, profile);
 }
 
 function explicitOpenAiProviderSelected(options: LocalpiOptions, providerId: string): boolean {
@@ -247,7 +262,32 @@ async function startableLlamaModels(
   return startable.filter((model): model is CatalogModel => model !== undefined);
 }
 
-function externalReasoningConfig(modelId: string): {
+function externalCapabilityConfig(
+  providerId: string,
+  modelId: string,
+  profileConfig: ProfileCapabilityConfig,
+  options: LocalpiOptions
+): {
+  readonly reasoning?: boolean;
+  readonly thinkingFormat?: CatalogThinkingFormat;
+} {
+  const baseConfig =
+    profileConfig.reasoning !== undefined || profileConfig.thinkingFormat !== undefined
+      ? {
+          reasoning: profileConfig.reasoning,
+          thinkingFormat: profileConfig.thinkingFormat
+        }
+      : externalReasoningConfig(providerId, modelId);
+  return withoutUndefined({
+    reasoning: options.modelReasoning ?? baseConfig.reasoning,
+    thinkingFormat: options.modelThinkingFormat ?? baseConfig.thinkingFormat
+  });
+}
+
+function externalReasoningConfig(
+  providerId: string,
+  modelId: string
+): {
   readonly reasoning?: true;
   readonly thinkingFormat?: CatalogThinkingFormat;
 } {
@@ -256,6 +296,9 @@ function externalReasoningConfig(modelId: string): {
     return { reasoning: true, thinkingFormat: "deepseek" };
   }
   if (isQwenThinkingModel(normalized)) {
+    return { reasoning: true, thinkingFormat: "qwen-chat-template" };
+  }
+  if (providerId === "vllm" && isGemmaThinkingModel(normalized)) {
     return { reasoning: true, thinkingFormat: "qwen-chat-template" };
   }
   return {};
@@ -269,7 +312,7 @@ export function managedModelSupportsReasoning(modelId: string): boolean {
     isDeepSeekThinkingModel(normalized) ||
     isQwenThinkingModel(normalized) ||
     normalized.includes("gpt-oss") ||
-    normalized.includes("gemma-4")
+    isGemmaThinkingModel(normalized)
   );
 }
 
@@ -335,6 +378,43 @@ function isQwenThinkingModel(normalizedModelId: string): boolean {
   );
 }
 
+type ProfileCapabilityConfig = {
+  readonly reasoning?: boolean;
+  readonly thinkingFormat?: CatalogThinkingFormat;
+  readonly contextWindow?: number;
+  readonly maxTokens?: number;
+};
+
+function profileCapabilityConfig(
+  profile: LocalModelProfile | undefined,
+  baseUrl: string,
+  modelId: string
+): ProfileCapabilityConfig {
+  if (
+    profile === undefined ||
+    !profileMatchesBaseUrl(profile, baseUrl) ||
+    !profileMatchesModel(profile, modelId)
+  ) {
+    return {};
+  }
+  return withoutUndefined({
+    reasoning: profile.capabilities?.reasoning,
+    thinkingFormat: profile.capabilities?.thinkingFormat,
+    contextWindow: profile.client?.contextWindow,
+    maxTokens: profile.client?.maxTokens
+  }) as ProfileCapabilityConfig;
+}
+
+function isGemmaThinkingModel(normalizedModelId: string): boolean {
+  return normalizedModelId.includes("gemma-4") || normalizedModelId.includes("gemma4");
+}
+
 function hasModelToken(normalizedModelId: string, token: string): boolean {
   return normalizedModelId.split(/[^a-z0-9]+/u).includes(token);
+}
+
+function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as Partial<T>;
 }

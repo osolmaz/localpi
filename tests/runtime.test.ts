@@ -392,6 +392,69 @@ describe("runtime resolution", () => {
     });
   });
 
+  it("marks vLLM Gemma 4 model ids with Qwen chat-template thinking format", async () => {
+    const baseUrl = await startModelServer("nvidia/Gemma-4-26B-A4B-NVFP4", 32768);
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "vllm", baseUrl, model: "auto" })
+    ).resolves.toMatchObject({
+      runtime: "vllm",
+      model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+      catalogModels: [
+        {
+          modelId: "nvidia/Gemma-4-26B-A4B-NVFP4",
+          reasoning: true,
+          thinkingFormat: "qwen-chat-template",
+          contextWindow: 32768
+        }
+      ]
+    });
+  });
+
+  it("uses local model profiles for explicit OpenAI-compatible capabilities", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelServer("nvidia/Gemma-4-26B-A4B-NVFP4", 999999);
+    const profilePath = path.join(stateDir, "gemma-profile.json");
+    await writeFile(
+      profilePath,
+      JSON.stringify({
+        id: "gemma4-26b-a4b-nvfp4",
+        model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+        base_url: baseUrl,
+        client: {
+          context_window: 32768,
+          max_tokens: 4096
+        },
+        capabilities: {
+          reasoning: true,
+          thinking_format: "qwen-chat-template"
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "openai-compatible",
+        baseUrl,
+        model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+        modelProfileFile: profilePath
+      })
+    ).resolves.toMatchObject({
+      model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+      contextWindow: 32768,
+      catalogModels: [
+        {
+          modelId: "nvidia/Gemma-4-26B-A4B-NVFP4",
+          reasoning: true,
+          thinkingFormat: "qwen-chat-template",
+          contextWindow: 32768,
+          maxTokens: 4096
+        }
+      ]
+    });
+  });
+
   it("does not mark older Qwen and DeepSeek coder model ids as reasoning models", async () => {
     const baseUrl = await startModelListServer([
       { id: "Qwen2.5-Coder-32B" },
@@ -1464,6 +1527,9 @@ function options(): LocalpiOptions {
     provider: undefined,
     customProviderId: "local-openai",
     providersFile: undefined,
+    modelProfileFile: undefined,
+    modelReasoning: undefined,
+    modelThinkingFormat: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: "pi",

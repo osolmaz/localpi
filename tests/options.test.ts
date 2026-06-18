@@ -79,6 +79,12 @@ describe("localpi option parsing", () => {
       "my-provider",
       "--providers-file",
       "/tmp/localpi-providers.json",
+      "--model-profile",
+      "/tmp/local-model-profile.json",
+      "--model-reasoning",
+      "true",
+      "--model-thinking-format",
+      "qwen-chat-template",
       "--state-dir",
       "/tmp/localpi-state",
       "--session-dir",
@@ -117,6 +123,9 @@ describe("localpi option parsing", () => {
       provider: "vllm",
       customProviderId: "my-provider",
       providersFile: "/tmp/localpi-providers.json",
+      modelProfileFile: "/tmp/local-model-profile.json",
+      modelReasoning: true,
+      modelThinkingFormat: "qwen-chat-template",
       stateDir: "/tmp/localpi-state",
       sessionDir: "/tmp/localpi-sessions",
       piCommand: "my-pi",
@@ -166,6 +175,12 @@ describe("localpi environment defaults", () => {
     "LOCALPI_MODEL",
     "LOCALPI_PROVIDER",
     "LOCALPI_PROVIDERS_FILE",
+    "LOCALPI_MODEL_PROFILE",
+    "LOCALPI_MODEL_REASONING",
+    "LOCALPI_MODEL_THINKING_FORMAT",
+    "LOCALPAGER_AGENT_PROFILE",
+    "LOCALPAGER_AGENT_REASONING",
+    "LOCALPAGER_AGENT_THINKING_FORMAT",
     "LOCALPI_SESSION_DIR",
     "LOCALPI_THINKING",
     "LOCALPI_DEMO",
@@ -195,6 +210,9 @@ describe("localpi environment defaults", () => {
     process.env["LOCALPI_MODEL"] = "env-model";
     process.env["LOCALPI_PROVIDER"] = "env-provider";
     process.env["LOCALPI_PROVIDERS_FILE"] = "/tmp/env-providers.json";
+    process.env["LOCALPI_MODEL_PROFILE"] = "/tmp/env-profile.json";
+    process.env["LOCALPI_MODEL_REASONING"] = "yes";
+    process.env["LOCALPI_MODEL_THINKING_FORMAT"] = "deepseek";
     process.env["LOCALPI_SESSION_DIR"] = "/tmp/localpi-env-sessions";
     process.env["LOCALPI_THINKING"] = "medium";
     process.env["LOCALPI_DEMO"] = "true";
@@ -211,6 +229,9 @@ describe("localpi environment defaults", () => {
       model: "env-model",
       provider: "env-provider",
       providersFile: "/tmp/env-providers.json",
+      modelProfileFile: "/tmp/env-profile.json",
+      modelReasoning: true,
+      modelThinkingFormat: "deepseek",
       sessionDir: "/tmp/localpi-env-sessions",
       thinking: "medium",
       demo: true,
@@ -219,6 +240,18 @@ describe("localpi environment defaults", () => {
       demoFollowupPrompt: "env again",
       demoInitialPromptFile: "/tmp/env-initial.txt",
       demoFollowupPromptFile: "/tmp/env-followup.txt"
+    });
+  });
+
+  it("accepts LocalPager agent capability profile environment fallbacks", () => {
+    process.env["LOCALPAGER_AGENT_PROFILE"] = "/tmp/localpager-profile.json";
+    process.env["LOCALPAGER_AGENT_REASONING"] = "true";
+    process.env["LOCALPAGER_AGENT_THINKING_FORMAT"] = "qwen-chat-template";
+
+    expect(parseLocalpiArgs([])).toMatchObject({
+      modelProfileFile: "/tmp/localpager-profile.json",
+      modelReasoning: true,
+      modelThinkingFormat: "qwen-chat-template"
     });
   });
 

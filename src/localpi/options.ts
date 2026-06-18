@@ -4,6 +4,7 @@ import { normalizeBaseUrl } from "../llm/openai.js";
 
 export type RuntimeKind = "auto" | "llama-server" | "lmstudio" | "vllm" | "openai-compatible";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+export type ModelThinkingFormat = "deepseek" | "qwen-chat-template";
 
 export const thinkingLevels: readonly ThinkingLevel[] = [
   "off",
@@ -21,6 +22,9 @@ export type LocalpiOptions = {
   readonly provider: string | undefined;
   readonly customProviderId: string;
   readonly providersFile: string | undefined;
+  readonly modelProfileFile: string | undefined;
+  readonly modelReasoning: boolean | undefined;
+  readonly modelThinkingFormat: ModelThinkingFormat | undefined;
   readonly stateDir: string;
   readonly sessionDir: string;
   readonly piCommand: string;
@@ -59,6 +63,13 @@ export function defaultOptions(): LocalpiOptions {
     provider: process.env["LOCALPI_PROVIDER"],
     customProviderId: envString("LOCALPI_PROVIDER_ID", "local-openai"),
     providersFile: process.env["LOCALPI_PROVIDERS_FILE"],
+    modelProfileFile:
+      process.env["LOCALPI_MODEL_PROFILE"] ?? process.env["LOCALPAGER_AGENT_PROFILE"],
+    modelReasoning: envOptionalBoolean("LOCALPI_MODEL_REASONING", "LOCALPAGER_AGENT_REASONING"),
+    modelThinkingFormat: envOptionalThinkingFormat(
+      "LOCALPI_MODEL_THINKING_FORMAT",
+      "LOCALPAGER_AGENT_THINKING_FORMAT"
+    ),
     stateDir,
     sessionDir: defaultSessionDir(stateDir),
     piCommand: envString("LOCALPI_PI_CMD", "npx -y @earendil-works/pi-coding-agent@latest"),
@@ -140,6 +151,10 @@ export function usage(): string {
     "  --chat-template <path>   llama.cpp chat template file",
     "  --tools <list>           Pi tools allow list",
     "  --providers-file <path>  localpi provider registry JSON",
+    "  --model-profile <path>   local model capability profile JSON",
+    "  --model-reasoning <bool> override generated Pi reasoning capability",
+    "  --model-thinking-format <format>",
+    "                          override generated Pi thinking format",
     "  --no-approval           do not ask before tool calls",
     "  --no-token-status       do not install token status extension",
     "  --demo                  endlessly run Pi prompts for demo mode",
@@ -226,6 +241,12 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--provider": (options, value) => ({ ...options, provider: value }),
   "--provider-id": (options, value) => ({ ...options, customProviderId: value }),
   "--providers-file": (options, value) => ({ ...options, providersFile: value }),
+  "--model-profile": (options, value) => ({ ...options, modelProfileFile: value }),
+  "--model-reasoning": (options, value) => ({ ...options, modelReasoning: parseBoolean(value) }),
+  "--model-thinking-format": (options, value) => ({
+    ...options,
+    modelThinkingFormat: parseModelThinkingFormat(value)
+  }),
   "--state-dir": (options, value) => ({ ...options, stateDir: value }),
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: value }),
@@ -335,6 +356,15 @@ export function parseThinkingLevel(value: string): ThinkingLevel {
   );
 }
 
+function parseModelThinkingFormat(value: string): ModelThinkingFormat {
+  if (value === "deepseek" || value === "qwen-chat-template") {
+    return value;
+  }
+  throw new Error(
+    `unknown model thinking format ${value}; expected deepseek or qwen-chat-template`
+  );
+}
+
 function envString(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
@@ -357,11 +387,28 @@ function envOptionalPositiveInteger(name: string): number | undefined {
   return value === undefined ? undefined : parsePositiveInteger(value);
 }
 
+function envOptionalBoolean(primaryName: string, fallbackName: string): boolean | undefined {
+  const [name, value] = envFirst([primaryName, fallbackName]);
+  return value === undefined ? undefined : parseBoolean(value, name);
+}
+
+function envOptionalThinkingFormat(
+  primaryName: string,
+  fallbackName: string
+): ModelThinkingFormat | undefined {
+  const [, value] = envFirst([primaryName, fallbackName]);
+  return value === undefined ? undefined : parseModelThinkingFormat(value);
+}
+
 function envBoolean(name: string, fallback: boolean): boolean {
   const value = process.env[name];
   if (value === undefined) {
     return fallback;
   }
+  return parseBoolean(value, name);
+}
+
+function parseBoolean(value: string, name = "value"): boolean {
   if (["1", "true", "yes", "on"].includes(value.toLowerCase())) {
     return true;
   }
@@ -369,6 +416,16 @@ function envBoolean(name: string, fallback: boolean): boolean {
     return false;
   }
   throw new Error(`${name} must be boolean-like, got ${value}`);
+}
+
+function envFirst(names: readonly string[]): readonly [string, string | undefined] {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value !== undefined) {
+      return [name, value];
+    }
+  }
+  return [names[0] ?? "", undefined];
 }
 
 function defaultSessionDir(stateDir: string): string {

@@ -98,6 +98,32 @@ Provider registry JSON can define additional OpenAI-compatible providers:
 
 Set `discover: false` when the endpoint should not be probed during startup. Explicit `--provider <id> --model <id>` can still select that provider and generate Pi config.
 
+## Capability Profiles
+
+OpenAI-compatible `/v1/models` responses do not reliably report local serving capabilities such as reasoning support or Pi's required thinking request format. Localpi can read a local model capability profile with `--model-profile`, `LOCALPI_MODEL_PROFILE`, or `LOCALPAGER_AGENT_PROFILE`.
+
+Example:
+
+```json
+{
+  "id": "gemma4-26b-a4b-nvfp4",
+  "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+  "base_url": "http://127.0.0.1:8000/v1",
+  "client": {
+    "context_window": 32768,
+    "max_tokens": 4096
+  },
+  "capabilities": {
+    "reasoning": true,
+    "thinking_format": "qwen-chat-template"
+  }
+}
+```
+
+When the served model id matches `model` or `id`, localpi uses the profile to generate Pi model config. `LOCALPI_MODEL_REASONING` / `LOCALPAGER_AGENT_REASONING` and `LOCALPI_MODEL_THINKING_FORMAT` / `LOCALPAGER_AGENT_THINKING_FORMAT` are explicit overrides.
+
+Name-based capability detection remains fallback behavior. Built-in vLLM Gemma 4 model ids are treated as reasoning-capable with `qwen-chat-template`, matching vLLM Gemma servers launched with `--reasoning-parser gemma4`.
+
 ## Model Selection
 
 `--model` should accept:

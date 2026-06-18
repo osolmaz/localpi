@@ -193,6 +193,9 @@ localpi --stop
 - `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
 - `--pi-command <command>`: Pi launch command
 - `--providers-file <path>`: provider registry JSON
+- `--model-profile <path>`: local model capability profile JSON
+- `--model-reasoning <bool>`: override generated Pi reasoning capability
+- `--model-thinking-format <deepseek|qwen-chat-template>`: override generated Pi thinking format
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
 - `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: `off`
 - `--demo`: endlessly run Pi prompts inside the normal Pi TUI until interrupted or Pi exits; requires an explicit non-`auto` model
@@ -213,6 +216,9 @@ localpi --stop
 - `LOCALPI_PROVIDER`
 - `LOCALPI_BASE_URL`
 - `LOCALPI_PROVIDERS_FILE`
+- `LOCALPI_MODEL_PROFILE`
+- `LOCALPI_MODEL_REASONING`
+- `LOCALPI_MODEL_THINKING_FORMAT`
 - `LOCALPI_STATE_DIR`
 - `LOCALPI_SESSION_DIR`
 - `LOCALPI_PI_CMD`
@@ -232,6 +238,9 @@ localpi --stop
 - `LOCALPI_DEMO_INITIAL_PROMPT_FILE`
 - `LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE`
 - `LOCALPI_MODELS_FILE`
+- `LOCALPAGER_AGENT_PROFILE`
+- `LOCALPAGER_AGENT_REASONING`
+- `LOCALPAGER_AGENT_THINKING_FORMAT`
 
 `LOCALPI_MODELS_FILE` may point at a JSON file with this shape:
 
@@ -264,6 +273,26 @@ Provider registries use the same file or `LOCALPI_PROVIDERS_FILE`:
 ```
 
 Use `discover: false` for endpoints that should not be probed during startup. They can still be selected explicitly with `--provider vllm-qwen --model <id>`.
+
+Model capability profiles can fill in metadata that OpenAI-compatible servers do not expose through `/v1/models`, such as vLLM reasoning support:
+
+```json
+{
+  "id": "gemma4-26b-a4b-nvfp4",
+  "model": "nvidia/Gemma-4-26B-A4B-NVFP4",
+  "base_url": "http://127.0.0.1:8000/v1",
+  "client": {
+    "context_window": 32768,
+    "max_tokens": 4096
+  },
+  "capabilities": {
+    "reasoning": true,
+    "thinking_format": "qwen-chat-template"
+  }
+}
+```
+
+`LOCALPAGER_AGENT_PROFILE`, `LOCALPAGER_AGENT_REASONING`, and `LOCALPAGER_AGENT_THINKING_FORMAT` are accepted as aliases so LocalPager Agent can pass the same profile metadata through to localpi.
 
 ## Development
 
