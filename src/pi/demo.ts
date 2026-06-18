@@ -1,4 +1,5 @@
 import type { ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import type { LocalpiOptions } from "../localpi/options.js";
@@ -44,6 +45,7 @@ export async function execDemoLoop(
   extensions: ExtensionBundle
 ): Promise<number> {
   const prompts = await resolveDemoPrompts(options);
+  const sessionId = demoSessionId();
   const interrupt = interruptState();
   let activeChild: ChildProcess | undefined;
   const signalHandler = (signal: NodeJS.Signals): void => {
@@ -59,7 +61,7 @@ export async function execDemoLoop(
     for (let iteration = 0; !interrupt.interrupted; iteration += 1) {
       const prompt = iteration === 0 ? prompts.initial : prompts.followup;
       const plan = await createLaunchPlan(options, runtimeConfig, connection, extensions, {
-        forwardedArgs: [...options.forwardedArgs, "-p", prompt]
+        forwardedArgs: demoForwardedArgs(options.forwardedArgs, sessionId, prompt)
       });
       const code = await execLaunchPlan(plan, {
         detached: true,
@@ -78,6 +80,18 @@ export async function execDemoLoop(
     process.removeListener("SIGINT", signalHandler);
     process.removeListener("SIGTERM", signalHandler);
   }
+}
+
+function demoForwardedArgs(
+  forwardedArgs: readonly string[],
+  sessionId: string,
+  prompt: string
+): readonly string[] {
+  return ["--session-id", sessionId, ...forwardedArgs, "-p", prompt];
+}
+
+function demoSessionId(): string {
+  return `localpi-demo-${randomUUID()}`;
 }
 
 async function resolvePrompt(

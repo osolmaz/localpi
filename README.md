@@ -115,6 +115,8 @@ Run an endless non-interactive demo:
 localpi --demo
 ```
 
+Demo mode keeps one generated Pi session across iterations so followup prompts continue from the first prompt.
+
 Override the demo prompts:
 
 ```bash

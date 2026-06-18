@@ -143,6 +143,15 @@ describe("localpi cli", () => {
     expect(print.stderr).toContain("--demo cannot be used with forwarded Pi prompt flag --print");
   });
 
+  it("rejects forwarded Pi session flags in demo mode", async () => {
+    const result = await run(["--demo", "--session-id", "manual-session"]);
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain(
+      "--demo cannot be used with forwarded Pi session flag --session-id"
+    );
+  });
+
   it("launches pi against the resolved runtime and writes its config", async () => {
     const stateDir = await tempStateDir();
     const baseUrl = await startModelServer("served-model", 4096);
@@ -252,6 +261,12 @@ describe("localpi cli", () => {
       "keep going"
     ]);
     expect(records.every((record) => record.args.includes("--no-tools"))).toBe(true);
+    const sessionIds = records.map((record) => {
+      const index = record.args.indexOf("--session-id");
+      return index < 0 ? undefined : record.args[index + 1];
+    });
+    expect(sessionIds[0]).toMatch(/^localpi-demo-/u);
+    expect(new Set(sessionIds).size).toBe(1);
   });
 
   async function startModelServer(model: string, contextWindow: number): Promise<string> {

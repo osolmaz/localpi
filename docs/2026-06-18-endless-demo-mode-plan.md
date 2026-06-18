@@ -21,6 +21,7 @@ The demo loop is owned by localpi. Each individual generation is still owned by 
 - The followup prompt defaults to `Continue.`
 - The loop continues until localpi is exited, `Ctrl-C` is pressed, or Pi exits with a non-zero status.
 - Runtime discovery, model selection, Pi config generation, extensions, thinking, tools, and approval behavior match normal localpi launches.
+- Each demo run uses one generated Pi session id so followup prompts keep the first prompt's context.
 - Demo mode works with any provider localpi already supports: LM Studio, vLLM, generic OpenAI-compatible providers, and managed `llama-server`.
 - Demo mode does not parse terminal output to detect when generation stops.
 
@@ -133,6 +134,7 @@ If `execLaunchPlan` currently hides too much child-process control, split out a 
 - [x] Unit-test that normal launches are unchanged.
 - [x] Use a fake `LOCALPI_PI_CMD` that exits `0` and records args to prove first prompt then followup prompts are sent in order.
 - [x] Use a fake `LOCALPI_PI_CMD` that exits non-zero to prove the loop stops and returns the child exit code.
+- [x] Verify each demo iteration uses the same generated Pi session id.
 - [ ] Add an interrupt-oriented test if the process runner is made injectable enough to do that without flaking.
 - [x] Run `npm run check`.
 

@@ -55,11 +55,31 @@ function validateDemoOptions(options: ParsedOptions): void {
       `--demo cannot be used with forwarded Pi prompt flag ${promptFlag}; use --demo-initial-prompt or --demo-followup-prompt`
     );
   }
+  const sessionFlag = forwardedSessionFlag(options.forwardedArgs);
+  if (sessionFlag !== undefined) {
+    throw new Error(
+      `--demo cannot be used with forwarded Pi session flag ${sessionFlag}; demo mode manages its own session`
+    );
+  }
 }
 
 function forwardedPromptFlag(args: readonly string[]): string | undefined {
   return args.find(
     (arg) => arg === "-p" || arg === "--print" || arg === "--prompt" || arg.startsWith("--prompt=")
+  );
+}
+
+function forwardedSessionFlag(args: readonly string[]): string | undefined {
+  return args.find(
+    (arg) =>
+      arg === "--continue" ||
+      arg === "-c" ||
+      arg === "--resume" ||
+      arg === "-r" ||
+      arg === "--session" ||
+      arg === "--session-id" ||
+      arg === "--fork" ||
+      arg === "--no-session"
   );
 }
 
