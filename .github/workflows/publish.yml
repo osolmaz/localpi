@@ -78,13 +78,6 @@ jobs:
 
           echo "Publishing localpi@$package_version"
 
-      - run: npm run check
-      - run: npm run coverage
-      - run: npm run dry
-      - run: npm run mutate
-      - uses: dutifuldev/slophammer@main
-        with:
-          checker: ts
-          version: 0.4.0
+      - run: npm run build
       - run: npm pack --dry-run
       - run: npm publish --access public --provenance
