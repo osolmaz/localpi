@@ -19,6 +19,7 @@ export type LaunchPlanOptions = {
 };
 
 export type LaunchExecutionOptions = {
+  readonly detached?: boolean;
   readonly forwardSignals?: boolean;
   readonly onChild?: (child: ChildProcess) => void;
 };
@@ -64,6 +65,7 @@ export async function execLaunchPlan(
   const child = spawn(shellCommand(plan.command, plan.args), {
     shell: true,
     stdio,
+    detached: options.detached === true,
     env: { ...process.env, ...plan.env }
   });
   options.onChild?.(child);
@@ -82,6 +84,22 @@ export async function execLaunchPlan(
       resolve(code ?? 0);
     });
   });
+}
+
+export function terminateLaunchProcess(child: ChildProcess, signal: NodeJS.Signals): void {
+  const pid = child.pid;
+  if (pid === undefined) {
+    return;
+  }
+  if (process.platform === "win32") {
+    child.kill(signal);
+    return;
+  }
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    child.kill(signal);
+  }
 }
 
 function shellCommand(command: string, args: readonly string[]): string {

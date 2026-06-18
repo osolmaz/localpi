@@ -1,11 +1,13 @@
 import path from "node:path";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 
 import { describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";
 import type { RuntimeConnection } from "../src/localpi/runtime.js";
 import type { RuntimeConfig } from "../src/pi/config.js";
-import { createLaunchPlan, execLaunchPlan } from "../src/pi/launch.js";
+import { createLaunchPlan, execLaunchPlan, terminateLaunchProcess } from "../src/pi/launch.js";
 
 describe("Pi launch plan", () => {
   it("adds localpi extensions, system prompt, and default tools", async () => {
@@ -72,6 +74,44 @@ describe("Pi launch plan", () => {
       execLaunchPlan({ command: "sh -c 'exit 7' --", args: [], env: { LOCALPI_TEST: "1" } })
     ).resolves.toBe(7);
   });
+
+  it("can terminate detached shell command process groups", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "localpi-launch-"));
+    try {
+      const pidPath = path.join(dir, "child.pid");
+      const scriptPath = path.join(dir, "child.cjs");
+      await writeFile(
+        scriptPath,
+        [
+          "const fs = require('node:fs');",
+          `fs.writeFileSync(${JSON.stringify(pidPath)}, String(process.pid));`,
+          "process.on('SIGTERM', () => process.exit(0));",
+          "setInterval(() => {}, 1000);"
+        ].join("\n")
+      );
+      let launched: Parameters<typeof terminateLaunchProcess>[0] | undefined;
+      const running = execLaunchPlan(
+        { command: `node ${scriptPath}`, args: [], env: {} },
+        {
+          detached: true,
+          forwardSignals: false,
+          onChild: (child) => {
+            launched = child;
+          }
+        }
+      );
+
+      const childPid = await waitForPid(pidPath);
+      if (launched === undefined) {
+        throw new Error("launch child was not reported");
+      }
+      terminateLaunchProcess(launched, "SIGTERM");
+      await expect(running).resolves.toBe(143);
+      await waitForDead(childPid);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 function options(stateDir: string): LocalpiOptions {
@@ -129,4 +169,42 @@ function runtimeConfig(stateDir: string): RuntimeConfig {
     modelsPath: path.join(stateDir, "pi", "models.json"),
     settingsPath: path.join(stateDir, "pi", "settings.json")
   };
+}
+
+async function waitForPid(pidPath: string): Promise<number> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    try {
+      return Number(await readFile(pidPath, "utf8"));
+    } catch {
+      await sleep(20);
+    }
+  }
+  throw new Error(`timed out waiting for ${pidPath}`);
+}
+
+async function waitForDead(pid: number): Promise<void> {
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline) {
+    if (!isAlive(pid)) {
+      return;
+    }
+    await sleep(20);
+  }
+  throw new Error(`process ${String(pid)} is still alive`);
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

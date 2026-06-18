@@ -235,6 +235,8 @@ describe("localpi environment defaults", () => {
   it("lets explicit demo flags override environment prompt values", () => {
     process.env["LOCALPI_DEMO_INITIAL_PROMPT"] = "env story";
     process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT"] = "env again";
+    process.env["LOCALPI_DEMO_INITIAL_PROMPT_FILE"] = "/tmp/env-initial.txt";
+    process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE"] = "/tmp/env-followup.txt";
     expect(
       parseLocalpiArgs([
         "--demo-initial-prompt",
@@ -244,7 +246,29 @@ describe("localpi environment defaults", () => {
       ])
     ).toMatchObject({
       demoInitialPrompt: "cli story",
-      demoFollowupPrompt: "cli again"
+      demoFollowupPrompt: "cli again",
+      demoInitialPromptFile: undefined,
+      demoFollowupPromptFile: undefined
+    });
+  });
+
+  it("keeps explicit demo prompt files ahead of explicit demo prompt text", () => {
+    expect(
+      parseLocalpiArgs([
+        "--demo-initial-prompt-file",
+        "/tmp/cli-initial.txt",
+        "--demo-initial-prompt",
+        "cli story",
+        "--demo-followup-prompt-file",
+        "/tmp/cli-followup.txt",
+        "--demo-followup-prompt",
+        "cli again"
+      ])
+    ).toMatchObject({
+      demoInitialPrompt: "cli story",
+      demoInitialPromptFile: "/tmp/cli-initial.txt",
+      demoFollowupPrompt: "cli again",
+      demoFollowupPromptFile: "/tmp/cli-followup.txt"
     });
   });
 });

@@ -5,7 +5,7 @@ import type { LocalpiOptions } from "../localpi/options.js";
 import type { RuntimeConnection } from "../localpi/runtime.js";
 import type { RuntimeConfig } from "./config.js";
 import type { ExtensionBundle } from "./extensions.js";
-import { createLaunchPlan, execLaunchPlan } from "./launch.js";
+import { createLaunchPlan, execLaunchPlan, terminateLaunchProcess } from "./launch.js";
 
 export const defaultDemoInitialPrompt =
   "You are narrating a never-ending sci-fi adventure. Continue in short paragraphs. Whenever the user sends a message, treat it as a live director note and incorporate it immediately. Never end the story.";
@@ -49,7 +49,9 @@ export async function execDemoLoop(
   const signalHandler = (signal: NodeJS.Signals): void => {
     interrupt.interrupted = true;
     interrupt.exitCode = signalExitCode(signal);
-    activeChild?.kill(signal);
+    if (activeChild !== undefined) {
+      terminateLaunchProcess(activeChild, signal);
+    }
   };
   process.once("SIGINT", signalHandler);
   process.once("SIGTERM", signalHandler);
@@ -60,6 +62,7 @@ export async function execDemoLoop(
         forwardedArgs: [...options.forwardedArgs, "-p", prompt]
       });
       const code = await execLaunchPlan(plan, {
+        detached: true,
         forwardSignals: false,
         onChild: (child) => {
           activeChild = child;

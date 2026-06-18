@@ -89,6 +89,7 @@ export function defaultOptions(): LocalpiOptions {
 export function parseLocalpiArgs(args: readonly string[]): LocalpiOptions {
   let options = defaultOptions();
   const forwardedArgs: string[] = [];
+  const demoPromptFlags = demoPromptFlagTracker();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) {
@@ -101,6 +102,7 @@ export function parseLocalpiArgs(args: readonly string[]): LocalpiOptions {
     if (arg === "-h" || arg === "--help") {
       return { ...options, forwardedArgs: ["--help"] };
     }
+    trackDemoPromptFlag(demoPromptFlags, arg);
     const parsed = parseLocalpiFlag(options, args, index);
     if (parsed !== undefined) {
       options = parsed.options;
@@ -109,7 +111,7 @@ export function parseLocalpiArgs(args: readonly string[]): LocalpiOptions {
     }
     forwardedArgs.push(arg);
   }
-  return { ...options, forwardedArgs };
+  return normalizeDemoPromptPrecedence({ ...options, forwardedArgs }, demoPromptFlags);
 }
 
 export function usage(): string {
@@ -172,6 +174,13 @@ export function usage(): string {
 type ParseResult = {
   readonly options: LocalpiOptions;
   readonly advance: number;
+};
+
+type DemoPromptFlagTracker = {
+  initialText: boolean;
+  initialFile: boolean;
+  followupText: boolean;
+  followupFile: boolean;
 };
 
 function parseLocalpiFlag(
@@ -257,6 +266,45 @@ function parseValueFlag(
     return undefined;
   }
   return { options: updater(options, requiredValue(args, index + 1, flag)), advance: 1 };
+}
+
+function demoPromptFlagTracker(): DemoPromptFlagTracker {
+  return {
+    initialText: false,
+    initialFile: false,
+    followupText: false,
+    followupFile: false
+  };
+}
+
+function trackDemoPromptFlag(tracker: DemoPromptFlagTracker, arg: string): void {
+  switch (arg) {
+    case "--demo-initial-prompt":
+      tracker.initialText = true;
+      return;
+    case "--demo-initial-prompt-file":
+      tracker.initialFile = true;
+      return;
+    case "--demo-followup-prompt":
+      tracker.followupText = true;
+      return;
+    case "--demo-followup-prompt-file":
+      tracker.followupFile = true;
+      return;
+  }
+}
+
+function normalizeDemoPromptPrecedence(
+  options: LocalpiOptions,
+  tracker: DemoPromptFlagTracker
+): LocalpiOptions {
+  return {
+    ...options,
+    demoInitialPromptFile:
+      tracker.initialText && !tracker.initialFile ? undefined : options.demoInitialPromptFile,
+    demoFollowupPromptFile:
+      tracker.followupText && !tracker.followupFile ? undefined : options.demoFollowupPromptFile
+  };
 }
 
 function parseRuntime(value: string): RuntimeKind {
