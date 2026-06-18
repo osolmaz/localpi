@@ -478,6 +478,52 @@ describe("runtime resolution", () => {
     });
   });
 
+  it("rejects malformed optional string fields in local model profiles", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelServer("nvidia/Gemma-4-26B-A4B-NVFP4", 32768);
+    const badBaseUrlProfile = path.join(stateDir, "bad-base-url-profile.json");
+    const badThinkingFormatProfile = path.join(stateDir, "bad-thinking-format-profile.json");
+    const baseProfile = {
+      id: "gemma4-26b-a4b-nvfp4",
+      model: "nvidia/Gemma-4-26B-A4B-NVFP4"
+    };
+    await writeFile(
+      badBaseUrlProfile,
+      JSON.stringify({
+        ...baseProfile,
+        base_url: 123
+      })
+    );
+    await writeFile(
+      badThinkingFormatProfile,
+      JSON.stringify({
+        ...baseProfile,
+        capabilities: {
+          thinking_format: { name: "qwen-chat-template" }
+        }
+      })
+    );
+
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "vllm",
+        baseUrl,
+        model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+        modelProfileFile: badBaseUrlProfile
+      })
+    ).rejects.toThrow("model profile");
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "vllm",
+        baseUrl,
+        model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+        modelProfileFile: badThinkingFormatProfile
+      })
+    ).rejects.toThrow("model profile");
+  });
+
   it("does not mark older Qwen and DeepSeek coder model ids as reasoning models", async () => {
     const baseUrl = await startModelListServer([
       { id: "Qwen2.5-Coder-32B" },

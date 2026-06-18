@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { asObject, optionalString, requiredString } from "../common/json.js";
+import { asObject, requiredString } from "../common/json.js";
 import { normalizeBaseUrl } from "../llm/openai.js";
 import type { CatalogThinkingFormat } from "./catalog.js";
 import type { LocalpiOptions } from "./options.js";
@@ -67,13 +67,16 @@ function parseLocalModelProfile(value: unknown, source: string): LocalModelProfi
     capabilities === undefined
       ? undefined
       : optionalThinkingFormat(
-          optionalString(capabilities["thinking_format"]),
+          optionalProfileString(
+            capabilities["thinking_format"],
+            `model profile ${source} capabilities.thinking_format`
+          ),
           `model profile ${source} capabilities.thinking_format`
         );
   return withoutUndefined({
     id: requiredString(root["id"], `model profile ${source} id`),
     model: requiredString(root["model"], `model profile ${source} model`),
-    baseUrl: optionalString(root["base_url"]),
+    baseUrl: optionalProfileString(root["base_url"], `model profile ${source} base_url`),
     client:
       client === undefined
         ? undefined
@@ -96,6 +99,16 @@ function optionalObject(
   context: string
 ): Readonly<Record<string, unknown>> | undefined {
   return value === undefined ? undefined : asObject(value, context);
+}
+
+function optionalProfileString(value: unknown, context: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`${context} must be a string`);
+  }
+  return value;
 }
 
 function optionalBoolean(value: unknown, context: string): boolean | undefined {
