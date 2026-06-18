@@ -76,19 +76,19 @@ Forwarded non-prompt Pi options should remain allowed.
 
 Keep `src/pi/launch.ts` as the single-launch layer.
 
-Refactor `createLaunchPlan` so callers can provide a forwarded-argument override or extra prompt arguments without mutating `LocalpiOptions.forwardedArgs`.
+Refactor `createLaunchPlan` so callers can provide a forwarded-argument override without mutating `LocalpiOptions.forwardedArgs`.
 
 Example shape:
 
 ```ts
 createLaunchPlan(options, runtimeConfig, connection, extensions, {
-  forwardedArgs: ["-p", prompt]
+  forwardedArgs: ["--session-id", sessionId]
 });
 ```
 
 Normal mode should keep using `options.forwardedArgs`.
 
-Demo mode should call the same launch planner with `["-p", prompt]` for each iteration.
+Demo mode should call the same launch planner with the generated `--session-id` for each iteration, then pass the prompt over child-process stdin. Stdin keeps arbitrary prompt text intact, including prompts that start with `-` or `@`.
 
 ## Demo Runner
 
@@ -130,7 +130,7 @@ If `execLaunchPlan` currently hides too much child-process control, split out a 
 - [x] Verify prompt files override text prompt values.
 - [x] Verify `--demo --status`, `--demo --stop`, and `--demo --list` fail clearly.
 - [x] Verify demo mode rejects forwarded Pi prompt flags.
-- [x] Unit-test launch planning so demo prompts are passed as `-p <prompt>`.
+- [x] Unit-test launch execution so demo prompts can be piped over stdin.
 - [x] Unit-test that normal launches are unchanged.
 - [x] Use a fake `LOCALPI_PI_CMD` that exits `0` and records args to prove first prompt then followup prompts are sent in order.
 - [x] Use a fake `LOCALPI_PI_CMD` that exits non-zero to prove the loop stops and returns the child exit code.

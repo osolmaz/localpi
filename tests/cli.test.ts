@@ -262,9 +262,9 @@ describe("localpi cli", () => {
     const result = await run([
       "--demo",
       "--demo-initial-prompt",
-      "start story",
+      "- start story",
       "--demo-followup-prompt",
-      "keep going",
+      "@keep going",
       "--runtime",
       "lmstudio",
       "--base-url",
@@ -286,11 +286,12 @@ describe("localpi cli", () => {
         (line) => JSON.parse(line) as { readonly args: readonly string[]; readonly prompt: string }
       );
     expect(records.map((record) => record.prompt)).toEqual([
-      "start story",
-      "keep going",
-      "keep going"
+      "- start story",
+      "@keep going",
+      "@keep going"
     ]);
     expect(records.every((record) => record.args.includes("--no-tools"))).toBe(true);
+    expect(records.every((record) => !record.args.includes("-p"))).toBe(true);
     const sessionIds = records.map((record) => {
       const index = record.args.indexOf("--session-id");
       return index < 0 ? undefined : record.args[index + 1];
@@ -371,14 +372,17 @@ describe("localpi cli", () => {
     return [
       "const fs = require('node:fs');",
       "const args = process.argv.slice(2);",
-      "const promptIndex = args.indexOf('-p');",
-      "const prompt = promptIndex < 0 ? undefined : args[promptIndex + 1];",
       `const countPath = ${JSON.stringify(countPath)};`,
       `const logPath = ${JSON.stringify(logPath)};`,
-      "const count = fs.existsSync(countPath) ? Number(fs.readFileSync(countPath, 'utf8')) : 0;",
-      "fs.writeFileSync(countPath, String(count + 1));",
-      "fs.appendFileSync(logPath, `${JSON.stringify({ args, prompt })}\\n`);",
-      "process.exit(count >= 2 ? 7 : 0);"
+      "let prompt = '';",
+      "process.stdin.setEncoding('utf8');",
+      "process.stdin.on('data', (chunk) => { prompt += chunk; });",
+      "process.stdin.on('end', () => {",
+      "  const count = fs.existsSync(countPath) ? Number(fs.readFileSync(countPath, 'utf8')) : 0;",
+      "  fs.writeFileSync(countPath, String(count + 1));",
+      "  fs.appendFileSync(logPath, `${JSON.stringify({ args, prompt })}\\n`);",
+      "  process.exit(count >= 2 ? 7 : 0);",
+      "});"
     ].join("\n");
   }
 });

@@ -61,11 +61,12 @@ export async function execDemoLoop(
     for (let iteration = 0; !interrupt.interrupted; iteration += 1) {
       const prompt = iteration === 0 ? prompts.initial : prompts.followup;
       const plan = await createLaunchPlan(options, runtimeConfig, connection, extensions, {
-        forwardedArgs: demoForwardedArgs(options.forwardedArgs, sessionId, prompt)
+        forwardedArgs: demoForwardedArgs(options.forwardedArgs, sessionId)
       });
       const code = await execLaunchPlan(plan, {
         detached: true,
         forwardSignals: false,
+        input: prompt,
         onChild: (child) => {
           activeChild = child;
         }
@@ -82,12 +83,8 @@ export async function execDemoLoop(
   }
 }
 
-function demoForwardedArgs(
-  forwardedArgs: readonly string[],
-  sessionId: string,
-  prompt: string
-): readonly string[] {
-  return ["--session-id", sessionId, ...forwardedArgs, "-p", prompt];
+function demoForwardedArgs(forwardedArgs: readonly string[], sessionId: string): readonly string[] {
+  return ["--session-id", sessionId, ...forwardedArgs];
 }
 
 function demoSessionId(): string {

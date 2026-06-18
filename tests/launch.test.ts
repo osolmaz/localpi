@@ -75,6 +75,37 @@ describe("Pi launch plan", () => {
     ).resolves.toBe(7);
   });
 
+  it("can pipe input to the launched process", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "localpi-launch-"));
+    try {
+      const inputPath = path.join(dir, "input.txt");
+      const scriptPath = path.join(dir, "stdin.cjs");
+      await writeFile(
+        scriptPath,
+        [
+          "const fs = require('node:fs');",
+          `const inputPath = ${JSON.stringify(inputPath)};`,
+          "let input = '';",
+          "process.stdin.setEncoding('utf8');",
+          "process.stdin.on('data', (chunk) => { input += chunk; });",
+          "process.stdin.on('end', () => {",
+          "  fs.writeFileSync(inputPath, input);",
+          "});"
+        ].join("\n")
+      );
+
+      await expect(
+        execLaunchPlan(
+          { command: `node ${scriptPath}`, args: [], env: {} },
+          { input: "- bullet\n@mention" }
+        )
+      ).resolves.toBe(0);
+      await expect(readFile(inputPath, "utf8")).resolves.toBe("- bullet\n@mention");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("can terminate detached shell command process groups", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "localpi-launch-"));
     try {

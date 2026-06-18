@@ -21,6 +21,7 @@ export type LaunchPlanOptions = {
 export type LaunchExecutionOptions = {
   readonly detached?: boolean;
   readonly forwardSignals?: boolean;
+  readonly input?: string;
   readonly onChild?: (child: ChildProcess) => void;
 };
 
@@ -61,7 +62,8 @@ export async function execLaunchPlan(
   plan: LaunchPlan,
   options: LaunchExecutionOptions = {}
 ): Promise<number> {
-  const stdio: StdioOptions = "inherit";
+  const stdio: StdioOptions =
+    options.input === undefined ? "inherit" : ["pipe", "inherit", "inherit"];
   const child = spawn(shellCommand(plan.command, plan.args), {
     shell: true,
     stdio,
@@ -69,6 +71,7 @@ export async function execLaunchPlan(
     env: { ...process.env, ...plan.env }
   });
   options.onChild?.(child);
+  writeLaunchInput(child, options.input);
   child.stdout?.resume();
   return await new Promise<number>((resolve, reject) => {
     child.on("error", reject);
@@ -84,6 +87,18 @@ export async function execLaunchPlan(
       resolve(code ?? 0);
     });
   });
+}
+
+function writeLaunchInput(child: ChildProcess, input: string | undefined): void {
+  if (input === undefined || child.stdin === null) {
+    return;
+  }
+  child.stdin.on("error", ignoreLaunchInputError);
+  child.stdin.end(input);
+}
+
+function ignoreLaunchInputError(error: Error): void {
+  void error;
 }
 
 export function terminateLaunchProcess(child: ChildProcess, signal: NodeJS.Signals): void {
