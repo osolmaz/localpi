@@ -13,6 +13,7 @@ describe("localpi cli", () => {
   const tempDirs: string[] = [];
   const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
   const previousDemo = process.env["LOCALPI_DEMO"];
+  const previousThinking = process.env["LOCALPI_THINKING"];
   const previousStdinIsTty = process.stdin.isTTY;
   const previousStdoutIsTty = process.stdout.isTTY;
 
@@ -28,6 +29,11 @@ describe("localpi cli", () => {
       delete process.env["LOCALPI_DEMO"];
     } else {
       process.env["LOCALPI_DEMO"] = previousDemo;
+    }
+    if (previousThinking === undefined) {
+      delete process.env["LOCALPI_THINKING"];
+    } else {
+      process.env["LOCALPI_THINKING"] = previousThinking;
     }
     await Promise.all(
       servers.map(
@@ -313,6 +319,61 @@ describe("localpi cli", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("uses remembered thinking unless a localpi thinking override is set", async () => {
+    const stateDir = await tempStateDir();
+    const baseUrl = await startModelServer("served-model", 4096);
+    const scriptPath = path.join(stateDir, "fake-pi.cjs");
+    const firstLogPath = path.join(stateDir, "remembered-launch.json");
+    await writeFile(path.join(stateDir, "thinking.json"), JSON.stringify({ thinking: "high" }));
+    await writeFile(scriptPath, fakePiLaunchScript(firstLogPath));
+
+    const remembered = await run([
+      "--runtime",
+      "lmstudio",
+      "--base-url",
+      baseUrl,
+      "--state-dir",
+      stateDir,
+      "--session-dir",
+      path.join(stateDir, "sessions"),
+      "--pi-command",
+      `node ${scriptPath}`
+    ]);
+
+    expect(remembered).toEqual({ code: 0, stdout: "", stderr: "" });
+    const rememberedRecord = JSON.parse(await readFile(firstLogPath, "utf8")) as {
+      readonly args: readonly string[];
+    };
+    expect(argValue(rememberedRecord.args, "--thinking")).toBe("high");
+    const rememberedSettings = JSON.parse(
+      await readFile(path.join(stateDir, "pi-config-runtime", "settings.json"), "utf8")
+    ) as { readonly defaultThinkingLevel?: string };
+    expect(rememberedSettings.defaultThinkingLevel).toBe("high");
+
+    const secondLogPath = path.join(stateDir, "override-launch.json");
+    await writeFile(scriptPath, fakePiLaunchScript(secondLogPath));
+    const overridden = await run([
+      "--runtime",
+      "lmstudio",
+      "--base-url",
+      baseUrl,
+      "--state-dir",
+      stateDir,
+      "--session-dir",
+      path.join(stateDir, "sessions"),
+      "--pi-command",
+      `node ${scriptPath}`,
+      "--thinking",
+      "low"
+    ]);
+
+    expect(overridden).toEqual({ code: 0, stdout: "", stderr: "" });
+    const overriddenRecord = JSON.parse(await readFile(secondLogPath, "utf8")) as {
+      readonly args: readonly string[];
+    };
+    expect(argValue(overriddenRecord.args, "--thinking")).toBe("low");
+  });
+
   it("keeps provider-only interactive launches eligible for Pi-native startup selection", async () => {
     const stateDir = await tempStateDir();
     const baseUrl = await startModelListServer(["first", "second"]);
@@ -502,6 +563,11 @@ describe("localpi cli", () => {
       }
     }
     return paths;
+  }
+
+  function argValue(args: readonly string[], flag: string): string | undefined {
+    const index = args.indexOf(flag);
+    return index === -1 ? undefined : args[index + 1];
   }
 
   function fakePiLaunchScript(logPath: string): string {

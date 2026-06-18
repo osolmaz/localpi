@@ -24,7 +24,7 @@ Startup selection is for models only. There is no startup thinking picker.
 - Explicit `--runtime` values scope discovery but do not disable the startup selector by themselves.
 - Non-interactive runs never show a picker.
 - Pi receives the launch-time model catalog so `/model` can switch across discovered providers and models.
-- Thinking starts as `off` unless `--thinking` or `LOCALPI_THINKING` sets another startup level.
+- Thinking starts from `--thinking`, `LOCALPI_THINKING`, the last saved Pi thinking level, or `medium`.
 - In-session thinking changes happen through `/thinking` inside Pi.
 
 ## Provider Coverage
@@ -86,9 +86,9 @@ Thinking is not selected at startup through a picker.
 
 Startup defaults:
 
-- `localpi` starts with thinking `off`.
-- `LOCALPI_THINKING=<level>` changes the startup default.
-- `localpi --thinking <level>` overrides the startup default.
+- `localpi` starts with the last saved thinking level, or `medium` if none is saved.
+- `LOCALPI_THINKING=<level>` overrides the saved startup default.
+- `localpi --thinking <level>` overrides the saved startup default.
 - The chosen startup value is passed to Pi as `--thinking <level>` and written to `settings.json.defaultThinkingLevel`.
 
 In-session control:
@@ -97,6 +97,7 @@ In-session control:
 - `/thinking` opens Pi's selector UI.
 - `/thinking high` sets the level directly.
 - The extension calls Pi's thinking API, so Pi owns runtime mutation.
+- The extension saves the actual Pi thinking level to localpi state for the next launch.
 
 Managed `llama-server` caveat:
 
@@ -114,6 +115,7 @@ Managed `llama-server` caveat:
 - [x] Add `/thinking` as a Pi extension command.
 - [x] Keep startup thinking non-interactive.
 - [x] Keep `--thinking` and `LOCALPI_THINKING` as automation-safe startup controls.
+- [x] Remember the last Pi thinking level for future localpi launches.
 - [ ] Manually verify model picker behavior in an interactive terminal with multiple loaded providers.
 - [ ] Manually verify Pi `/model` can switch among generated catalog entries.
 - [ ] Manually verify Pi `/thinking` picker and direct `/thinking <level>` command.

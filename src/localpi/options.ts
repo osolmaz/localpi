@@ -73,7 +73,7 @@ export function defaultOptions(): LocalpiOptions {
     stateDir,
     sessionDir: defaultSessionDir(stateDir),
     piCommand: envString("LOCALPI_PI_CMD", "npx -y @earendil-works/pi-coding-agent@latest"),
-    thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "off")),
+    thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "medium")),
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
     timeoutMs: envPositiveInteger("LOCALPI_TIMEOUT_MS", "3000"),

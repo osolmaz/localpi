@@ -255,10 +255,10 @@ describe("localpi environment defaults", () => {
     });
   });
 
-  it("defaults thinking to off when LOCALPI_THINKING is not set", () => {
+  it("defaults thinking to medium when LOCALPI_THINKING is not set", () => {
     delete process.env["LOCALPI_THINKING"];
     expect(parseLocalpiArgs([])).toMatchObject({
-      thinking: "off"
+      thinking: "medium"
     });
   });
 

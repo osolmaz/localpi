@@ -38,7 +38,7 @@ Target default:
 localpi --model gemma-12b
 ```
 
-This uses the default `auto` runtime. If exactly one model is loaded locally, Localpi selects it. If multiple models are loaded in an interactive terminal, Localpi boots Pi with a temporary default and opens Pi's native model selector. If no external model is loaded and `llama-server` is installed, Localpi can fall back to the managed `llama-server` default. Thinking starts as `off` unless `--thinking` or `LOCALPI_THINKING` sets another startup level.
+This uses the default `auto` runtime. If exactly one model is loaded locally, Localpi selects it. If multiple models are loaded in an interactive terminal, Localpi boots Pi with a temporary default and opens Pi's native model selector. If no external model is loaded and `llama-server` is installed, Localpi can fall back to the managed `llama-server` default. Thinking starts from `--thinking`, `LOCALPI_THINKING`, the last saved Pi thinking level, or `medium`.
 
 LM Studio is explicit:
 
@@ -135,7 +135,7 @@ Use a bounded reasoning budget with managed `llama-server`:
 localpi --model gemma-12b --thinking low -p "classify this item"
 ```
 
-In an interactive session, use `/thinking` to pick a level or `/thinking high` to set one directly. This changes Pi's active thinking level for later turns. For managed `llama-server`, the server-side reasoning budget is still chosen at startup because changing it requires restarting the local server process.
+In an interactive session, use `/thinking` to pick a level or `/thinking high` to set one directly. This changes Pi's active thinking level for later turns and saves it for the next localpi launch. For managed `llama-server`, the server-side reasoning budget is still chosen at startup because changing it requires restarting the local server process.
 
 For managed `llama-server`, thinking levels map to server-side reasoning:
 
@@ -148,7 +148,7 @@ For managed `llama-server`, thinking levels map to server-side reasoning:
 | `high`    | `--reasoning on --reasoning-budget 2048` |
 | `xhigh`   | `--reasoning on --reasoning-budget 8192` |
 
-The default is `off`.
+The fallback default is `medium`.
 
 Point at vLLM:
 
@@ -197,7 +197,7 @@ localpi --stop
 - `--model-reasoning <bool>`: override generated Pi reasoning capability
 - `--model-thinking-format <deepseek|qwen-chat-template>`: override generated Pi thinking format
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
-- `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: `off`
+- `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: last saved level, then `medium`
 - `--demo`: endlessly run Pi prompts inside the normal Pi TUI until interrupted or Pi exits; requires an explicit non-`auto` model
 - `--demo-initial-prompt <text>`: first demo prompt
 - `--demo-followup-prompt <text>`: repeated demo prompt after the first run

@@ -7,13 +7,14 @@ import {
   statusOutput,
   stopRuntime
 } from "../localpi/runtime.js";
+import { applyRememberedThinking } from "../localpi/thinking-state.js";
 import { writeRuntimeConfig } from "../pi/config.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
 import { createLaunchPlan, execLaunchPlan } from "../pi/launch.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
-    const options = parseLocalpiArgs(args);
+    let options = parseLocalpiArgs(args);
     const helpResult = helpCommandResult(options);
     if (helpResult !== undefined) {
       return helpResult;
@@ -23,6 +24,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
     if (commandResult !== undefined) {
       return commandResult;
     }
+    options = await applyRememberedThinking(options, hasExplicitThinkingOverride(args));
 
     const connection = await resolveRuntime(options);
     const runtimeConfig = await writeRuntimeConfig(options, connection);
@@ -322,6 +324,21 @@ function helpCommandResult(options: ParsedOptions): CommandResult | undefined {
   return options.forwardedArgs.length === 1 && options.forwardedArgs[0] === "--help"
     ? ok(usage())
     : undefined;
+}
+
+function hasExplicitThinkingOverride(args: readonly string[]): boolean {
+  if (process.env["LOCALPI_THINKING"] !== undefined) {
+    return true;
+  }
+  for (const arg of args) {
+    if (arg === "--") {
+      return false;
+    }
+    if (arg === "--thinking") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function startupModelSelectorOptions(
