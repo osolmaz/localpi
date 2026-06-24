@@ -53,5 +53,8 @@
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "pi-factory": "github:dutifuldev/pi-factory#feat/end-to-end-implementation"
   }
 }
