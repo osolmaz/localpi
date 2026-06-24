@@ -71,6 +71,17 @@ describe("Pi launch plan", () => {
       )
     ).resolves.toBe(0);
   });
+
+  it("preserves shell-style pi command values", async () => {
+    await expect(
+      execLaunchPlan(
+        executablePlan({
+          command: "LOCALPI_TEST=ok sh -c 'test \"$LOCALPI_TEST\" = ok' --",
+          args: []
+        })
+      )
+    ).resolves.toBe(0);
+  });
 });
 
 function executablePlan(input: {
