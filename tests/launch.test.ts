@@ -57,6 +57,13 @@ describe("Pi launch plan", () => {
     await expect(
       execLaunchPlan({ command: "sh -c 'exit 7' --", args: [], env: { LOCALPI_TEST: "1" } })
     ).resolves.toBe(7);
+    await expect(
+      execLaunchPlan({
+        command: "LOCALPI_TEST=ok sh -c 'test \"$LOCALPI_TEST\" = ok' --",
+        args: [],
+        env: {}
+      })
+    ).resolves.toBe(0);
   });
 });
 

@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
+import type { StdioOptions } from "node:child_process";
 import { mkdir } from "node:fs/promises";
-import { createPiLaunchPlan, execPiLaunchPlan } from "pi-factory";
+import { createPiLaunchPlan } from "pi-factory";
 import type { PiLaunchPlan } from "pi-factory";
 
 import type { LocalpiOptions } from "../localpi/options.js";
@@ -30,5 +32,30 @@ export async function createLaunchPlan(
 }
 
 export async function execLaunchPlan(plan: ExecutableLaunchPlan): Promise<number> {
-  return await execPiLaunchPlan(plan as PiLaunchPlan);
+  const stdio: StdioOptions = "inherit";
+  const child = spawn(shellCommand(plan.command, plan.args), {
+    shell: true,
+    stdio,
+    cwd: plan.cwd,
+    env: { ...process.env, ...plan.env }
+  });
+  child.stdout?.resume();
+  return await new Promise<number>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("exit", (code, signal) => {
+      if (signal !== null) {
+        process.kill(process.pid, signal);
+        return;
+      }
+      resolve(code ?? 0);
+    });
+  });
+}
+
+function shellCommand(command: string, args: readonly string[]): string {
+  return [command, ...args.map(shellQuote)].join(" ");
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
