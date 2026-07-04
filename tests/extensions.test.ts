@@ -27,6 +27,12 @@ describe("Pi extensions", () => {
       expect(status).toContain("tok/s");
       expect(status).toContain("message_update");
       expect(status).toContain("currentTurn");
+      expect(status).toContain("firstOutputAt");
+      expect(status).toContain("generationElapsed");
+      expect(status).toContain("prefillTokenCount");
+      expect(status).toContain("input + cacheWrite");
+      expect(status).toContain("prefill ");
+      expect(status).toContain("gen ");
       expect(status).toContain("outputText += update.text");
       expect(status).toContain('kind: "delta"');
       expect(status).not.toContain("turns.get(event.turnIndex)");

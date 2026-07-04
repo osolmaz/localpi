@@ -150,7 +150,7 @@ session dir: ~/.local/state/localpi/sessions
 Localpi installs two default extensions:
 
 - tool approval gate: ask before each tool call, and tell the model clearly when a tool call was blocked
-- token status: show live output token estimate while streaming and final exact token stats when usage data is available
+- token status: show live generation speed while streaming, then final prefill and generation rates when usage data is available
 
 ## System Prompt
 

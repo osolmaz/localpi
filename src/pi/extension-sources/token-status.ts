@@ -11,6 +11,7 @@ type Usage = {
 
 type TurnState = {
   startedAt: number;
+  firstOutputAt?: number;
   outputText: string;
   estimatedOutputTokens: number;
   lastStatusAt: number;
@@ -33,6 +34,7 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
     if (!ctx.hasUI || state === undefined) {
       return;
     }
+    const now = Date.now();
     const update = textUpdateFromUnknown(event.assistantMessageEvent ?? event.message ?? event);
     if (update.kind === "delta") {
       state.outputText += update.text;
@@ -40,11 +42,14 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
       state.outputText = update.text;
     }
     state.estimatedOutputTokens = Math.ceil(state.outputText.length / 4);
-    if (Date.now() - state.lastStatusAt < 250) {
+    if (state.firstOutputAt === undefined && state.outputText.length > 0) {
+      state.firstOutputAt = now;
+    }
+    if (now - state.lastStatusAt < 250) {
       return;
     }
-    state.lastStatusAt = Date.now();
-    ctx.ui.setStatus("localpi-perf", ctx.ui.theme.fg("dim", statusText(state)));
+    state.lastStatusAt = now;
+    ctx.ui.setStatus("localpi-perf", ctx.ui.theme.fg("dim", statusText(state, now)));
   });
 
   pi.on("turn_end", (event, ctx) => {
@@ -65,7 +70,10 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
     const input = usage?.input ?? 0;
     const cacheRead = usage?.cacheRead ?? 0;
     const cacheWrite = usage?.cacheWrite ?? 0;
-    const elapsedSeconds = elapsed(state);
+    const now = Date.now();
+    const elapsedSeconds = elapsed(state, now);
+    const decodeSeconds = generationElapsed(state, now);
+    const prefillText = prefillStatusText(state, input, cacheWrite);
     const context = ctx.getContextUsage();
     const contextText =
       context && context.percent !== null
@@ -77,7 +85,8 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
       ctx.ui.theme.fg(
         "dim",
         [
-          \`\${(output / elapsedSeconds).toFixed(1)} tok/s\`,
+          \`gen \${(output / decodeSeconds).toFixed(1)} tok/s\`,
+          prefillText,
           \`out \${output}\`,
           \`in \${input}\`,
           cacheRead > 0 ? \`cache \${cacheRead}\` : undefined,
@@ -98,13 +107,48 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
   });
 }
 
-function statusText(state: TurnState): string {
-  const elapsedSeconds = elapsed(state);
-  return \`\${(state.estimatedOutputTokens / elapsedSeconds).toFixed(1)} tok/s | out ~\${state.estimatedOutputTokens} | \${elapsedSeconds.toFixed(1)}s\`;
+function statusText(state: TurnState, now: number): string {
+  const elapsedSeconds = elapsed(state, now);
+  if (state.firstOutputAt === undefined) {
+    return \`prefill \${elapsedSeconds.toFixed(1)}s | out ~\${state.estimatedOutputTokens}\`;
+  }
+  const decodeSeconds = generationElapsed(state, now);
+  const prefillSeconds = secondsBetween(state.startedAt, state.firstOutputAt);
+  return [
+    \`gen \${(state.estimatedOutputTokens / decodeSeconds).toFixed(1)} tok/s\`,
+    \`out ~\${state.estimatedOutputTokens}\`,
+    \`prefill \${prefillSeconds.toFixed(1)}s\`,
+    \`total \${elapsedSeconds.toFixed(1)}s\`
+  ].join(" | ");
 }
 
-function elapsed(state: TurnState): number {
-  return Math.max((Date.now() - state.startedAt) / 1000, 0.001);
+function prefillStatusText(
+  state: TurnState,
+  input: number,
+  cacheWrite: number
+): string | undefined {
+  const tokens = prefillTokenCount(input, cacheWrite);
+  if (state.firstOutputAt === undefined || tokens <= 0) {
+    return undefined;
+  }
+  const seconds = secondsBetween(state.startedAt, state.firstOutputAt);
+  return \`prefill \${(tokens / seconds).toFixed(1)} tok/s\`;
+}
+
+function prefillTokenCount(input: number, cacheWrite: number): number {
+  return Math.max(input + cacheWrite, 0);
+}
+
+function generationElapsed(state: TurnState, now: number): number {
+  return secondsBetween(state.firstOutputAt ?? state.startedAt, now);
+}
+
+function elapsed(state: TurnState, now: number): number {
+  return secondsBetween(state.startedAt, now);
+}
+
+function secondsBetween(start: number, end: number): number {
+  return Math.max((end - start) / 1000, 0.001);
 }
 
 type TextUpdate = {
