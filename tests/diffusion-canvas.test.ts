@@ -322,6 +322,38 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80).join("\n")).toContain("second completion canvas");
   });
 
+  it("bounds the canvas buffer, never evicting the correlated request", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-mine" } }
+    });
+
+    // The correlated canvas arrives first, then a crowd of foreign requests
+    // large enough to overflow the buffer cap; the correlated entry survives.
+    sse.push({ request_id: "chatcmpl-mine", step: 2, text: "my surviving canvas" });
+    for (let i = 0; i < 20; i += 1) {
+      sse.push({ request_id: `chatcmpl-other-${String(i)}`, step: 1, text: "foreign canvas" });
+    }
+    await flushMicrotasks();
+
+    const rendered = pi.renderWidget(80).join("\n");
+    expect(rendered).toContain("my surviving canvas");
+    expect(rendered).not.toContain("foreign canvas");
+  });
+
   it("computes steps per canvas from vLLM diffusion metrics deltas", async () => {
     const fetchMock = vi
       .fn<(input: string, init?: unknown) => Promise<{ ok: boolean; text(): Promise<string> }>>()

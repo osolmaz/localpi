@@ -31,6 +31,7 @@ const minResolveMs = 300;
 const maxResolveMs = 1500;
 const defaultResolveMs = 1200;
 const metricsTimeoutMs = 5000;
+const maxBufferedCanvases = 8;
 const noiseGlyphs = "abcdefghijklmnopqrstuvwxyz0123456789#%&@$+=~?";
 
 type ActiveCell = {
@@ -131,7 +132,21 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       if (state === undefined || state.done) {
         return;
       }
+      // The feed broadcasts every request on the server. Buffer per request
+      // id (the correlated id can change mid-turn or arrive late on servers
+      // that ignore the X-Request-Id header), but bound the buffer so a busy
+      // shared server cannot grow it without limit: evict the oldest foreign
+      // entry, never the correlated one.
+      state.latestCanvasByRequest.delete(event.requestId);
       state.latestCanvasByRequest.set(event.requestId, event);
+      if (state.latestCanvasByRequest.size > maxBufferedCanvases) {
+        for (const requestId of state.latestCanvasByRequest.keys()) {
+          if (requestId !== state.responseId) {
+            state.latestCanvasByRequest.delete(requestId);
+            break;
+          }
+        }
+      }
       refreshLiveCanvas(state);
       requestRender();
     }).catch(() => {
