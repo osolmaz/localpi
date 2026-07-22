@@ -390,6 +390,49 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80)).toHaveLength(1);
   });
 
+  it("shows the full canvas in live mode, ratcheting the widget height", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+
+    // A whole canvas block detokenizes far past the simulated 4-row window;
+    // live mode must render all of it, not a truncated head.
+    const words: string[] = [];
+    for (let i = 0; i < 100; i += 1) {
+      words.push(`word${String(i)}`);
+    }
+    const canvas = `${words.join(" ")} FINAL-MARKER`;
+    sse.push({ request_id: "chatcmpl-1", step: 2, text: canvas });
+    await flushMicrotasks();
+
+    const tall = pi.renderWidget(80);
+    expect(tall.join("\n")).toContain("FINAL-MARKER");
+    expect(tall.length).toBeGreaterThan(1 + 4);
+
+    // A shorter canvas on a later step must not shrink the widget: the
+    // height ratchets so the TUI layout stays stable within the turn.
+    sse.push({ request_id: "chatcmpl-1", step: 3, text: "short canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80)).toHaveLength(tall.length);
+
+    pi.emitTurnEnd();
+    expect(pi.renderWidget(80)).toHaveLength(1);
+  });
+
   it("settles simulated commits when the live stream arrives late", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
