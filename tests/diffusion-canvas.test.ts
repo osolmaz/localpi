@@ -322,6 +322,38 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80).join("\n")).toContain("second completion canvas");
   });
 
+  it("settles simulated commits when the live stream arrives late", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+
+    // A commit animates in simulated mode before any canvas event arrives.
+    pi.emitMessageUpdate("already committed prefix");
+    expect(pi.renderWidget(120).join("\n")).not.toContain("already committed prefix");
+
+    // The first live canvas switches renderers; the committed prefix must
+    // settle instead of being dropped with the simulated animation cells.
+    sse.push({ request_id: "chatcmpl-1", step: 5, text: "denoising tail" });
+    await flushMicrotasks();
+    const live = pi.renderWidget(120).join("\n");
+    expect(live).toContain("[muted:already committed prefix]");
+    expect(live).toContain("[accent:denoising tail]");
+  });
+
   it("bounds the canvas buffer, never evicting the correlated request", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>

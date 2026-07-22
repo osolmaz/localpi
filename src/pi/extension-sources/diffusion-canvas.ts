@@ -175,7 +175,15 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       state.liveText = undefined;
       return;
     }
-    state.liveMode = true;
+    if (!state.liveMode) {
+      // If the event stream came up after commits already animated in
+      // simulated mode, those committed chars still sit in the resolve
+      // animation; settle them so the live renderer (which ignores the
+      // animation cells) keeps the committed prefix visible.
+      state.settledText += state.active.map((cell) => cell.char).join("");
+      state.active = [];
+      state.liveMode = true;
+    }
     state.liveText = event.text;
     state.liveStep = event.step;
   }
