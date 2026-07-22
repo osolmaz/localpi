@@ -69,6 +69,14 @@ describe("localpi option parsing", () => {
     expect(parseLocalpiArgs(["--demo"]).demoFromCli).toBe(true);
   });
 
+  it("parses diffusion canvas flags", () => {
+    expect(parseLocalpiArgs([]).diffusionCanvas).toBe(false);
+    expect(parseLocalpiArgs(["--diffusion-canvas"]).diffusionCanvas).toBe(true);
+    expect(parseLocalpiArgs(["--diffusion-canvas", "--no-diffusion-canvas"]).diffusionCanvas).toBe(
+      false
+    );
+  });
+
   it("parses every value flag", () => {
     const options = parseLocalpiArgs([
       "--model",
@@ -172,6 +180,7 @@ describe("localpi environment defaults", () => {
     "LOCALPI_CONTEXT_WINDOW",
     "LOCALPI_APPROVAL",
     "LOCALPI_TOKEN_STATUS",
+    "LOCALPI_DIFFUSION_CANVAS",
     "LOCALPI_MODEL",
     "LOCALPI_PROVIDER",
     "LOCALPI_PROVIDERS_FILE",
@@ -207,6 +216,7 @@ describe("localpi environment defaults", () => {
     process.env["LOCALPI_CONTEXT_WINDOW"] = "16384";
     process.env["LOCALPI_APPROVAL"] = "no";
     process.env["LOCALPI_TOKEN_STATUS"] = "1";
+    process.env["LOCALPI_DIFFUSION_CANVAS"] = "yes";
     process.env["LOCALPI_MODEL"] = "env-model";
     process.env["LOCALPI_PROVIDER"] = "env-provider";
     process.env["LOCALPI_PROVIDERS_FILE"] = "/tmp/env-providers.json";
@@ -226,6 +236,7 @@ describe("localpi environment defaults", () => {
       contextWindow: 16384,
       approval: false,
       tokenStatus: true,
+      diffusionCanvas: true,
       model: "env-model",
       provider: "env-provider",
       providersFile: "/tmp/env-providers.json",
