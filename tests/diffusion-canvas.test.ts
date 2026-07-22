@@ -99,10 +99,15 @@ describe("diffusion canvas extension behavior", () => {
 
     pi.emitTurnStart();
     await flushMicrotasks();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://127.0.0.1:8000/v1/diffusion/events");
+    // No subscription yet: it opens scoped once the request id is known.
+    expect(fetchMock).not.toHaveBeenCalled();
     pi.emit("message_update", {
       assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
     });
+    await flushMicrotasks();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://127.0.0.1:8000/v1/diffusion/events?request_id=chatcmpl-1"
+    );
 
     sse.push({ request_id: "chatcmpl-1", step: 3, text: "the qXick brZwn f#x" });
     await flushMicrotasks();
@@ -145,6 +150,14 @@ describe("diffusion canvas extension behavior", () => {
 
     pi.emitTurnStart();
     await flushMicrotasks();
+    expect(pi.renderWidget(120).join("\n")).toContain("simulated");
+
+    // The id is known, so a scoped subscription is attempted and refused.
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+    await flushMicrotasks();
+    expect(fetchMock).toHaveBeenCalled();
     expect(pi.renderWidget(120).join("\n")).toContain("simulated");
 
     pi.emitMessageUpdate("burst text arrives without a side channel");
@@ -237,7 +250,7 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80).join("\n")).toContain("first denoise canvas");
   });
 
-  it("never renders a canvas before the responseId is known", async () => {
+  it("never subscribes before the responseId is known", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
       Promise.resolve(sse.response)
@@ -253,16 +266,20 @@ describe("diffusion canvas extension behavior", () => {
     pi.emitTurnStart();
     await flushMicrotasks();
 
-    // Even a single active request could be another client's on a shared
-    // server; buffer it but do not render until the responseId is known.
-    sse.push({ request_id: "chatcmpl-mine", step: 2, text: "early canvas" });
-    await flushMicrotasks();
-    expect(pi.renderWidget(80).join("\n")).not.toContain("early canvas");
+    // Without a request id there is nothing to scope the subscription to, so
+    // no canvas of any request (possibly another client's) ever arrives.
+    expect(fetchMock).not.toHaveBeenCalled();
 
     pi.emit("message_update", {
       assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-mine" } }
     });
-    expect(pi.renderWidget(80).join("\n")).toContain("early canvas");
+    await flushMicrotasks();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://127.0.0.1:8000/v1/diffusion/events?request_id=chatcmpl-mine"
+    );
+    sse.push({ request_id: "chatcmpl-mine", step: 2, text: "scoped canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("scoped canvas");
   });
 
   it("parses CRLF-framed SSE events", async () => {
@@ -483,16 +500,20 @@ type SseHarness = {
   push(event: { request_id: string; step: number; text: string }): void;
 };
 
+// Each `response` access hands out a fresh stream (the extension re-subscribes
+// per completion); pushes go to the most recently opened stream.
 function sseStream(lineEnding = "\n"): SseHarness {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-  const body = new ReadableStream<Uint8Array>({
-    start(streamController) {
-      controller = streamController;
-    }
-  });
   return {
-    response: { ok: true, status: 200, body },
+    get response() {
+      const body = new ReadableStream<Uint8Array>({
+        start(streamController) {
+          controller = streamController;
+        }
+      });
+      return { ok: true, status: 200, body };
+    },
     push: (event) => {
       controller?.enqueue(
         encoder.encode(`data: ${JSON.stringify(event)}${lineEnding}${lineEnding}`)

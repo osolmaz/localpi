@@ -88,6 +88,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
   let countersAtTurnStart: Promise<DiffusionCounters | undefined> | undefined;
   let stepsPerCanvas: number | undefined;
   let eventsAbort: AbortController | undefined;
+  let subscribedRequestId: string | undefined;
 
   function installWidget(ctx: ExtensionContext): void {
     if (widgetInstalled) {
@@ -121,22 +122,34 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     }
   }
 
-  function openEventStream(): void {
-    if (eventsUrl === null || eventsAbort !== undefined) {
+  // Subscribe scoped to one request id: the server then never sends other
+  // clients' canvas states to this process. The subscription is (re)opened
+  // whenever the current completion's id becomes known, so nothing is
+  // subscribed while no id is held.
+  function openEventStream(requestId: string): void {
+    if (eventsUrl === null) {
       return;
     }
+    if (subscribedRequestId === requestId && eventsAbort !== undefined) {
+      return;
+    }
+    closeEventStream();
+    subscribedRequestId = requestId;
     const abort = new AbortController();
     eventsAbort = abort;
-    void consumeEventStream(eventsUrl, abort.signal, (event) => {
+    const separator = eventsUrl.includes("?") ? "&" : "?";
+    const url = \`\${eventsUrl}\${separator}request_id=\${encodeURIComponent(requestId)}\`;
+    void consumeEventStream(url, abort.signal, (event) => {
       const state = current;
       if (state === undefined || state.done) {
         return;
       }
-      // The feed broadcasts every request on the server. Buffer per request
-      // id (the correlated id can change mid-turn or arrive late on servers
-      // that ignore the X-Request-Id header), but bound the buffer so a busy
-      // shared server cannot grow it without limit: evict the oldest foreign
-      // entry, never the correlated one.
+      // A server that predates the request_id query parameter ignores it and
+      // broadcasts every request, so filtering here stays as defense. Buffer
+      // per request id (the correlated id can change mid-turn or arrive late
+      // on servers that ignore the X-Request-Id header), but bound the buffer
+      // so a busy shared server cannot grow it without limit: evict the
+      // oldest foreign entry, never the correlated one.
       state.latestCanvasByRequest.delete(event.requestId);
       state.latestCanvasByRequest.set(event.requestId, event);
       if (state.latestCanvasByRequest.size > maxBufferedCanvases) {
@@ -155,8 +168,10 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     });
   }
 
-  // The side channel broadcasts every request on the server. Display only
-  // the canvas belonging to this turn's current completion; an uncorrelated
+  // The SSE subscription is scoped server-side to this turn's request id;
+  // this filter is defense in depth for servers that predate the request_id
+  // query parameter and still broadcast every request. Display only the
+  // canvas belonging to this turn's current completion; an uncorrelated
   // canvas is never rendered, since on a shared server it could be another
   // client's text. The id is known before the first denoising step because
   // this extension assigns it via the X-Request-Id header (see the
@@ -191,6 +206,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
   function closeEventStream(): void {
     eventsAbort?.abort();
     eventsAbort = undefined;
+    subscribedRequestId = undefined;
   }
 
   function renderWidget(width: number, theme: WidgetTheme): string[] {
@@ -275,7 +291,8 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     countersAtTurnStart = fetchCounters();
     installWidget(ctx);
     startTicker();
-    openEventStream();
+    // The SSE subscription opens once the completion's request id is known
+    // (header hook or first stream chunk); it is always scoped to that id.
   });
 
   // Assign each completion's request id up front: vLLM derives its request
@@ -290,6 +307,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const requestTag = crypto.randomUUID().replace(/-/gu, "");
     event.headers["X-Request-Id"] = requestTag;
     state.responseId = \`chatcmpl-\${requestTag}\`;
+    openEventStream(state.responseId);
     refreshLiveCanvas(state);
   });
 
@@ -306,6 +324,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const responseId = responseIdFromEvent(event.assistantMessageEvent);
     if (responseId !== undefined && responseId !== state.responseId) {
       state.responseId = responseId;
+      openEventStream(responseId);
       refreshLiveCanvas(state);
     }
     const added = deltaFromEvent(event.assistantMessageEvent);
@@ -661,11 +680,16 @@ async function consumeEventStream(
     throw new Error(\`diffusion events unavailable: \${String(response.status)}\`);
   }
   const reader = response.body.getReader();
+  // fetch rejects reads on abort, but cancel explicitly so the stream is
+  // released even when a runtime (or test double) ignores the signal.
+  signal.addEventListener("abort", () => void reader.cancel().catch(() => undefined), {
+    once: true
+  });
   const decoder = new TextDecoder();
   let buffer = "";
   for (;;) {
     const { done, value } = await reader.read();
-    if (done) {
+    if (done || signal.aborted) {
       return;
     }
     // SSE allows LF, CRLF, and CR line endings; normalize to LF so frame
