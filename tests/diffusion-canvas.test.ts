@@ -150,6 +150,56 @@ describe("diffusion canvas extension behavior", () => {
     expect(noisy).not.toContain("burst text arrives");
   });
 
+  it("counts thinking and tool-call deltas as commits, ignores non-delta events", async () => {
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    extension(pi);
+
+    pi.emitTurnStart();
+    pi.emitMessageUpdate("model thinks out loud here", "thinking_delta");
+    vi.advanceTimersByTime(2000);
+    expect(pi.renderWidget(120).join("\n")).toContain("model thinks out loud here");
+
+    // Tool-call JSON paces the stats but never settles into the display text.
+    pi.emitMessageUpdate('{"path":"/tmp/x"}', "toolcall_delta");
+    expect(pi.renderWidget(120).join("\n")).toContain("2 commits");
+    expect(pi.renderWidget(120).join("\n")).not.toContain('{"path":"/tmp/x"}');
+
+    // Start/end/done markers carry no new tokens and are not commits.
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "text_end", content: "full text" }
+    });
+    pi.emit("message_update", { assistantMessageEvent: { type: "done" } });
+    expect(pi.renderWidget(120).join("\n")).toContain("2 commits");
+  });
+
+  it("sticks to the first live request and ignores other clients' events", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+
+    sse.push({ request_id: "chatcmpl-mine", step: 1, text: "my canvas" });
+    await flushMicrotasks();
+    sse.push({ request_id: "chatcmpl-other", step: 9, text: "someone elses canvas" });
+    await flushMicrotasks();
+
+    const rendered = pi.renderWidget(80).join("\n");
+    expect(rendered).toContain("my canvas");
+    expect(rendered).not.toContain("someone elses canvas");
+    expect(rendered).toContain("step 1");
+  });
+
   it("computes steps per canvas from vLLM diffusion metrics deltas", async () => {
     const fetchMock = vi
       .fn<(input: string, init?: unknown) => Promise<{ ok: boolean; text(): Promise<string> }>>()
@@ -247,6 +297,7 @@ type WidgetFactory = (tui: WidgetTui, theme: WidgetTheme) => WidgetComponent;
 
 type CanvasContext = {
   readonly hasUI: boolean;
+  readonly mode: string;
   readonly ui: {
     setWidget(key: string, content: WidgetFactory | string[] | undefined): void;
   };
@@ -263,6 +314,7 @@ class CanvasPiHarness {
 
   private readonly ctx: CanvasContext = {
     hasUI: true,
+    mode: "tui",
     ui: {
       setWidget: (_key, content) => {
         if (content === undefined) {
@@ -289,8 +341,8 @@ class CanvasPiHarness {
     this.emit("turn_start", {});
   }
 
-  emitMessageUpdate(delta: string): void {
-    this.emit("message_update", { assistantMessageEvent: { delta } });
+  emitMessageUpdate(delta: string, type = "text_delta"): void {
+    this.emit("message_update", { assistantMessageEvent: { type, delta } });
   }
 
   emitTurnEnd(): void {
@@ -306,7 +358,7 @@ class CanvasPiHarness {
     return this.component?.render(width) ?? [];
   }
 
-  private emit(event: string, payload: unknown): void {
+  emit(event: string, payload: unknown): void {
     for (const handler of this.handlers.get(event) ?? []) {
       handler(payload, this.ctx);
     }

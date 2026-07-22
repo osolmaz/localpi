@@ -43,11 +43,11 @@ type TurnState = {
   lastBurstAt: number | undefined;
   burstCount: number;
   totalChars: number;
-  seenText: string;
   settledText: string;
   active: ActiveCell[];
   intervals: number[];
   liveMode: boolean;
+  liveRequestId: string | undefined;
   liveText: string | undefined;
   liveStep: number;
   done: boolean;
@@ -129,7 +129,13 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       if (state === undefined || state.done) {
         return;
       }
-      // localpi drives a single local session; the latest event is ours.
+      // The side channel broadcasts every request on the server. localpi
+      // drives a single local session, so adopt the first request seen after
+      // this turn started and stick to it, ignoring other clients' requests.
+      state.liveRequestId ??= event.requestId;
+      if (event.requestId !== state.liveRequestId) {
+        return;
+      }
       state.liveMode = true;
       state.liveText = event.text;
       state.liveStep = event.step;
@@ -205,43 +211,51 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
   }
 
   pi.on("turn_start", (_event, ctx) => {
-    if (!ctx.hasUI) {
+    // Component-factory widgets only render in the terminal UI; other modes
+    // (RPC, print) must not start tickers, metrics polling, or the SSE feed.
+    if (ctx.mode !== "tui") {
       return;
     }
-    current = newTurnState();
+    const state = newTurnState();
+    current = state;
     stepsPerCanvas = undefined;
     countersAtTurnStart = undefined;
     installWidget(ctx);
     startTicker();
     openEventStream();
     void fetchCounters().then((counters) => {
-      countersAtTurnStart = counters;
+      // Discard the sample if it resolves after this turn already ended.
+      if (current === state) {
+        countersAtTurnStart = counters;
+      }
     });
   });
 
   pi.on("message_update", (event, ctx) => {
     const state = current;
-    if (!ctx.hasUI || state === undefined || state.done) {
+    if (ctx.mode !== "tui" || state === undefined || state.done) {
       return;
     }
-    const update = textUpdateFromUnknown(event.assistantMessageEvent ?? event.message ?? event);
-    const added = consumeAddedText(state, update);
-    if (added.length === 0) {
+    const added = deltaFromEvent(event.assistantMessageEvent);
+    if (added === undefined || added.text.length === 0) {
       return;
     }
-    recordBurst(state, added);
+    recordBurst(state, added.text, added.display);
     requestRender();
   });
 
   pi.on("turn_end", (_event, ctx) => {
     const state = current;
-    if (!ctx.hasUI || state === undefined) {
+    if (ctx.mode !== "tui" || state === undefined) {
       return;
     }
     finishTurn(state);
     closeEventStream();
     const before = countersAtTurnStart;
     void fetchCounters().then((counters) => {
+      if (current !== state) {
+        return;
+      }
       if (before !== undefined && counters !== undefined) {
         stepsPerCanvas = stepsPerCanvasFromDelta(before, counters) ?? stepsPerCanvas;
       }
@@ -254,7 +268,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     stopTicker();
     closeEventStream();
     current = undefined;
-    if (ctx.hasUI) {
+    if (widgetInstalled && ctx.hasUI) {
       ctx.ui.setWidget(widgetId, undefined);
     }
     widgetInstalled = false;
@@ -268,18 +282,18 @@ function newTurnState(): TurnState {
     lastBurstAt: undefined,
     burstCount: 0,
     totalChars: 0,
-    seenText: "",
     settledText: "",
     active: [],
     intervals: [],
     liveMode: false,
+    liveRequestId: undefined,
     liveText: undefined,
     liveStep: 0,
     done: false
   };
 }
 
-function recordBurst(state: TurnState, added: string): void {
+function recordBurst(state: TurnState, added: string, display: boolean): void {
   const now = Date.now();
   if (state.firstBurstAt === undefined) {
     state.firstBurstAt = now;
@@ -294,11 +308,19 @@ function recordBurst(state: TurnState, added: string): void {
     // Truthful mode: the emergence was already shown live via the real
     // canvas states, so committed text settles immediately. Clear the live
     // canvas; the next denoising step brings the next block.
-    state.settledText += sanitize(added);
+    if (display) {
+      state.settledText += sanitize(added);
+    }
     state.liveText = undefined;
     return;
   }
   state.settledText += state.active.map((cell) => cell.char).join("");
+  if (!display) {
+    // Tool-call commits pace the stats but their JSON is not settled into
+    // the display text; Pi renders the tool call itself.
+    state.active = [];
+    return;
+  }
   const resolveMs = resolveDuration(state);
   const chars = [...sanitize(added)];
   state.active = chars.map((char) => ({
@@ -660,40 +682,34 @@ function stepsPerCanvasFromDelta(
   return denoiseSteps / canvases;
 }
 
-type TextUpdate = {
-  readonly kind: "delta" | "snapshot";
+type CommitDelta = {
   readonly text: string;
+  // Whether the delta belongs in the settled display text. Tool-call JSON
+  // paces the commit stats but is rendered by Pi's own tool widgets.
+  readonly display: boolean;
 };
 
-function consumeAddedText(state: TurnState, update: TextUpdate): string {
-  if (update.kind === "delta") {
-    state.seenText += update.text;
-    return update.text;
+// Every streamed delta is a canvas commit on a diffusion server, including
+// thinking (DiffusionGemma routes its whole output through the reasoning
+// field until an explicit end marker), so all delta kinds count toward the
+// stats. Non-delta events (start/end/done markers) carry no new tokens.
+function deltaFromEvent(value: unknown): CommitDelta | undefined {
+  if (value === null || typeof value !== "object") {
+    return undefined;
   }
-  if (update.text.length <= state.seenText.length) {
-    return "";
+  const object = value as Record<string, unknown>;
+  const type = object["type"];
+  const delta = object["delta"];
+  if (typeof type !== "string" || typeof delta !== "string") {
+    return undefined;
   }
-  const added = update.text.slice(state.seenText.length);
-  state.seenText = update.text;
-  return added;
-}
-
-function textUpdateFromUnknown(value: unknown): TextUpdate {
-  if (typeof value === "string") {
-    return { kind: "snapshot", text: value };
+  if (type === "text_delta" || type === "thinking_delta") {
+    return { text: delta, display: true };
   }
-  if (value && typeof value === "object") {
-    const object = value as Record<string, unknown>;
-    const delta = object["delta"];
-    const text = object["text"] ?? object["content"];
-    if (typeof delta === "string") {
-      return { kind: "delta", text: delta };
-    }
-    if (typeof text === "string") {
-      return { kind: "snapshot", text };
-    }
+  if (type === "toolcall_delta") {
+    return { text: delta, display: false };
   }
-  return { kind: "snapshot", text: "" };
+  return undefined;
 }
 `;
 }
