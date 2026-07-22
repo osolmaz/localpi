@@ -5,7 +5,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";
-import { writeDefaultExtensions } from "../src/pi/extensions.js";
+import { metricsUrlFromBaseUrl, writeDefaultExtensions } from "../src/pi/extensions.js";
 
 describe("Pi extensions", () => {
   it("writes thinking control, approval, and token status extensions", async () => {
@@ -91,6 +91,51 @@ describe("Pi extensions", () => {
     }
   });
 
+  it("writes a diffusion canvas extension when enabled", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions(
+        { ...options(stateDir), diffusionCanvas: true },
+        {
+          diffusionCanvas: {
+            metricsUrl: "http://127.0.0.1:8000/metrics",
+            eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+          }
+        }
+      );
+      expect(bundle.paths).toHaveLength(4);
+      expect(path.basename(bundle.paths[3] ?? "")).toBe("diffusion-canvas.ts");
+      const source = await readFile(bundle.paths[3] ?? "", "utf8");
+      expect(source).toContain('"http://127.0.0.1:8000/metrics"');
+      expect(source).toContain('pi.on("turn_start"');
+      expect(source).toContain('pi.on("message_update"');
+      expect(source).toContain("ctx.ui.setWidget");
+      expect(source).toContain("vllm:diffusion");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the diffusion canvas extension by default", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions(options(stateDir));
+      const names = bundle.paths.map((extensionPath) => path.basename(extensionPath));
+      expect(names).not.toContain("diffusion-canvas.ts");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("derives a metrics URL from an OpenAI-compatible base URL", () => {
+    expect(metricsUrlFromBaseUrl("http://127.0.0.1:8000/v1")).toBe("http://127.0.0.1:8000/metrics");
+    expect(metricsUrlFromBaseUrl("http://127.0.0.1:8000/v1/")).toBe(
+      "http://127.0.0.1:8000/metrics"
+    );
+    expect(metricsUrlFromBaseUrl("http://127.0.0.1:8000")).toBe("http://127.0.0.1:8000/metrics");
+    expect(metricsUrlFromBaseUrl(undefined)).toBeUndefined();
+  });
+
   it("writes a Pi-native startup model selector extension when requested", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
@@ -166,6 +211,7 @@ function options(stateDir: string): LocalpiOptions {
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
     tokenStatus: true,
+    diffusionCanvas: false,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

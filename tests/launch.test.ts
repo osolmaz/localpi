@@ -150,6 +150,7 @@ function options(stateDir: string): LocalpiOptions {
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
     tokenStatus: true,
+    diffusionCanvas: false,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

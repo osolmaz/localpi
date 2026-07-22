@@ -2,6 +2,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { demoModeExtensionSource } from "../src/pi/extension-sources/demo-mode.js";
+import { diffusionCanvasExtensionSource } from "../src/pi/extension-sources/diffusion-canvas.js";
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "../src/pi/extension-sources/token-status.js";
@@ -24,7 +25,18 @@ describe("generated Pi extension sources", () => {
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
     { fileName: "tool-approval.ts", source: approvalExtensionSource() },
-    { fileName: "token-status.ts", source: tokenStatusExtensionSource() }
+    { fileName: "token-status.ts", source: tokenStatusExtensionSource() },
+    {
+      fileName: "diffusion-canvas.ts",
+      source: diffusionCanvasExtensionSource({
+        metricsUrl: "http://127.0.0.1:8000/metrics",
+        eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+      })
+    },
+    {
+      fileName: "diffusion-canvas-no-metrics.ts",
+      source: diffusionCanvasExtensionSource(undefined)
+    }
   ] as const;
 
   for (const { fileName, source } of sources) {

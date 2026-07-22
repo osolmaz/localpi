@@ -41,6 +41,7 @@ export type LocalpiOptions = {
   readonly tools: string | undefined;
   readonly approval: boolean;
   readonly tokenStatus: boolean;
+  readonly diffusionCanvas: boolean;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -86,6 +87,7 @@ export function defaultOptions(): LocalpiOptions {
     tools: envString("LOCALPI_TOOLS", "read,bash,edit,write,grep,find,ls"),
     approval: envBoolean("LOCALPI_APPROVAL", true),
     tokenStatus: envBoolean("LOCALPI_TOKEN_STATUS", true),
+    diffusionCanvas: envBoolean("LOCALPI_DIFFUSION_CANVAS", false),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -157,6 +159,8 @@ export function usage(): string {
     "                          override generated Pi thinking format",
     "  --no-approval           do not ask before tool calls",
     "  --no-token-status       do not install token status extension",
+    "  --diffusion-canvas      show a diffusion canvas visualizer widget",
+    "  --no-diffusion-canvas   disable the diffusion canvas visualizer",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -229,6 +233,8 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--list": (options) => ({ ...options, list: true }),
   "--no-approval": (options) => ({ ...options, approval: false }),
   "--no-token-status": (options) => ({ ...options, tokenStatus: false }),
+  "--diffusion-canvas": (options) => ({ ...options, diffusionCanvas: true }),
+  "--no-diffusion-canvas": (options) => ({ ...options, diffusionCanvas: false }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 

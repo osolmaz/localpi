@@ -74,6 +74,38 @@ Localpi launches Pi with:
 
 The approval gate makes failed or denied tool calls explicit to the model so the model does not claim that a blocked command ran.
 
+## Diffusion Canvas Visualizer
+
+Diffusion LLM servers such as DiffusionGemma on vLLM denoise a whole canvas of
+tokens internally and only stream tokens when a canvas converges and commits.
+Clients therefore see bursts of text separated by silent denoising intervals,
+which makes streaming look stalled even when the server is fast.
+
+`--diffusion-canvas` installs a Pi widget above the editor that visualizes this
+process live:
+
+- during the real inter-commit silence it shows a shimmering noise field, which
+  represents the canvas being denoised server-side
+- when a commit burst arrives, the noise resolves into the real text cell by
+  cell
+- a stats line shows real numbers: commits, tokens per commit, commit interval,
+  smoothed tok/s, and denoising steps per canvas from the server's Prometheus
+  `/metrics` endpoint when available
+
+The intermediate token states never leave the inference engine, so the glyph
+noise is a visualization. The burst boundaries, commit timing, and step counts
+are real.
+
+```bash
+localpi --runtime vllm --model nvidia/diffusiongemma-26B-A4B-it-NVFP4 --diffusion-canvas
+```
+
+The widget also works in demo mode:
+
+```bash
+localpi --demo --model nvidia/diffusiongemma-26B-A4B-it-NVFP4 --diffusion-canvas
+```
+
 ## LM Studio Alternative
 
 LM Studio exposes an OpenAI-compatible endpoint, usually:
@@ -205,6 +237,8 @@ localpi --stop
 - `--demo-followup-prompt-file <path>`: UTF-8 file for repeated demo prompts
 - `--no-approval`: disable the tool approval gate
 - `--no-token-status`: disable the token status extension
+- `--diffusion-canvas`: show a diffusion canvas visualizer widget above the editor
+- `--no-diffusion-canvas`: disable the diffusion canvas visualizer
 - `--status`: print runtime, model, and Pi config status
 - `--stop`: stop the managed `llama-server` process
 - `--list`: list configured model aliases
@@ -232,6 +266,7 @@ localpi --stop
 - `LOCALPI_CHAT_TEMPLATE`
 - `LOCALPI_TOOLS`
 - `LOCALPI_THINKING`
+- `LOCALPI_DIFFUSION_CANVAS`
 - `LOCALPI_DEMO`
 - `LOCALPI_DEMO_INITIAL_PROMPT`
 - `LOCALPI_DEMO_FOLLOWUP_PROMPT`
