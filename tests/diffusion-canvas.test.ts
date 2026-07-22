@@ -585,9 +585,12 @@ describe("diffusion canvas extension behavior", () => {
     pi.emitTurnStart();
     expect(pi.widgetFactory).toBeDefined();
     expect(vi.getTimerCount()).toBeGreaterThan(0);
+    // The widget header replaces Pi's built-in working spinner row.
+    expect(pi.workingVisible).toBe(false);
 
     pi.emitSessionShutdown();
     expect(pi.widgetCleared).toBe(true);
+    expect(pi.workingVisible).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
   });
 });
@@ -657,6 +660,7 @@ type CanvasContext = {
   readonly mode: string;
   readonly ui: {
     setWidget(key: string, content: WidgetFactory | string[] | undefined): void;
+    setWorkingVisible(visible: boolean): void;
   };
 };
 
@@ -665,6 +669,7 @@ type Handler = (event: unknown, ctx: CanvasContext) => void;
 class CanvasPiHarness {
   widgetFactory: WidgetFactory | undefined;
   widgetCleared = false;
+  workingVisible = true;
 
   private component: WidgetComponent | undefined;
   private readonly handlers = new Map<string, Handler[]>();
@@ -684,6 +689,9 @@ class CanvasPiHarness {
           this.widgetFactory = content;
           this.component = content({ requestRender: () => undefined }, themeStub());
         }
+      },
+      setWorkingVisible: (visible) => {
+        this.workingVisible = visible;
       }
     }
   };
