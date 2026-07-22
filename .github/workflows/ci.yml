@@ -19,7 +19,7 @@ jobs:
       - run: npm run coverage
       - run: npm run dry
       - run: npm run mutate
-      - uses: dutifuldev/slophammer@main
+      - uses: osolmaz/slophammer@main
         with:
           checker: ts
           version: 0.4.0

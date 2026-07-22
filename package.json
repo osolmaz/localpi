@@ -6,12 +6,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dutifuldev/localpi.git"
+    "url": "git+https://github.com/osolmaz/localpi.git"
   },
   "bugs": {
-    "url": "https://github.com/dutifuldev/localpi/issues"
+    "url": "https://github.com/osolmaz/localpi/issues"
   },
-  "homepage": "https://github.com/dutifuldev/localpi#readme",
+  "homepage": "https://github.com/osolmaz/localpi#readme",
   "publishConfig": {
     "access": "public"
   },
