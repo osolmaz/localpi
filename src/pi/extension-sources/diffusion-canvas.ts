@@ -64,6 +64,7 @@ type RenderCellKind = "settled" | "resolved" | "noise" | "ahead";
 type RenderCell = {
   readonly char: string;
   readonly kind: RenderCellKind;
+  readonly width: number;
 };
 
 type WidgetTheme = {
@@ -339,11 +340,94 @@ function sanitize(text: string): string {
   return text.replace(/\\s+/gu, " ").replace(/\\p{C}/gu, "");
 }
 
+// Approximate terminal display width: East Asian wide/fullwidth glyphs and
+// emoji occupy two cells; combining marks occupy none. The real canvas mixes
+// scripts freely, so rows must be packed by display width, not char count.
+function charWidth(char: string): number {
+  if (/^\\p{M}+$/u.test(char)) {
+    return 0;
+  }
+  const cp = char.codePointAt(0) ?? 0;
+  if (
+    cp >= 0x1100 &&
+    (cp <= 0x115f ||
+      cp === 0x2329 ||
+      cp === 0x232a ||
+      (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
+      (cp >= 0xac00 && cp <= 0xd7a3) ||
+      (cp >= 0xf900 && cp <= 0xfaff) ||
+      (cp >= 0xfe30 && cp <= 0xfe6f) ||
+      (cp >= 0xff00 && cp <= 0xff60) ||
+      (cp >= 0xffe0 && cp <= 0xffe6) ||
+      (cp >= 0x1f300 && cp <= 0x1faff) ||
+      (cp >= 0x20000 && cp <= 0x3fffd))
+  ) {
+    return 2;
+  }
+  return 1;
+}
+
+function textWidth(text: string): number {
+  let width = 0;
+  for (const char of text) {
+    width += charWidth(char);
+  }
+  return width;
+}
+
+function cellsFromText(text: string, kind: RenderCellKind): RenderCell[] {
+  return [...text].map((char) => ({ char, kind, width: charWidth(char) }));
+}
+
+function tailByWidth(text: string, maxWidth: number): string {
+  const chars = [...text];
+  let width = 0;
+  let start = chars.length;
+  for (let index = chars.length - 1; index >= 0; index -= 1) {
+    const cw = charWidth(chars[index] ?? "");
+    if (width + cw > maxWidth) {
+      break;
+    }
+    width += cw;
+    start = index;
+  }
+  return chars.slice(start).join("");
+}
+
+function headByWidth(text: string, maxWidth: number): string {
+  const chars = [...text];
+  let width = 0;
+  let end = 0;
+  for (const [index, char] of chars.entries()) {
+    const cw = charWidth(char);
+    if (width + cw > maxWidth) {
+      break;
+    }
+    width += cw;
+    end = index + 1;
+  }
+  return chars.slice(0, end).join("");
+}
+
 function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[] {
   const cells = renderCells(state, cols * maxRows);
   const rows: string[] = [];
-  for (let start = 0; start < cells.length; start += cols) {
-    rows.push(styleRow(cells.slice(start, start + cols), theme));
+  let row: RenderCell[] = [];
+  let rowWidth = 0;
+  for (const cell of cells) {
+    if (rowWidth + cell.width > cols) {
+      rows.push(styleRow(row, theme));
+      row = [];
+      rowWidth = 0;
+      if (rows.length >= maxRows) {
+        return rows;
+      }
+    }
+    row.push(cell);
+    rowWidth += cell.width;
+  }
+  if (row.length > 0) {
+    rows.push(styleRow(row, theme));
   }
   return rows;
 }
@@ -357,50 +441,54 @@ function renderCells(state: TurnState, budget: number): RenderCell[] {
 
 // Live mode: settled committed text followed by the real canvas snapshot of
 // the block currently being denoised, exactly as reported by the server.
+// Budgets are display-width cells.
 function renderLiveCells(state: TurnState, budget: number): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
   const settledReserve = Math.min(
-    state.settledText.length,
-    Math.max(budget - canvas.length, Math.ceil(budget / 4))
+    textWidth(state.settledText),
+    Math.max(budget - textWidth(canvas), Math.ceil(budget / 4))
   );
   const canvasBudget = Math.max(budget - settledReserve, 0);
-  const cells: RenderCell[] = [];
-  for (const char of state.settledText.slice(-settledReserve)) {
-    cells.push({ char, kind: "settled" });
-  }
-  for (const char of canvas.slice(0, canvasBudget)) {
-    cells.push({ char, kind: "noise" });
-  }
-  return cells;
+  return [
+    ...cellsFromText(tailByWidth(state.settledText, settledReserve), "settled"),
+    ...cellsFromText(headByWidth(canvas, canvasBudget), "noise")
+  ];
 }
 
 // Simulated mode: while the turn runs, glyph noise fills all window space not
 // yet holding text (the canvas still being denoised server-side), and commit
-// bursts resolve from noise into the real text.
+// bursts resolve from noise into the real text. Budgets are display-width
+// cells; noise glyphs are all width 1.
 function renderSimulatedCells(state: TurnState, budget: number): RenderCell[] {
   const now = Date.now();
+  const settledWidth = textWidth(state.settledText);
+  const activeWidth = state.active.reduce((width, cell) => width + charWidth(cell.char), 0);
   const aheadCount = state.done
     ? 0
     : Math.min(
-        Math.max(budget - state.settledText.length - state.active.length, Math.ceil(budget / maxRows)),
+        Math.max(budget - settledWidth - activeWidth, Math.ceil(budget / maxRows)),
         budget
       );
-  const settledBudget = Math.max(budget - state.active.length - aheadCount, 0);
-  const cells: RenderCell[] = [];
-  for (const char of state.settledText.slice(-settledBudget)) {
-    cells.push({ char, kind: "settled" });
-  }
+  const settledBudget = Math.max(budget - activeWidth - aheadCount, 0);
+  const cells: RenderCell[] = [
+    ...cellsFromText(tailByWidth(state.settledText, settledBudget), "settled")
+  ];
   for (const cell of state.active) {
     cells.push(
       now >= cell.resolveAt
-        ? { char: cell.char, kind: "resolved" }
-        : { char: noiseChar(), kind: "noise" }
+        ? { char: cell.char, kind: "resolved", width: charWidth(cell.char) }
+        : { char: noiseChar(), kind: "noise", width: 1 }
     );
   }
   for (let index = 0; index < aheadCount; index += 1) {
-    cells.push({ char: noiseChar(), kind: "ahead" });
+    cells.push({ char: noiseChar(), kind: "ahead", width: 1 });
   }
-  return cells.slice(-budget);
+  let total = cells.reduce((width, cell) => width + cell.width, 0);
+  while (total > budget && cells.length > 0) {
+    total -= cells[0]?.width ?? 0;
+    cells.shift();
+  }
+  return cells;
 }
 
 function styleRow(cells: readonly RenderCell[], theme: WidgetTheme): string {
