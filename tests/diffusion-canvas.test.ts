@@ -173,7 +173,7 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(120).join("\n")).toContain("2 commits");
   });
 
-  it("sticks to the first live request and ignores other clients' events", async () => {
+  it("shows only the canvas matching the turn's responseId", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
       Promise.resolve(sse.response)
@@ -189,15 +189,48 @@ describe("diffusion canvas extension behavior", () => {
     pi.emitTurnStart();
     await flushMicrotasks();
 
-    sse.push({ request_id: "chatcmpl-mine", step: 1, text: "my canvas" });
-    await flushMicrotasks();
+    // Pi's stream start event delivers the server request id for this turn.
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-mine" } }
+    });
+
     sse.push({ request_id: "chatcmpl-other", step: 9, text: "someone elses canvas" });
     await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).not.toContain("someone elses canvas");
 
+    sse.push({ request_id: "chatcmpl-mine", step: 1, text: "my canvas" });
+    await flushMicrotasks();
     const rendered = pi.renderWidget(80).join("\n");
     expect(rendered).toContain("my canvas");
     expect(rendered).not.toContain("someone elses canvas");
     expect(rendered).toContain("step 1");
+  });
+
+  it("falls back to the only active request before the responseId is known", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+
+    sse.push({ request_id: "chatcmpl-mine", step: 2, text: "early canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("early canvas");
+
+    // Two concurrent requests without a known responseId: show neither.
+    sse.push({ request_id: "chatcmpl-other", step: 5, text: "ambiguous canvas" });
+    await flushMicrotasks();
+    const ambiguous = pi.renderWidget(80).join("\n");
+    expect(ambiguous).not.toContain("ambiguous canvas");
   });
 
   it("computes steps per canvas from vLLM diffusion metrics deltas", async () => {
