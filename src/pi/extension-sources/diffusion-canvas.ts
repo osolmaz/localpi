@@ -213,17 +213,20 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     subscribedRequestId = undefined;
   }
 
+  // The canvas rows come first and the stats line sits below them, so the
+  // document flows straight from Pi's streamed message into the resolving
+  // canvas with nothing in between.
   function renderWidget(width: number, theme: WidgetTheme): string[] {
     const state = current;
     if (state === undefined) {
       return [];
     }
     const cols = Math.max(16, width - 2);
-    const lines = [" " + theme.fg("dim", truncate(headerText(state), cols))];
+    const statsLine = " " + theme.fg("dim", truncate(headerText(state), cols));
     // Once the turn is over and the last canvas has resolved, collapse to the
     // stats line: the full text is already visible in the message above.
     if (state.done && animationDone(state)) {
-      return lines;
+      return [statsLine];
     }
     const rows = canvasRows(state, cols, theme);
     // Keep the widget height stable while active: pad to the tallest layout
@@ -236,10 +239,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     while (rows.length < state.rowsHighWater) {
       rows.push("");
     }
-    for (const row of rows) {
-      lines.push(" " + row);
-    }
-    return lines;
+    return [...rows.map((row) => " " + row), statsLine];
   }
 
   function headerText(state: TurnState): string {

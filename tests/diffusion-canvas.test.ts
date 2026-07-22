@@ -466,8 +466,12 @@ describe("diffusion canvas extension behavior", () => {
     const rendered = pi.renderWidget(18);
     // Row packing splits words at 16 columns; flatten the styled rows back
     // into the document text to assert on content and ordering.
+    // The stats line sits below the canvas rows so the document flows
+    // straight from the message into the canvas with nothing in between.
+    // (Truncated to the 16-column test width, hence the partial match.)
+    expect(rendered[rendered.length - 1]).toContain("diffusion canva");
     const flattened = rendered
-      .slice(1)
+      .slice(0, -1)
       .map((line) =>
         line
           .replace(/^ /u, "")
