@@ -23,11 +23,6 @@ export function diffusionCanvasExtensionSource(urls: DiffusionCanvasUrls | undef
 // commit timing, and step counts are real; the glyphs are illustrative.
 const metricsUrl: string | null = ${metricsUrlSource};
 const eventsUrl: string | null = ${eventsUrlSource};
-// Loopback servers serve only this machine's user, so showing the single
-// active request's canvas before its id is known cannot leak another
-// person's text. See refreshLiveCanvas.
-const allowUncorrelatedCanvas: boolean =
-  eventsUrl !== null && /^https?:\\/\\/(127\\.0\\.0\\.1|localhost|\\[::1\\])(:|\\/)/u.test(eventsUrl);
 
 const widgetId = "localpi-diffusion-canvas";
 const tickMs = 90;
@@ -35,6 +30,7 @@ const maxRows = 4;
 const minResolveMs = 300;
 const maxResolveMs = 1500;
 const defaultResolveMs = 1200;
+const metricsTimeoutMs = 5000;
 const noiseGlyphs = "abcdefghijklmnopqrstuvwxyz0123456789#%&@$+=~?";
 
 type ActiveCell = {
@@ -144,32 +140,24 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     });
   }
 
-  // The side channel broadcasts every request on the server. Display the
-  // canvas belonging to this turn's current completion: Pi's assistant
-  // stream exposes the server request id as partial.responseId (the chatcmpl
-  // id), which matches the SSE request_id. The diffusion server only sends
-  // its first completion chunk when the first canvas commits, so the id is
-  // unknown while the first canvas denoises. During that window, fall back
-  // to the only active request, but exclusively on loopback servers: there
-  // the subscriber and the requester are the same user, so no other client's
-  // text can be exposed. On shared/remote servers, never render an
-  // uncorrelated canvas.
+  // The side channel broadcasts every request on the server. Display only
+  // the canvas belonging to this turn's current completion; an uncorrelated
+  // canvas is never rendered, since on a shared server it could be another
+  // client's text. The id is known before the first denoising step because
+  // this extension assigns it via the X-Request-Id header (see the
+  // before_provider_headers handler); Pi's assistant stream additionally
+  // reports the server-authoritative id as partial.responseId with the first
+  // committed chunk, which corrects the prediction on servers that ignore
+  // the header.
   function refreshLiveCanvas(state: TurnState): void {
-    let event: CanvasEvent | undefined;
-    if (state.responseId !== undefined) {
-      event = state.latestCanvasByRequest.get(state.responseId);
-      if (event === undefined) {
-        // No canvas yet for the current completion (e.g. a new completion
-        // started after a tool call); drop any stale one.
-        state.liveText = undefined;
-        return;
-      }
-    } else if (allowUncorrelatedCanvas && state.latestCanvasByRequest.size === 1) {
-      for (const only of state.latestCanvasByRequest.values()) {
-        event = only;
-      }
+    if (state.responseId === undefined) {
+      return;
     }
+    const event = state.latestCanvasByRequest.get(state.responseId);
     if (event === undefined) {
+      // No canvas yet for the current completion (e.g. a new completion
+      // started after a tool call); drop any stale one.
+      state.liveText = undefined;
       return;
     }
     state.liveMode = true;
@@ -258,13 +246,31 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     openEventStream();
   });
 
+  // Assign each completion's request id up front: vLLM derives its request
+  // id from the X-Request-Id header (chatcmpl-<header>), so setting the
+  // header lets this turn correlate side-channel canvas events from the very
+  // first denoising step, before the server streams any completion chunk.
+  pi.on("before_provider_headers", (event) => {
+    const state = current;
+    if (state === undefined || state.done || eventsUrl === null) {
+      return;
+    }
+    const requestTag = crypto.randomUUID().replace(/-/gu, "");
+    event.headers["X-Request-Id"] = requestTag;
+    state.responseId = \`chatcmpl-\${requestTag}\`;
+    refreshLiveCanvas(state);
+  });
+
   pi.on("message_update", (event, ctx) => {
     const state = current;
     if (ctx.mode !== "tui" || state === undefined || state.done) {
       return;
     }
     // A turn can contain several completions (one per tool-call round), each
-    // with its own server request id; always track the current one.
+    // with its own server request id. The id was predicted when the
+    // X-Request-Id header was set; the stream's partial.responseId is the
+    // server-authoritative value and corrects the prediction on servers that
+    // ignore the header.
     const responseId = responseIdFromEvent(event.assistantMessageEvent);
     if (responseId !== undefined && responseId !== state.responseId) {
       state.responseId = responseId;
@@ -609,7 +615,9 @@ async function consumeEventStream(
     if (done) {
       return;
     }
-    buffer += decoder.decode(value, { stream: true });
+    // SSE allows LF, CRLF, and CR line endings; normalize to LF so frame
+    // splitting works for all conforming servers.
+    buffer += decoder.decode(value, { stream: true }).replace(/\\r\\n?/gu, "\\n");
     for (;;) {
       const boundary = buffer.indexOf("\\n\\n");
       if (boundary === -1) {
@@ -656,7 +664,10 @@ async function fetchCounters(): Promise<DiffusionCounters | undefined> {
     return undefined;
   }
   try {
-    const response = await fetch(metricsUrl);
+    // Bound the request so a stalled /metrics endpoint cannot accumulate
+    // pending sockets across turns; a missed sample only hides the
+    // steps/canvas stat.
+    const response = await fetch(metricsUrl, { signal: AbortSignal.timeout(metricsTimeoutMs) });
     if (!response.ok) {
       return undefined;
     }

@@ -209,7 +209,7 @@ describe("diffusion canvas extension behavior", () => {
     expect(rendered).toContain("step 1");
   });
 
-  it("never renders an uncorrelated canvas from a non-loopback server", async () => {
+  it("correlates the first canvas via the injected X-Request-Id header", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
       Promise.resolve(sse.response)
@@ -218,9 +218,35 @@ describe("diffusion canvas extension behavior", () => {
 
     const pi = new CanvasPiHarness();
     const extension = await loadExtension(
-      diffusionCanvasExtensionSource({
-        eventsUrl: "http://gpubox.internal:8000/v1/diffusion/events"
-      })
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+
+    // The extension assigns the request id up front through the header, so
+    // canvas events correlate before the server streams any completion chunk.
+    const headers: Record<string, string | null> = {};
+    pi.emit("before_provider_headers", { headers });
+    const tag = headers["X-Request-Id"];
+    expect(tag).toBeTruthy();
+
+    sse.push({ request_id: `chatcmpl-${String(tag)}`, step: 1, text: "first denoise canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("first denoise canvas");
+  });
+
+  it("never renders a canvas before the responseId is known", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
     );
     extension(pi);
 
@@ -239,8 +265,8 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80).join("\n")).toContain("early canvas");
   });
 
-  it("shows the only active request's canvas on loopback before the id is known", async () => {
-    const sse = sseStream();
+  it("parses CRLF-framed SSE events", async () => {
+    const sse = sseStream("\r\n");
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
       Promise.resolve(sse.response)
     );
@@ -254,19 +280,13 @@ describe("diffusion canvas extension behavior", () => {
 
     pi.emitTurnStart();
     await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
 
-    // The diffusion server sends no completion chunk until the first canvas
-    // commits, so the responseId is unknown during the first denoise. On
-    // loopback the only active request is this user's own.
-    sse.push({ request_id: "chatcmpl-mine", step: 2, text: "early canvas" });
+    sse.push({ request_id: "chatcmpl-1", step: 4, text: "crlf framed canvas" });
     await flushMicrotasks();
-    expect(pi.renderWidget(80).join("\n")).toContain("early canvas");
-
-    // Two concurrent requests are ambiguous even on loopback: keep the
-    // already-adopted single candidate but never switch to the newcomer.
-    sse.push({ request_id: "chatcmpl-other", step: 5, text: "ambiguous canvas" });
-    await flushMicrotasks();
-    expect(pi.renderWidget(80).join("\n")).not.toContain("ambiguous canvas");
+    expect(pi.renderWidget(80).join("\n")).toContain("crlf framed canvas");
   });
 
   it("tracks a new responseId after a tool-call completion", async () => {
@@ -348,7 +368,7 @@ type SseHarness = {
   push(event: { request_id: string; step: number; text: string }): void;
 };
 
-function sseStream(): SseHarness {
+function sseStream(lineEnding = "\n"): SseHarness {
   const encoder = new TextEncoder();
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   const body = new ReadableStream<Uint8Array>({
@@ -359,7 +379,9 @@ function sseStream(): SseHarness {
   return {
     response: { ok: true, status: 200, body },
     push: (event) => {
-      controller?.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+      controller?.enqueue(
+        encoder.encode(`data: ${JSON.stringify(event)}${lineEnding}${lineEnding}`)
+      );
     }
   };
 }
