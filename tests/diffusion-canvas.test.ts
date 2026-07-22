@@ -433,6 +433,60 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80)).toHaveLength(1);
   });
 
+  it("renders committed text and canvas as one continuous tail-windowed document", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+    sse.push({ request_id: "chatcmpl-1", step: 1, text: "first block resolving" });
+    await flushMicrotasks();
+
+    // Commit far more text than the live row cap can show at this width.
+    const words: string[] = [];
+    for (let i = 0; i < 120; i += 1) {
+      words.push(`w${String(i)}`);
+    }
+    pi.emitMessageUpdate(`${words.join(" ")} LAST-COMMITTED-WORD `);
+    sse.push({ request_id: "chatcmpl-1", step: 1, text: "NEXT-CANVAS resolving here" });
+    await flushMicrotasks();
+
+    const rendered = pi.renderWidget(18);
+    // Row packing splits words at 16 columns; flatten the styled rows back
+    // into the document text to assert on content and ordering.
+    const flattened = rendered
+      .slice(1)
+      .map((line) =>
+        line
+          .replace(/^ /u, "")
+          .replace(/\[\w+:/gu, "")
+          .replace(/\]/gu, "")
+      )
+      .join("");
+    // The window is the tail of the document: the oldest committed text has
+    // scrolled out, the newest is still visible, and the next canvas
+    // continues right after it (both runs share the document flow, so there
+    // is no gap between the settled text and the resolving canvas).
+    expect(flattened).not.toContain("w0 w1");
+    expect(flattened).toContain("LAST-COMMITTED-WORD");
+    expect(flattened).toContain("NEXT-CANVAS");
+    expect(flattened.indexOf("NEXT-CANVAS")).toBeGreaterThan(
+      flattened.indexOf("LAST-COMMITTED-WORD")
+    );
+  });
+
   it("settles simulated commits when the live stream arrives late", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>

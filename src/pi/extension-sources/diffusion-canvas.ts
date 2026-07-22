@@ -538,68 +538,50 @@ function tailByWidth(text: string, maxWidth: number): string {
   return chars.slice(start).join("");
 }
 
-function headByWidth(text: string, maxWidth: number): string {
-  const chars = [...text];
-  let width = 0;
-  let end = 0;
-  for (const [index, char] of chars.entries()) {
-    const cw = charWidth(char);
-    if (width + cw > maxWidth) {
-      break;
-    }
-    width += cw;
-    end = index + 1;
-  }
-  return chars.slice(0, end).join("");
-}
-
 function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[] {
   const rowCap = state.liveMode ? liveMaxRows : maxRows;
   const cells = renderCells(state, cols * rowCap);
-  const rows: string[] = [];
+  const rows: RenderCell[][] = [];
   let row: RenderCell[] = [];
   let rowWidth = 0;
   for (const cell of cells) {
     if (rowWidth + cell.width > cols) {
-      rows.push(styleRow(row, theme));
+      rows.push(row);
       row = [];
       rowWidth = 0;
-      if (rows.length >= rowCap) {
-        return rows;
-      }
     }
     row.push(cell);
     rowWidth += cell.width;
   }
   if (row.length > 0) {
-    rows.push(styleRow(row, theme));
+    rows.push(row);
   }
-  return rows;
+  // Live mode packs the whole settled+canvas document from its start, so row
+  // boundaries of already-committed text never move; the widget is a tail
+  // window over it, scrolling up only as new rows are produced (like a
+  // terminal). Simulated mode builds a budget-sized window, so its rows are
+  // the head.
+  const visible = state.liveMode ? rows.slice(-rowCap) : rows.slice(0, rowCap);
+  return visible.map((cellsRow) => styleRow(cellsRow, theme));
 }
 
 function renderCells(state: TurnState, budget: number): RenderCell[] {
   if (state.liveMode) {
-    return renderLiveCells(state, budget);
+    return renderLiveCells(state);
   }
   return renderSimulatedCells(state, budget);
 }
 
-// Live mode: the full canvas snapshot of the block currently being denoised,
-// exactly as reported by the server, preceded by a short settled tail (the
-// last committed text) for continuity with the message above. The canvas is
-// only clipped when it alone exceeds the whole row budget. Budgets are
-// display-width cells.
-function renderLiveCells(state: TurnState, budget: number): RenderCell[] {
+// Live mode: one continuous document, the committed text concatenated with
+// the canvas snapshot currently being denoised. It is never clipped here;
+// canvasRows packs it from the start (stable row boundaries for committed
+// text) and windows the tail, so on a commit the resolved text stays in
+// place and the next canvas continues mid-row without a gap.
+function renderLiveCells(state: TurnState): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
-  const canvasBudget = Math.min(textWidth(canvas), budget);
-  const settledReserve = Math.min(
-    textWidth(state.settledText),
-    Math.ceil(budget / liveMaxRows),
-    budget - canvasBudget
-  );
   return [
-    ...cellsFromText(tailByWidth(state.settledText, settledReserve), "settled"),
-    ...cellsFromText(headByWidth(canvas, canvasBudget), "noise")
+    ...cellsFromText(state.settledText, "settled"),
+    ...cellsFromText(canvas, "noise")
   ];
 }
 
