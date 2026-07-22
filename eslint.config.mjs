@@ -24,5 +24,15 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error"
     }
+  },
+  {
+    // Terminal rendering code: character classification is flat boolean range
+    // checks (high cyclomatic complexity by nature), and spreading strings is
+    // the intended code-point iteration for width-safe glyph substitution.
+    files: ["packages/diffusion-canvas/extensions/**"],
+    rules: {
+      complexity: ["error", 16],
+      "@typescript-eslint/no-misused-spread": "off"
+    }
   }
 );

@@ -1,0 +1,30 @@
+{
+  "name": "pi-diffusion-canvas",
+  "version": "0.1.0",
+  "description": "Live diffusion canvas widget for Pi: watch a diffusion LLM's text emerge through real denoising steps in the TUI",
+  "keywords": [
+    "pi-package",
+    "diffusion",
+    "vllm",
+    "visualization"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dutifuldev/localpi.git",
+    "directory": "packages/diffusion-canvas"
+  },
+  "files": [
+    "extensions/**",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

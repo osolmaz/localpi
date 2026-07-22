@@ -1,12 +1,4 @@
-export type DiffusionCanvasUrls = {
-  readonly metricsUrl?: string | undefined;
-  readonly eventsUrl?: string | undefined;
-};
-
-export function diffusionCanvasExtensionSource(urls: DiffusionCanvasUrls | undefined): string {
-  const metricsUrlSource = JSON.stringify(urls?.metricsUrl ?? null);
-  const eventsUrlSource = JSON.stringify(urls?.eventsUrl ?? null);
-  return `import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 // Diffusion LLM servers (e.g. DiffusionGemma on vLLM) denoise a whole canvas
 // internally and only stream committed tokens when a canvas converges, so
@@ -21,10 +13,31 @@ export function diffusionCanvasExtensionSource(urls: DiffusionCanvasUrls | undef
 // states never leave the engine, so the widget shows glyph noise during the
 // real denoising silence and animates each commit burst. Burst boundaries,
 // commit timing, and step counts are real; the glyphs are illustrative.
-const metricsUrl: string | null = ${metricsUrlSource};
-const eventsUrl: string | null = ${eventsUrlSource};
+//
+// Server URLs resolve at turn start: the PI_DIFFUSION_CANVAS_EVENTS_URL and
+// PI_DIFFUSION_CANVAS_METRICS_URL environment variables win, otherwise both
+// derive from the active model's baseUrl (an OpenAI-compatible ".../v1").
+let metricsUrl: string | null = null;
+let eventsUrl: string | null = null;
 
-const widgetId = "localpi-diffusion-canvas";
+function resolveServerUrls(ctx: ExtensionContext): void {
+  const baseUrl = ctx.model?.baseUrl;
+  metricsUrl =
+    process.env["PI_DIFFUSION_CANVAS_METRICS_URL"] ?? serverUrlFromBase(baseUrl, "/metrics");
+  eventsUrl =
+    process.env["PI_DIFFUSION_CANVAS_EVENTS_URL"] ??
+    serverUrlFromBase(baseUrl, "/v1/diffusion/events");
+}
+
+function serverUrlFromBase(baseUrl: string | undefined, path: string): string | null {
+  if (baseUrl === undefined || baseUrl.length === 0) {
+    return null;
+  }
+  const origin = baseUrl.replace(/\/v1\/?$/u, "").replace(/\/$/u, "");
+  return origin.length === 0 ? null : origin + path;
+}
+
+const widgetId = "pi-diffusion-canvas";
 const tickMs = 90;
 const maxRows = 4;
 // Live mode shows the entire canvas being denoised (a ~256-token block can
@@ -87,7 +100,7 @@ type CanvasEvent = {
 export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
   let current: TurnState | undefined;
   let ticker: ReturnType<typeof setInterval> | undefined;
-  let requestRender = (): void => {};
+  let requestRender = (): void => undefined;
   let widgetInstalled = false;
   let countersAtTurnStart: Promise<DiffusionCounters | undefined> | undefined;
   let stepsPerCanvas: number | undefined;
@@ -100,23 +113,23 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     }
     widgetInstalled = true;
     ctx.ui.setWidget(widgetId, (tui, theme) => {
-      requestRender = () => tui.requestRender();
+      requestRender = () => {
+        tui.requestRender();
+      };
       return {
         render: (width: number) => renderWidget(width, theme),
-        invalidate: () => {}
+        invalidate: () => undefined
       };
     });
   }
 
   function startTicker(): void {
-    if (ticker === undefined) {
-      ticker = setInterval(() => {
-        requestRender();
-        if (current !== undefined && current.done && animationDone(current)) {
-          stopTicker();
-        }
-      }, tickMs);
-    }
+    ticker ??= setInterval(() => {
+      requestRender();
+      if (current !== undefined && current.done && animationDone(current)) {
+        stopTicker();
+      }
+    }, tickMs);
   }
 
   function stopTicker(): void {
@@ -142,7 +155,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const abort = new AbortController();
     eventsAbort = abort;
     const separator = eventsUrl.includes("?") ? "&" : "?";
-    const url = \`\${eventsUrl}\${separator}request_id=\${encodeURIComponent(requestId)}\`;
+    const url = `${eventsUrl}${separator}request_id=${encodeURIComponent(requestId)}`;
     void consumeEventStream(url, abort.signal, (event) => {
       const state = current;
       if (state === undefined || state.done) {
@@ -250,37 +263,39 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       }
       const waited = ((Date.now() - state.startedAt) / 1000).toFixed(1);
       if (state.liveMode) {
-        return \`diffusion canvas | live | denoising canvas 1, step \${state.liveStep}... \${waited}s\`;
+        return `diffusion canvas | live | denoising canvas 1, step ${String(state.liveStep)}... ${waited}s`;
       }
-      return \`diffusion canvas | simulated | denoising canvas 1 server-side... \${waited}s | text appears when the canvas commits\`;
+      return `diffusion canvas | simulated | denoising canvas 1 server-side... ${waited}s | text appears when the canvas commits`;
     }
     const tokens = Math.ceil(state.totalChars / 4);
     const parts = [
       "diffusion canvas",
       mode,
-      \`\${state.burstCount} commits\`,
-      \`~\${Math.max(Math.round(tokens / state.burstCount), 1)} tok/commit\`
+      `${String(state.burstCount)} commits`,
+      `~${String(Math.max(Math.round(tokens / state.burstCount), 1))} tok/commit`
     ];
     const interval = medianOf(state.intervals);
     if (interval !== undefined) {
-      parts.push(\`\${(interval / 1000).toFixed(1)}s/commit\`);
+      parts.push(`${(interval / 1000).toFixed(1)}s/commit`);
     }
     const elapsedSeconds = Math.max(
       ((state.lastBurstAt ?? state.startedAt) - state.startedAt) / 1000,
       0.001
     );
-    parts.push(\`~\${(tokens / elapsedSeconds).toFixed(1)} tok/s\`);
+    parts.push(`~${(tokens / elapsedSeconds).toFixed(1)} tok/s`);
     if (stepsPerCanvas !== undefined) {
       // Prometheus counters are server-wide, so this is an aggregate over
       // everything the server ran during the turn, not per-request.
-      parts.push(\`\${stepsPerCanvas.toFixed(1)} steps/canvas (server)\`);
+      parts.push(`${stepsPerCanvas.toFixed(1)} steps/canvas (server)`);
     }
     if (state.done) {
       parts.push("done");
     } else if (state.liveMode) {
-      parts.push(\`denoising canvas \${state.burstCount + 1}, step \${state.liveStep}...\`);
+      parts.push(
+        `denoising canvas ${String(state.burstCount + 1)}, step ${String(state.liveStep)}...`
+      );
     } else {
-      parts.push(\`denoising canvas \${state.burstCount + 1}...\`);
+      parts.push(`denoising canvas ${String(state.burstCount + 1)}...`);
     }
     return parts.join(" | ");
   }
@@ -291,6 +306,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     if (ctx.mode !== "tui") {
       return;
     }
+    resolveServerUrls(ctx);
     const state = newTurnState();
     current = state;
     stepsPerCanvas = undefined;
@@ -316,7 +332,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     }
     const requestTag = crypto.randomUUID().replace(/-/gu, "");
     event.headers["X-Request-Id"] = requestTag;
-    state.responseId = \`chatcmpl-\${requestTag}\`;
+    state.responseId = `chatcmpl-${requestTag}`;
     openEventStream(state.responseId);
     refreshLiveCanvas(state);
   });
@@ -401,9 +417,7 @@ function newTurnState(): TurnState {
 
 function recordBurst(state: TurnState, added: string, display: boolean): void {
   const now = Date.now();
-  if (state.firstBurstAt === undefined) {
-    state.firstBurstAt = now;
-  }
+  state.firstBurstAt ??= now;
   if (state.lastBurstAt !== undefined) {
     state.intervals.push(now - state.lastBurstAt);
   }
@@ -471,7 +485,7 @@ function medianOf(values: readonly number[]): number | undefined {
 // renderer, leaving stale frames in the transcript. Render only glyphs with
 // unambiguous monospace width and substitute the rest with a neutral dot:
 // they read as noise either way, and the real text lands in the message.
-const substituteGlyph = "\\u00b7";
+const substituteGlyph = "\u00b7";
 
 function displayableChar(char: string): string {
   const cp = char.codePointAt(0) ?? 0;
@@ -490,7 +504,7 @@ function displayableChar(char: string): string {
 }
 
 function sanitize(text: string): string {
-  const flattened = text.replace(/\\s+/gu, " ").replace(/\\p{C}/gu, "");
+  const flattened = text.replace(/\s+/gu, " ").replace(/\p{C}/gu, "");
   let result = "";
   for (const char of flattened) {
     result += displayableChar(char);
@@ -584,10 +598,7 @@ function renderCells(state: TurnState, budget: number): RenderCell[] {
 // place and the next canvas continues mid-row without a gap.
 function renderLiveCells(state: TurnState): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
-  return [
-    ...cellsFromText(state.settledText, "settled"),
-    ...cellsFromText(canvas, "noise")
-  ];
+  return [...cellsFromText(state.settledText, "settled"), ...cellsFromText(canvas, "noise")];
 }
 
 // Simulated mode: while the turn runs, glyph noise fills all window space not
@@ -600,10 +611,7 @@ function renderSimulatedCells(state: TurnState, budget: number): RenderCell[] {
   const activeWidth = state.active.reduce((width, cell) => width + charWidth(cell.char), 0);
   const aheadCount = state.done
     ? 0
-    : Math.min(
-        Math.max(budget - settledWidth - activeWidth, Math.ceil(budget / maxRows)),
-        budget
-      );
+    : Math.min(Math.max(budget - settledWidth - activeWidth, Math.ceil(budget / maxRows)), budget);
   const settledBudget = Math.max(budget - activeWidth - aheadCount, 0);
   const cells: RenderCell[] = [
     ...cellsFromText(tailByWidth(state.settledText, settledBudget), "settled")
@@ -665,7 +673,7 @@ function noiseChar(): string {
 }
 
 function truncate(text: string, maxLength: number): string {
-  return text.length <= maxLength ? text : \`\${text.slice(0, Math.max(maxLength - 1, 0))}…\`;
+  return text.length <= maxLength ? text : `${text.slice(0, Math.max(maxLength - 1, 0))}…`;
 }
 
 async function consumeEventStream(
@@ -675,9 +683,9 @@ async function consumeEventStream(
 ): Promise<void> {
   const response = await fetch(url, { signal });
   if (!response.ok || response.body === null) {
-    throw new Error(\`diffusion events unavailable: \${String(response.status)}\`);
+    throw new Error(`diffusion events unavailable: ${String(response.status)}`);
   }
-  const reader = response.body.getReader();
+  const reader = (response.body as ReadableStream<Uint8Array>).getReader();
   // fetch rejects reads on abort, but cancel explicitly so the stream is
   // released even when a runtime (or test double) ignores the signal.
   signal.addEventListener("abort", () => void reader.cancel().catch(() => undefined), {
@@ -692,9 +700,9 @@ async function consumeEventStream(
     }
     // SSE allows LF, CRLF, and CR line endings; normalize to LF so frame
     // splitting works for all conforming servers.
-    buffer += decoder.decode(value, { stream: true }).replace(/\\r\\n?/gu, "\\n");
+    buffer += decoder.decode(value, { stream: true }).replace(/\r\n?/gu, "\n");
     for (;;) {
-      const boundary = buffer.indexOf("\\n\\n");
+      const boundary = buffer.indexOf("\n\n");
       if (boundary === -1) {
         break;
       }
@@ -710,14 +718,14 @@ async function consumeEventStream(
 
 function parseEventFrame(frame: string): CanvasEvent | undefined {
   const dataLines = frame
-    .split("\\n")
+    .split("\n")
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).trim());
   if (dataLines.length === 0) {
     return undefined;
   }
   try {
-    const parsed: unknown = JSON.parse(dataLines.join("\\n"));
+    const parsed: unknown = JSON.parse(dataLines.join("\n"));
     if (parsed === null || typeof parsed !== "object") {
       return undefined;
     }
@@ -757,11 +765,11 @@ function parseDiffusionCounters(body: string): DiffusionCounters | undefined {
   let positions: number | undefined;
   let committed: number | undefined;
   let found = false;
-  for (const line of body.split("\\n")) {
+  for (const line of body.split("\n")) {
     if (line.startsWith("#")) {
       continue;
     }
-    const match = /^vllm:diffusion_(\\w+?)(?:_total)?(?:\\{[^}]*\\})? (\\S+)$/u.exec(line.trim());
+    const match = /^vllm:diffusion_(\w+?)(?:_total)?(?:\{[^}]*\})? (\S+)$/u.exec(line.trim());
     if (match === null) {
       continue;
     }
@@ -850,6 +858,4 @@ function deltaFromEvent(value: unknown): CommitDelta | undefined {
     return { text: delta, display: false };
   }
   return undefined;
-}
-`;
 }

@@ -81,20 +81,27 @@ tokens internally and only stream tokens when a canvas converges and commits.
 Clients therefore see bursts of text separated by silent denoising intervals,
 which makes streaming look stalled even when the server is fast.
 
-`--diffusion-canvas` installs a Pi widget above the editor that visualizes this
-process live:
+`--diffusion-canvas` loads a Pi widget above the editor that visualizes this
+process live. The widget is maintained in this repository as a standalone Pi
+package, [`packages/diffusion-canvas`](packages/diffusion-canvas/), so it can
+also be installed into plain Pi; localpi bundles it.
 
-- during the real inter-commit silence it shows a shimmering noise field, which
-  represents the canvas being denoised server-side
-- when a commit burst arrives, the noise resolves into the real text cell by
-  cell
-- a stats line shows real numbers: commits, tokens per commit, commit interval,
-  smoothed tok/s, and denoising steps per canvas from the server's Prometheus
-  `/metrics` endpoint when available
+It has two modes:
 
-The intermediate token states never leave the inference engine, so the glyph
-noise is a visualization. The burst boundaries, commit timing, and step counts
-are real.
+- **live** (truthful): when the server exposes the `/v1/diffusion/events` side
+  channel, the widget renders the real intermediate canvas on every denoising
+  step: accepted tokens mixed with the sampler's renoise tokens, converging
+  into the committed text. This requires a vLLM build with canvas streaming
+  (see the package [README](packages/diffusion-canvas/README.md) for the
+  fork install one-liner) served with `--diffusion-stream-canvas`.
+- **simulated** (fallback, labeled): without the side channel, the widget
+  shows glyph noise during the real denoising silence and resolves each
+  commit burst into the real text. Burst boundaries, commit timing, and step
+  counts are real; the glyphs are illustrative.
+
+In both modes a stats line shows real numbers: commits, tokens per commit,
+commit interval, smoothed tok/s, and denoising steps per canvas from the
+server's Prometheus `/metrics` endpoint when available.
 
 ```bash
 localpi --runtime vllm --model nvidia/diffusiongemma-26B-A4B-it-NVFP4 --diffusion-canvas

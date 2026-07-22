@@ -11,11 +11,7 @@ import {
 } from "../localpi/runtime.js";
 import { applyRememberedSettings } from "../localpi/settings-state.js";
 import { createLocalpiAppDefinition } from "../pi/app.js";
-import {
-  diffusionEventsUrlFromBaseUrl,
-  metricsUrlFromBaseUrl,
-  writeDefaultExtensions
-} from "../pi/extensions.js";
+import { writeDefaultExtensions } from "../pi/extensions.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
@@ -36,15 +32,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
     const connection = await resolveRuntime(options);
     const selectorOptions = startupModelSelectorOptions(options, connection);
     const extensions = await writeDefaultExtensions(options, {
-      ...(selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions }),
-      ...(options.diffusionCanvas
-        ? {
-            diffusionCanvas: {
-              metricsUrl: metricsUrlFromBaseUrl(connection.baseUrl),
-              eventsUrl: diffusionEventsUrlFromBaseUrl(connection.baseUrl)
-            }
-          }
-        : {})
+      ...(selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions })
     });
     const app = createLocalpiAppDefinition(options, connection, extensions);
     return await launchResolvedRuntime(app, connection);

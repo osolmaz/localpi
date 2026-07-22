@@ -1,11 +1,12 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { LocalpiOptions } from "../localpi/options.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
 import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
-import { diffusionCanvasExtensionSource } from "./extension-sources/diffusion-canvas.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "./extension-sources/token-status.js";
@@ -18,12 +19,6 @@ export type ExtensionBundle = {
 
 export type ExtensionOptions = {
   readonly startupModelSelector?: StartupModelSelectorOptions;
-  readonly diffusionCanvas?: DiffusionCanvasOptions;
-};
-
-export type DiffusionCanvasOptions = {
-  readonly metricsUrl: string | undefined;
-  readonly eventsUrl: string | undefined;
 };
 
 export type StartupModelSelectorOptions = {
@@ -74,13 +69,7 @@ export async function writeDefaultExtensions(
     paths.push(await writeExtension(extensionDir, "token-status.ts", tokenStatusExtensionSource()));
   }
   if (options.diffusionCanvas) {
-    paths.push(
-      await writeExtension(
-        extensionDir,
-        "diffusion-canvas.ts",
-        diffusionCanvasExtensionSource(extensionOptions.diffusionCanvas)
-      )
-    );
+    paths.push(diffusionCanvasExtensionPath());
   }
   return {
     paths,
@@ -88,20 +77,22 @@ export async function writeDefaultExtensions(
   };
 }
 
-export function metricsUrlFromBaseUrl(baseUrl: string | undefined): string | undefined {
-  return serverUrlFromBaseUrl(baseUrl, "/metrics");
-}
-
-export function diffusionEventsUrlFromBaseUrl(baseUrl: string | undefined): string | undefined {
-  return serverUrlFromBaseUrl(baseUrl, "/v1/diffusion/events");
-}
-
-function serverUrlFromBaseUrl(baseUrl: string | undefined, path: string): string | undefined {
-  if (baseUrl === undefined) {
-    return undefined;
+// The diffusion canvas widget is maintained as a standalone Pi package in
+// this repository (packages/diffusion-canvas), so plain Pi users can install
+// it too. localpi loads the packaged extension file directly; the extension
+// derives the server URLs from the active model's baseUrl at runtime.
+export function diffusionCanvasExtensionPath(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const relative = path.join("packages", "diffusion-canvas", "extensions", "diffusion-canvas.ts");
+  // src/pi/ in the repo, dist/src/pi/ in the build: walk up to the root that
+  // contains the package.
+  for (let dir = moduleDir; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    const candidate = path.join(dir, relative);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
   }
-  const withoutV1 = baseUrl.replace(/\/v1\/?$/u, "");
-  return withoutV1.length === 0 ? undefined : `${withoutV1.replace(/\/$/u, "")}${path}`;
+  throw new Error("localpi installation is missing packages/diffusion-canvas");
 }
 
 async function writeExtension(extensionDir: string, name: string, source: string): Promise<string> {
