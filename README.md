@@ -92,8 +92,10 @@ It has two modes:
   channel, the widget renders the real intermediate canvas on every denoising
   step: accepted tokens mixed with the sampler's renoise tokens, converging
   into the committed text. This requires a vLLM build with canvas streaming
-  (see the package [README](packages/diffusion-canvas/README.md) for the
-  fork install one-liner) served with `--diffusion-stream-canvas`.
+  served with `--diffusion-stream-canvas`; see
+  [docs/diffusion-canvas-repro.md](docs/diffusion-canvas-repro.md) for the
+  full reproduction guide (fork install one-liner, serve command, and how
+  the truthful path works).
 - **simulated** (fallback, labeled): without the side channel, the widget
   shows glyph noise during the real denoising silence and resolves each
   commit burst into the real text. Burst boundaries, commit timing, and step

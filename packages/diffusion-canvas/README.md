@@ -24,12 +24,17 @@ simulation paced by the real commit bursts.
 
 ## Install
 
+This package is not published to a registry; it lives in the
+[localpi](https://github.com/dutifuldev/localpi) repository. Install it into
+plain Pi from a local checkout (Pi git installs point at repository roots,
+so clone first):
+
 ```bash
-pi install npm:pi-diffusion-canvas
+git clone https://github.com/dutifuldev/localpi
+pi install ./localpi/packages/diffusion-canvas
 ```
 
-Or run [localpi](https://github.com/dutifuldev/localpi) with
-`--diffusion-canvas`, which bundles this package.
+Or run localpi with `--diffusion-canvas`, which bundles this package.
 
 ## Configuration
 
