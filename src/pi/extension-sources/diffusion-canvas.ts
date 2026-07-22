@@ -296,6 +296,10 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     stepsPerCanvas = undefined;
     countersAtTurnStart = fetchCounters();
     installWidget(ctx);
+    // The widget header already shows live turn status (canvas, step,
+    // elapsed), so Pi's built-in working spinner row is redundant noise
+    // directly above it.
+    ctx.ui.setWorkingVisible(false);
     startTicker();
     // The SSE subscription opens once the completion's request id is known
     // (header hook or first stream chunk); it is always scoped to that id.
@@ -369,6 +373,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     current = undefined;
     if (widgetInstalled && ctx.hasUI) {
       ctx.ui.setWidget(widgetId, undefined);
+      ctx.ui.setWorkingVisible(true);
     }
     widgetInstalled = false;
   });
