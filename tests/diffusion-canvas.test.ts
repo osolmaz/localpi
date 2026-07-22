@@ -322,6 +322,57 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80).join("\n")).toContain("second completion canvas");
   });
 
+  it("keeps the widget height constant and substitutes ambiguous-width glyphs", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension(
+      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
+    );
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+
+    // Emoji, Devanagari, and Arabic have terminal-dependent display widths;
+    // one mispredicted cell desyncs the TUI's differential renderer. They
+    // must render as the neutral substitute, while ASCII and unambiguously
+    // wide CJK render as-is.
+    sse.push({
+      request_id: "chatcmpl-1",
+      step: 3,
+      text: "abc \u{1f600} \u0921\u0947 \u0645 \u6f22\u5b57 xyz"
+    });
+    await flushMicrotasks();
+
+    const rendered = pi.renderWidget(80);
+    const joined = rendered.join("\n");
+    expect(joined).toContain("abc");
+    expect(joined).toContain("xyz");
+    expect(joined).toContain("\u6f22\u5b57");
+    expect(joined).toContain("\u00b7");
+    expect(joined).not.toContain("\u{1f600}");
+    expect(joined).not.toContain("\u0921");
+
+    // While active, the widget always occupies header + maxRows lines so the
+    // TUI layout never grows and shrinks with the canvas (which would push
+    // stale frames into terminal scrollback).
+    expect(rendered).toHaveLength(5);
+    pi.emitMessageUpdate("short");
+    expect(pi.renderWidget(80)).toHaveLength(5);
+
+    // Once done and resolved, it still collapses to the stats line.
+    pi.emitTurnEnd();
+    expect(pi.renderWidget(80)).toHaveLength(1);
+  });
+
   it("settles simulated commits when the live stream arrives late", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>

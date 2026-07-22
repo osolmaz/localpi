@@ -205,7 +205,16 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     if (state.done && animationDone(state)) {
       return lines;
     }
-    for (const row of canvasRows(state, cols, theme)) {
+    const rows = canvasRows(state, cols, theme);
+    // Keep the widget height constant while active. The TUI renders
+    // differentially and pushes the top viewport line into terminal
+    // scrollback whenever the layout grows, so a widget that grows and
+    // shrinks with the canvas text leaves a trail of stale frames in the
+    // history. Rewriting a fixed set of rows in place leaves none.
+    while (rows.length < maxRows) {
+      rows.push("");
+    }
+    for (const row of rows) {
       lines.push(" " + row);
     }
     return lines;
@@ -424,35 +433,56 @@ function medianOf(values: readonly number[]): number | undefined {
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-function sanitize(text: string): string {
-  return text.replace(/\\s+/gu, " ").replace(/\\p{C}/gu, "");
-}
+// The canvas mixes scripts freely mid-denoise (multilingual renoise tokens).
+// Terminals disagree with any width model for combining marks, Indic
+// conjuncts, emoji sequences, and bidi-reordered RTL runs; a single
+// mispredicted cell hard-wraps a row and desyncs the TUI's differential
+// renderer, leaving stale frames in the transcript. Render only glyphs with
+// unambiguous monospace width and substitute the rest with a neutral dot:
+// they read as noise either way, and the real text lands in the message.
+const substituteGlyph = "\\u00b7";
 
-// Approximate terminal display width: East Asian wide/fullwidth glyphs and
-// emoji occupy two cells; combining marks occupy none. The real canvas mixes
-// scripts freely, so rows must be packed by display width, not char count.
-function charWidth(char: string): number {
-  if (/^\\p{M}+$/u.test(char)) {
-    return 0;
-  }
+function displayableChar(char: string): string {
   const cp = char.codePointAt(0) ?? 0;
   if (
-    cp >= 0x1100 &&
-    (cp <= 0x115f ||
-      cp === 0x2329 ||
-      cp === 0x232a ||
-      (cp >= 0x2e80 && cp <= 0xa4cf && cp !== 0x303f) ||
-      (cp >= 0xac00 && cp <= 0xd7a3) ||
-      (cp >= 0xf900 && cp <= 0xfaff) ||
-      (cp >= 0xfe30 && cp <= 0xfe6f) ||
-      (cp >= 0xff00 && cp <= 0xff60) ||
-      (cp >= 0xffe0 && cp <= 0xffe6) ||
-      (cp >= 0x1f300 && cp <= 0x1faff) ||
-      (cp >= 0x20000 && cp <= 0x3fffd))
+    (cp >= 0x20 && cp <= 0x7e) ||
+    (cp >= 0xa1 && cp <= 0x17f) ||
+    (cp >= 0x370 && cp <= 0x3ff && cp !== 0x374 && cp !== 0x375) ||
+    (cp >= 0x400 && cp <= 0x4ff) ||
+    (cp >= 0x2010 && cp <= 0x2027) ||
+    cp === 0x2591 ||
+    isWideChar(cp)
   ) {
-    return 2;
+    return char;
   }
-  return 1;
+  return substituteGlyph;
+}
+
+function sanitize(text: string): string {
+  const flattened = text.replace(/\\s+/gu, " ").replace(/\\p{C}/gu, "");
+  let result = "";
+  for (const char of flattened) {
+    result += displayableChar(char);
+  }
+  return result;
+}
+
+// Unambiguously two-cell scripts in every monospace terminal: CJK
+// punctuation and kana, CJK unified ideographs, Hangul syllables, CJK
+// compatibility ideographs, and fullwidth forms.
+function isWideChar(cp: number): boolean {
+  return (
+    (cp >= 0x3000 && cp <= 0x30ff) ||
+    (cp >= 0x3400 && cp <= 0x4dbf) ||
+    (cp >= 0x4e00 && cp <= 0x9fff) ||
+    (cp >= 0xac00 && cp <= 0xd7a3) ||
+    (cp >= 0xf900 && cp <= 0xfaff) ||
+    (cp >= 0xff01 && cp <= 0xff60)
+  );
+}
+
+function charWidth(char: string): number {
+  return isWideChar(char.codePointAt(0) ?? 0) ? 2 : 1;
 }
 
 function textWidth(text: string): number {
