@@ -135,6 +135,14 @@ export function usage(): string {
     "",
     "usage:",
     "  localpi [localpi options] [pi options/messages]",
+    "  localpi grid --concurrency <n> [options] [-- command...]",
+    "  localpi record --session <name> --out <file.mp4> [options]",
+    "",
+    "subcommands:",
+    "  grid                    launch a tmux grid of concurrent demo panes",
+    "                          (see localpi grid --help)",
+    "  record                  record a tmux session in a themed Ghostty window",
+    "                          (see localpi record --help)",
     "",
     "localpi options:",
     "  --runtime <kind>         auto, llama-server, lmstudio, vllm, or openai-compatible",
@@ -188,7 +196,9 @@ export function usage(): string {
     "  localpi --status",
     '  localpi --model gemma-e4b -p "say ok"',
     "  localpi --runtime lmstudio --model gemma-4-e4b-it",
-    "  localpi -- --help"
+    "  localpi -- --help",
+    "  localpi grid -n 16 --allow-high-concurrency --start -- localpi --demo --model gemma4-26b",
+    "  localpi record --session pi-demo-20260722-153000 --out demo.mp4"
   ].join("\n")}\n`;
 }
 

@@ -1,7 +1,9 @@
 import { runPiApp } from "@dutifuldev/pi-factory";
 
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
+import { runGridCommand } from "../localpi/grid.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
+import { runRecordCommand } from "../localpi/record.js";
 import {
   aliasListOutput,
   connectionStatus,
@@ -14,6 +16,12 @@ import { createLocalpiAppDefinition } from "../pi/app.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
+  if (args[0] === "grid") {
+    return runGridCommand(args.slice(1));
+  }
+  if (args[0] === "record") {
+    return runRecordCommand(args.slice(1));
+  }
   try {
     let options = parseLocalpiArgs(args);
     const helpResult = helpCommandResult(options);

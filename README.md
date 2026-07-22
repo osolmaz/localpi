@@ -215,6 +215,49 @@ Stop the managed `llama-server` runtime:
 localpi --stop
 ```
 
+## Demo Grid and Recording
+
+`localpi grid` launches a balanced tmux wall of concurrent `localpi --demo`
+panes, and `localpi record` records any tmux session in a themed Ghostty
+window. Together they turn a local model server into a screen-filling live
+demo (for example 16 concurrent DiffusionGemma sessions) and an mp4 of it.
+
+`localpi grid` previews by default and only creates panes with `--start`:
+
+```bash
+# Preview the plan (no tmux session is created):
+localpi grid --concurrency 16 --allow-high-concurrency \
+  -- localpi --runtime vllm --demo --model nvidia/diffusiongemma-26B-A4B-it-NVFP4
+
+# Launch it:
+localpi grid --concurrency 16 --allow-high-concurrency --min-available-gb 24 --start \
+  -- localpi --runtime vllm --demo --model nvidia/diffusiongemma-26B-A4B-it-NVFP4
+
+# View the wall:
+tmux attach -t pi-demo-<timestamp>
+```
+
+Safety gates: the per-pane command must select a model explicitly (`--model`
+or `LOCALPI_MODEL`); pane counts above the safe limit (default 4, or
+`PI_DEMO_GRID_MAX_SAFE_CONCURRENCY`) need `--allow-high-concurrency`, which
+should reflect the backend's real capacity (for vLLM, its `--max-num-seqs`);
+`--min-available-gb` refuses to launch on a memory-tight machine. Each pane
+runs with `LOCALPI_DEMO_INDEX` and `LOCALPI_DEMO_TOTAL` set and tmux's
+`tiled` layout keeps the grid square (2x2 for 4, 4x4 for 16).
+
+`localpi record` attaches a Ghostty window (default theme: Catppuccin Mocha)
+to the session and captures exactly that window with ffmpeg:
+
+```bash
+localpi record --session pi-demo-<timestamp> --out demo.mp4 --seconds 360
+```
+
+Recording stops when the Ghostty window closes, when `--seconds` elapses, or
+on `ctrl-c`, and the mp4 is finalized cleanly in all cases. It needs an X11
+desktop with `tmux`, `ghostty`, `ffmpeg`, `xdotool`, and `xwininfo`
+installed. `--font-size`, `--columns`, and `--rows` control the window;
+`--theme` accepts any `ghostty +list-themes` entry.
+
 ## Options
 
 - `--runtime <auto|llama-server|lmstudio|vllm|openai-compatible>`: runtime backend. Default: `auto`
