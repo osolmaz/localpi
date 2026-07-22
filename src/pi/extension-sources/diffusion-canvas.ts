@@ -27,6 +27,9 @@ const eventsUrl: string | null = ${eventsUrlSource};
 const widgetId = "localpi-diffusion-canvas";
 const tickMs = 90;
 const maxRows = 4;
+// Live mode shows the entire canvas being denoised (a ~256-token block can
+// take ~10 rows), so its cap is much larger than the simulated window.
+const liveMaxRows = 16;
 const minResolveMs = 300;
 const maxResolveMs = 1500;
 const defaultResolveMs = 1200;
@@ -49,6 +52,7 @@ type TurnState = {
   active: ActiveCell[];
   intervals: number[];
   liveMode: boolean;
+  rowsHighWater: number;
   responseId: string | undefined;
   latestCanvasByRequest: Map<string, CanvasEvent>;
   liveText: string | undefined;
@@ -222,12 +226,14 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       return lines;
     }
     const rows = canvasRows(state, cols, theme);
-    // Keep the widget height constant while active. The TUI renders
-    // differentially and pushes the top viewport line into terminal
-    // scrollback whenever the layout grows, so a widget that grows and
-    // shrinks with the canvas text leaves a trail of stale frames in the
-    // history. Rewriting a fixed set of rows in place leaves none.
-    while (rows.length < maxRows) {
+    // Keep the widget height stable while active: pad to the tallest layout
+    // seen this turn (it only ratchets up when a bigger canvas arrives). The
+    // TUI renders differentially, so a widget that grew and shrank with the
+    // canvas text every frame would leave a trail of stale frames in the
+    // terminal scrollback; rewriting a fixed set of rows in place leaves
+    // none.
+    state.rowsHighWater = Math.max(state.rowsHighWater, rows.length);
+    while (rows.length < state.rowsHighWater) {
       rows.push("");
     }
     for (const row of rows) {
@@ -379,6 +385,7 @@ function newTurnState(): TurnState {
     active: [],
     intervals: [],
     liveMode: false,
+    rowsHighWater: maxRows,
     responseId: undefined,
     latestCanvasByRequest: new Map(),
     liveText: undefined,
@@ -547,7 +554,8 @@ function headByWidth(text: string, maxWidth: number): string {
 }
 
 function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[] {
-  const cells = renderCells(state, cols * maxRows);
+  const rowCap = state.liveMode ? liveMaxRows : maxRows;
+  const cells = renderCells(state, cols * rowCap);
   const rows: string[] = [];
   let row: RenderCell[] = [];
   let rowWidth = 0;
@@ -556,7 +564,7 @@ function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[
       rows.push(styleRow(row, theme));
       row = [];
       rowWidth = 0;
-      if (rows.length >= maxRows) {
+      if (rows.length >= rowCap) {
         return rows;
       }
     }
@@ -576,16 +584,19 @@ function renderCells(state: TurnState, budget: number): RenderCell[] {
   return renderSimulatedCells(state, budget);
 }
 
-// Live mode: settled committed text followed by the real canvas snapshot of
-// the block currently being denoised, exactly as reported by the server.
-// Budgets are display-width cells.
+// Live mode: the full canvas snapshot of the block currently being denoised,
+// exactly as reported by the server, preceded by a short settled tail (the
+// last committed text) for continuity with the message above. The canvas is
+// only clipped when it alone exceeds the whole row budget. Budgets are
+// display-width cells.
 function renderLiveCells(state: TurnState, budget: number): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
+  const canvasBudget = Math.min(textWidth(canvas), budget);
   const settledReserve = Math.min(
     textWidth(state.settledText),
-    Math.max(budget - textWidth(canvas), Math.ceil(budget / 4))
+    Math.ceil(budget / liveMaxRows),
+    budget - canvasBudget
   );
-  const canvasBudget = Math.max(budget - settledReserve, 0);
   return [
     ...cellsFromText(tailByWidth(state.settledText, settledReserve), "settled"),
     ...cellsFromText(headByWidth(canvas, canvasBudget), "noise")
