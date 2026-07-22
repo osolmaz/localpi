@@ -47,7 +47,8 @@ type TurnState = {
   active: ActiveCell[];
   intervals: number[];
   liveMode: boolean;
-  liveRequestId: string | undefined;
+  responseId: string | undefined;
+  latestCanvasByRequest: Map<string, CanvasEvent>;
   liveText: string | undefined;
   liveStep: number;
   done: boolean;
@@ -82,7 +83,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
   let ticker: ReturnType<typeof setInterval> | undefined;
   let requestRender = (): void => {};
   let widgetInstalled = false;
-  let countersAtTurnStart: DiffusionCounters | undefined;
+  let countersAtTurnStart: Promise<DiffusionCounters | undefined> | undefined;
   let stepsPerCanvas: number | undefined;
   let eventsAbort: AbortController | undefined;
 
@@ -129,21 +130,42 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       if (state === undefined || state.done) {
         return;
       }
-      // The side channel broadcasts every request on the server. localpi
-      // drives a single local session, so adopt the first request seen after
-      // this turn started and stick to it, ignoring other clients' requests.
-      state.liveRequestId ??= event.requestId;
-      if (event.requestId !== state.liveRequestId) {
-        return;
-      }
-      state.liveMode = true;
-      state.liveText = event.text;
-      state.liveStep = event.step;
+      state.latestCanvasByRequest.set(event.requestId, event);
+      refreshLiveCanvas(state);
       requestRender();
     }).catch(() => {
       // Side channel unavailable (unpatched server or flag off): the widget
       // stays in the labeled simulated mode.
     });
+  }
+
+  // The side channel broadcasts every request on the server. Display only
+  // the canvas belonging to this turn's completion: Pi's assistant stream
+  // exposes the server request id as partial.responseId (the chatcmpl id),
+  // which matches the SSE request_id. Until the responseId is known (the
+  // stream's first event usually delivers it before the first canvas event),
+  // fall back to the only active request, if there is exactly one.
+  function refreshLiveCanvas(state: TurnState): void {
+    let event: CanvasEvent | undefined;
+    if (state.responseId !== undefined) {
+      event = state.latestCanvasByRequest.get(state.responseId);
+      if (event === undefined) {
+        // A previously shown fallback canvas turned out to be another
+        // request's; drop it.
+        state.liveText = undefined;
+        return;
+      }
+    } else if (state.latestCanvasByRequest.size === 1) {
+      for (const only of state.latestCanvasByRequest.values()) {
+        event = only;
+      }
+    }
+    if (event === undefined) {
+      return;
+    }
+    state.liveMode = true;
+    state.liveText = event.text;
+    state.liveStep = event.step;
   }
 
   function closeEventStream(): void {
@@ -219,22 +241,21 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const state = newTurnState();
     current = state;
     stepsPerCanvas = undefined;
-    countersAtTurnStart = undefined;
+    countersAtTurnStart = fetchCounters();
     installWidget(ctx);
     startTicker();
     openEventStream();
-    void fetchCounters().then((counters) => {
-      // Discard the sample if it resolves after this turn already ended.
-      if (current === state) {
-        countersAtTurnStart = counters;
-      }
-    });
   });
 
   pi.on("message_update", (event, ctx) => {
     const state = current;
     if (ctx.mode !== "tui" || state === undefined || state.done) {
       return;
+    }
+    const responseId = responseIdFromEvent(event.assistantMessageEvent);
+    if (responseId !== undefined && state.responseId === undefined) {
+      state.responseId = responseId;
+      refreshLiveCanvas(state);
     }
     const added = deltaFromEvent(event.assistantMessageEvent);
     if (added === undefined || added.text.length === 0) {
@@ -251,13 +272,15 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     }
     finishTurn(state);
     closeEventStream();
-    const before = countersAtTurnStart;
-    void fetchCounters().then((counters) => {
+    // Wait for the turn-start sample: on short turns it can still be in
+    // flight when the turn ends.
+    const beforePromise = countersAtTurnStart;
+    void Promise.all([beforePromise, fetchCounters()]).then(([before, after]) => {
       if (current !== state) {
         return;
       }
-      if (before !== undefined && counters !== undefined) {
-        stepsPerCanvas = stepsPerCanvasFromDelta(before, counters) ?? stepsPerCanvas;
+      if (before !== undefined && after !== undefined) {
+        stepsPerCanvas = stepsPerCanvasFromDelta(before, after) ?? stepsPerCanvas;
       }
       requestRender();
     });
@@ -286,7 +309,8 @@ function newTurnState(): TurnState {
     active: [],
     intervals: [],
     liveMode: false,
-    liveRequestId: undefined,
+    responseId: undefined,
+    latestCanvasByRequest: new Map(),
     liveText: undefined,
     liveStep: 0,
     done: false
@@ -688,6 +712,23 @@ type CommitDelta = {
   // paces the commit stats but is rendered by Pi's own tool widgets.
   readonly display: boolean;
 };
+
+// Pi's assistant stream events carry the in-progress message as "partial"
+// (or the final one as "message"), whose responseId is the server-side
+// request id (chatcmpl-...). That id is what the diffusion events side
+// channel reports, so it correlates live canvas events with this turn.
+function responseIdFromEvent(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const object = value as Record<string, unknown>;
+  const partial = object["partial"] ?? object["message"];
+  if (partial === null || typeof partial !== "object") {
+    return undefined;
+  }
+  const responseId = (partial as Record<string, unknown>)["responseId"];
+  return typeof responseId === "string" ? responseId : undefined;
+}
 
 // Every streamed delta is a canvas commit on a diffusion server, including
 // thinking (DiffusionGemma routes its whole output through the reasoning
