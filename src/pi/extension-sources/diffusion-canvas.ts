@@ -23,6 +23,11 @@ export function diffusionCanvasExtensionSource(urls: DiffusionCanvasUrls | undef
 // commit timing, and step counts are real; the glyphs are illustrative.
 const metricsUrl: string | null = ${metricsUrlSource};
 const eventsUrl: string | null = ${eventsUrlSource};
+// Loopback servers serve only this machine's user, so showing the single
+// active request's canvas before its id is known cannot leak another
+// person's text. See refreshLiveCanvas.
+const allowUncorrelatedCanvas: boolean =
+  eventsUrl !== null && /^https?:\\/\\/(127\\.0\\.0\\.1|localhost|\\[::1\\])(:|\\/)/u.test(eventsUrl);
 
 const widgetId = "localpi-diffusion-canvas";
 const tickMs = 90;
@@ -139,23 +144,27 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     });
   }
 
-  // The side channel broadcasts every request on the server. Display only
-  // the canvas belonging to this turn's completion: Pi's assistant stream
-  // exposes the server request id as partial.responseId (the chatcmpl id),
-  // which matches the SSE request_id. Until the responseId is known (the
-  // stream's first event usually delivers it before the first canvas event),
-  // fall back to the only active request, if there is exactly one.
+  // The side channel broadcasts every request on the server. Display the
+  // canvas belonging to this turn's current completion: Pi's assistant
+  // stream exposes the server request id as partial.responseId (the chatcmpl
+  // id), which matches the SSE request_id. The diffusion server only sends
+  // its first completion chunk when the first canvas commits, so the id is
+  // unknown while the first canvas denoises. During that window, fall back
+  // to the only active request, but exclusively on loopback servers: there
+  // the subscriber and the requester are the same user, so no other client's
+  // text can be exposed. On shared/remote servers, never render an
+  // uncorrelated canvas.
   function refreshLiveCanvas(state: TurnState): void {
     let event: CanvasEvent | undefined;
     if (state.responseId !== undefined) {
       event = state.latestCanvasByRequest.get(state.responseId);
       if (event === undefined) {
-        // A previously shown fallback canvas turned out to be another
-        // request's; drop it.
+        // No canvas yet for the current completion (e.g. a new completion
+        // started after a tool call); drop any stale one.
         state.liveText = undefined;
         return;
       }
-    } else if (state.latestCanvasByRequest.size === 1) {
+    } else if (allowUncorrelatedCanvas && state.latestCanvasByRequest.size === 1) {
       for (const only of state.latestCanvasByRequest.values()) {
         event = only;
       }
@@ -220,7 +229,9 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     );
     parts.push(\`~\${(tokens / elapsedSeconds).toFixed(1)} tok/s\`);
     if (stepsPerCanvas !== undefined) {
-      parts.push(\`\${stepsPerCanvas.toFixed(1)} steps/canvas\`);
+      // Prometheus counters are server-wide, so this is an aggregate over
+      // everything the server ran during the turn, not per-request.
+      parts.push(\`\${stepsPerCanvas.toFixed(1)} steps/canvas (server)\`);
     }
     if (state.done) {
       parts.push("done");
@@ -252,8 +263,10 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     if (ctx.mode !== "tui" || state === undefined || state.done) {
       return;
     }
+    // A turn can contain several completions (one per tool-call round), each
+    // with its own server request id; always track the current one.
     const responseId = responseIdFromEvent(event.assistantMessageEvent);
-    if (responseId !== undefined && state.responseId === undefined) {
+    if (responseId !== undefined && responseId !== state.responseId) {
       state.responseId = responseId;
       refreshLiveCanvas(state);
     }
