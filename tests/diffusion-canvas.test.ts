@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+
 import ts from "typescript";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { diffusionCanvasExtensionSource } from "../src/pi/extension-sources/diffusion-canvas.js";
+import { diffusionCanvasExtensionPath } from "../src/pi/extensions.js";
 
 describe("diffusion canvas extension behavior", () => {
   beforeEach(() => {
@@ -17,7 +19,7 @@ describe("diffusion canvas extension behavior", () => {
 
   it("shows noise for a commit burst and resolves it into the real text", async () => {
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    const extension = await loadExtension();
     extension(pi);
 
     pi.emitTurnStart();
@@ -39,7 +41,7 @@ describe("diffusion canvas extension behavior", () => {
 
   it("keeps upcoming-canvas noise between bursts and settles on turn end", async () => {
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    const extension = await loadExtension();
     extension(pi);
 
     pi.emitTurnStart();
@@ -66,7 +68,7 @@ describe("diffusion canvas extension behavior", () => {
 
   it("keeps resolving the final canvas after turn end, then collapses to stats", async () => {
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    const extension = await loadExtension();
     extension(pi);
 
     pi.emitTurnStart();
@@ -92,9 +94,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -143,9 +145,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -168,7 +170,7 @@ describe("diffusion canvas extension behavior", () => {
 
   it("counts thinking and tool-call deltas as commits, ignores non-delta events", async () => {
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    const extension = await loadExtension();
     extension(pi);
 
     pi.emitTurnStart();
@@ -197,9 +199,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -230,9 +232,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -258,9 +260,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -290,9 +292,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -314,9 +316,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -347,9 +349,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -398,9 +400,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -441,9 +443,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -499,9 +501,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -531,9 +533,9 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events" })
-    );
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
     extension(pi);
 
     pi.emitTurnStart();
@@ -563,9 +565,7 @@ describe("diffusion canvas extension behavior", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(
-      diffusionCanvasExtensionSource({ metricsUrl: "http://127.0.0.1:8000/metrics" })
-    );
+    const extension = await loadExtension({ metricsUrl: "http://127.0.0.1:8000/metrics" });
     extension(pi);
 
     pi.emitTurnStart();
@@ -581,9 +581,25 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(120).join("\n")).toContain("9.0 steps/canvas (server)");
   });
 
+  it("derives server URLs from the active model's baseUrl when no env override is set", async () => {
+    const fetchMock = vi
+      .fn<(input: string, init?: unknown) => Promise<{ ok: boolean; text(): Promise<string> }>>()
+      .mockResolvedValue(metricsResponse(0, 0, 0));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness({ baseUrl: "http://10.0.0.5:8000/v1" });
+    const extension = await loadExtension();
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://10.0.0.5:8000/metrics");
+  });
+
   it("clears the widget and stops the ticker on session shutdown", async () => {
     const pi = new CanvasPiHarness();
-    const extension = await loadExtension(diffusionCanvasExtensionSource(undefined));
+    const extension = await loadExtension();
     extension(pi);
 
     pi.emitTurnStart();
@@ -662,6 +678,7 @@ type WidgetFactory = (tui: WidgetTui, theme: WidgetTheme) => WidgetComponent;
 type CanvasContext = {
   readonly hasUI: boolean;
   readonly mode: string;
+  readonly model?: { readonly baseUrl?: string };
   readonly ui: {
     setWidget(key: string, content: WidgetFactory | string[] | undefined): void;
     setWorkingVisible(visible: boolean): void;
@@ -677,28 +694,36 @@ class CanvasPiHarness {
 
   private component: WidgetComponent | undefined;
   private readonly handlers = new Map<string, Handler[]>();
+  private readonly ctx: CanvasContext;
 
-  private readonly ctx: CanvasContext = {
-    hasUI: true,
-    mode: "tui",
-    ui: {
-      setWidget: (_key, content) => {
-        if (content === undefined) {
-          this.widgetCleared = true;
-          this.widgetFactory = undefined;
-          this.component = undefined;
-          return;
+  constructor(model?: { readonly baseUrl?: string }) {
+    this.ctx = this.createContext(model);
+  }
+
+  private createContext(model?: { readonly baseUrl?: string }): CanvasContext {
+    return {
+      hasUI: true,
+      mode: "tui",
+      ...(model === undefined ? {} : { model }),
+      ui: {
+        setWidget: (_key, content) => {
+          if (content === undefined) {
+            this.widgetCleared = true;
+            this.widgetFactory = undefined;
+            this.component = undefined;
+            return;
+          }
+          if (typeof content === "function") {
+            this.widgetFactory = content;
+            this.component = content({ requestRender: () => undefined }, themeStub());
+          }
+        },
+        setWorkingVisible: (visible) => {
+          this.workingVisible = visible;
         }
-        if (typeof content === "function") {
-          this.widgetFactory = content;
-          this.component = content({ requestRender: () => undefined }, themeStub());
-        }
-      },
-      setWorkingVisible: (visible) => {
-        this.workingVisible = visible;
       }
-    }
-  };
+    };
+  }
 
   on(event: string, handler: Handler): void {
     const existing = this.handlers.get(event) ?? [];
@@ -740,8 +765,28 @@ function themeStub(): WidgetTheme {
   };
 }
 
-async function loadExtension(source: string): Promise<CanvasExtension> {
-  const result = ts.transpileModule(source, {
+const packagedSource = readFileSync(diffusionCanvasExtensionPath(), "utf8");
+
+type ServerUrls = {
+  readonly eventsUrl?: string;
+  readonly metricsUrl?: string;
+};
+
+// Loads the packaged extension (packages/diffusion-canvas). The extension
+// resolves server URLs at turn start from env overrides or the active
+// model's baseUrl; tests configure them through the env variables.
+async function loadExtension(urls: ServerUrls = {}): Promise<CanvasExtension> {
+  if (urls.eventsUrl === undefined) {
+    delete process.env["PI_DIFFUSION_CANVAS_EVENTS_URL"];
+  } else {
+    process.env["PI_DIFFUSION_CANVAS_EVENTS_URL"] = urls.eventsUrl;
+  }
+  if (urls.metricsUrl === undefined) {
+    delete process.env["PI_DIFFUSION_CANVAS_METRICS_URL"];
+  } else {
+    process.env["PI_DIFFUSION_CANVAS_METRICS_URL"] = urls.metricsUrl;
+  }
+  const result = ts.transpileModule(packagedSource, {
     fileName: "diffusion-canvas.ts",
     compilerOptions: {
       module: ts.ModuleKind.ES2022,
