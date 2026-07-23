@@ -119,23 +119,177 @@ describe("diffusion canvas extension behavior", () => {
     expect(denoising).toContain("step 3");
     expect(denoising).toContain("[accent:the qXick brZwn f#x]");
 
-    // The commit settles instantly: the emergence was already shown live.
+    // The commit is the converged canvas (the server streams no event for
+    // the commit step), so it renders bright for a moment, then mutes.
     pi.emitMessageUpdate("the quick brown fox");
     const committed = pi.renderWidget(80).join("\n");
-    expect(committed).toContain("[muted:the quick brown fox]");
+    expect(committed).toContain("[text:the quick brown fox]");
     expect(committed).not.toContain("[accent:");
+    vi.advanceTimersByTime(500);
+    expect(pi.renderWidget(80).join("\n")).toContain("[muted:the quick brown fox]");
 
-    // Next block starts denoising: its canvas renders after the settled text.
-    sse.push({ request_id: "chatcmpl-1", step: 1, text: "jum%s over th* lazy" });
+    // Next block starts denoising: its canvas renders after the settled
+    // text. The server's step counter is monotonic across blocks; the header
+    // shows the step within the current canvas.
+    sse.push({ request_id: "chatcmpl-1", step: 4, text: "jum%s over th* lazy" });
     await flushMicrotasks();
     const nextBlock = pi.renderWidget(80).join("\n");
     expect(nextBlock).toContain("[muted:the quick brown fox]");
     expect(nextBlock).toContain("[accent:jum%s over th* lazy]");
+    expect(pi.renderWidget(140).join("\n")).toContain("denoising canvas 2, step 1...");
 
     pi.emitTurnEnd();
     const finished = pi.renderWidget(80);
     expect(finished).toHaveLength(1);
     expect(finished.join("\n")).toContain("done");
+  });
+
+  it("drops in-flight canvas events of the just-committed block", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+    sse.push({ request_id: "chatcmpl-1", step: 2, text: "block one denoising" });
+    await flushMicrotasks();
+    pi.emitMessageUpdate("block one committed");
+
+    // The SSE feed and the completion stream are separate connections, so a
+    // snapshot of the committed block can land after the commit; rendering
+    // it would show the committed text twice.
+    sse.push({ request_id: "chatcmpl-1", step: 3, text: "block one stale snapshot" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).not.toContain("block one stale snapshot");
+
+    // Past the grace window, a replayed step stays stale ...
+    vi.advanceTimersByTime(300);
+    sse.push({ request_id: "chatcmpl-1", step: 2, text: "replayed old step" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).not.toContain("replayed old step");
+
+    // ... while the next block's canvas renders.
+    sse.push({ request_id: "chatcmpl-1", step: 4, text: "block two denoising" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("block two denoising");
+  });
+
+  it("uses the block ordinal to identify stale canvases exactly", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+    sse.push({ request_id: "chatcmpl-1", step: 5, block: 0, text: "block zero canvas" });
+    await flushMicrotasks();
+    pi.emitMessageUpdate("block zero committed");
+
+    // With the ordinal there is no grace-window delay: the next block's
+    // first snapshot renders immediately after the commit.
+    sse.push({ request_id: "chatcmpl-1", step: 6, block: 1, text: "block one canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("block one canvas");
+
+    // An old-block snapshot never renders, even long after the commit.
+    vi.advanceTimersByTime(1000);
+    sse.push({ request_id: "chatcmpl-1", step: 7, block: 0, text: "late block zero" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).not.toContain("late block zero");
+  });
+
+  it("does not let a commit's staleness guards suppress the next completion", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-first" } }
+    });
+    sse.push({ request_id: "chatcmpl-first", step: 8, text: "first completion canvas" });
+    await flushMicrotasks();
+    pi.emitMessageUpdate("first completion committed");
+
+    // A new completion (tool-call round) starts inside the grace window; its
+    // step counter restarts on the server, so the floors must reset.
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-second" } }
+    });
+    sse.push({ request_id: "chatcmpl-second", step: 1, text: "second completion canvas" });
+    await flushMicrotasks();
+    expect(pi.renderWidget(80).join("\n")).toContain("second completion canvas");
+  });
+
+  it("keeps committed rows in place while the canvas width fluctuates", async () => {
+    const sse = sseStream();
+    const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
+      Promise.resolve(sse.response)
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pi = new CanvasPiHarness();
+    const extension = await loadExtension({
+      eventsUrl: "http://127.0.0.1:8000/v1/diffusion/events"
+    });
+    extension(pi);
+
+    pi.emitTurnStart();
+    await flushMicrotasks();
+    pi.emit("message_update", {
+      assistantMessageEvent: { type: "start", partial: { responseId: "chatcmpl-1" } }
+    });
+    sse.push({ request_id: "chatcmpl-1", step: 1, text: "opening canvas" });
+    await flushMicrotasks();
+
+    const words: string[] = [];
+    for (let i = 0; i < 60; i += 1) {
+      words.push(`w${String(i)}`);
+    }
+    pi.emitMessageUpdate(words.join(" "));
+    vi.advanceTimersByTime(500);
+
+    // The canvas's decoded width changes on every denoising step (renoise
+    // tokens swap); the settled rows above the seam must not move with it.
+    sse.push({ request_id: "chatcmpl-1", step: 2, text: "AAAA BBBB CCCC DDDD EEEE FFFF" });
+    await flushMicrotasks();
+    const wide = pi.renderWidget(18);
+    sse.push({ request_id: "chatcmpl-1", step: 3, text: "AAAA" });
+    await flushMicrotasks();
+    const narrow = pi.renderWidget(18);
+    expect(narrow[0]).toBe(wide[0]);
+    expect(narrow[1]).toBe(wide[1]);
   });
 
   it("falls back to labeled simulation when the events endpoint is unavailable", async () => {
@@ -387,8 +541,9 @@ describe("diffusion canvas extension behavior", () => {
     pi.emitMessageUpdate("short");
     expect(pi.renderWidget(80)).toHaveLength(5);
 
-    // Once done and resolved, it still collapses to the stats line.
+    // Once done and the commit flash has expired, it collapses to stats.
     pi.emitTurnEnd();
+    vi.advanceTimersByTime(500);
     expect(pi.renderWidget(80)).toHaveLength(1);
   });
 
@@ -435,7 +590,7 @@ describe("diffusion canvas extension behavior", () => {
     expect(pi.renderWidget(80)).toHaveLength(1);
   });
 
-  it("renders committed text and canvas as one continuous tail-windowed document", async () => {
+  it("renders committed text and canvas as one continuous seam-anchored document", async () => {
     const sse = sseStream();
     const fetchMock = vi.fn<(input: string, init?: unknown) => Promise<unknown>>(() =>
       Promise.resolve(sse.response)
@@ -462,7 +617,8 @@ describe("diffusion canvas extension behavior", () => {
       words.push(`w${String(i)}`);
     }
     pi.emitMessageUpdate(`${words.join(" ")} LAST-COMMITTED-WORD `);
-    sse.push({ request_id: "chatcmpl-1", step: 1, text: "NEXT-CANVAS resolving here" });
+    vi.advanceTimersByTime(500);
+    sse.push({ request_id: "chatcmpl-1", step: 2, text: "NEXT-CANVAS resolving here" });
     await flushMicrotasks();
 
     const rendered = pi.renderWidget(18);
@@ -518,6 +674,8 @@ describe("diffusion canvas extension behavior", () => {
 
     // The first live canvas switches renderers; the committed prefix must
     // settle instead of being dropped with the simulated animation cells.
+    // (Advance past the post-commit grace window first.)
+    vi.advanceTimersByTime(300);
     sse.push({ request_id: "chatcmpl-1", step: 5, text: "denoising tail" });
     await flushMicrotasks();
     const live = pi.renderWidget(120).join("\n");
@@ -617,7 +775,7 @@ describe("diffusion canvas extension behavior", () => {
 
 type SseHarness = {
   readonly response: { ok: boolean; status: number; body: ReadableStream<Uint8Array> };
-  push(event: { request_id: string; step: number; text: string }): void;
+  push(event: { request_id: string; step: number; text: string; block?: number }): void;
 };
 
 // Each `response` access hands out a fresh stream (the extension re-subscribes
