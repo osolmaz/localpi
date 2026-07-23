@@ -48,6 +48,19 @@ const maxResolveMs = 1500;
 const defaultResolveMs = 1200;
 const metricsTimeoutMs = 5000;
 const maxBufferedCanvases = 8;
+// After a commit, canvas events of the committed block can still be in
+// flight on the SSE connection (it races the completion stream on a separate
+// socket); rendering one would duplicate the settled text. Events carrying a
+// block ordinal are filtered exactly; without one, drop events for a short
+// grace window after each commit.
+const commitGraceMs = 250;
+// The server never streams the converged canvas (commit steps emit no
+// event), so the widget renders it itself: the committed text stays bright
+// for a moment before muting into the settled document.
+const flashMs = 450;
+// Rows of settled context kept above the seam (where settled text meets the
+// canvas) in the live window.
+const liveSettledContextRows = 2;
 const noiseGlyphs = "abcdefghijklmnopqrstuvwxyz0123456789#%&@$+=~?";
 
 type ActiveCell = {
@@ -70,6 +83,17 @@ type TurnState = {
   latestCanvasByRequest: Map<string, CanvasEvent>;
   liveText: string | undefined;
   liveStep: number;
+  liveBlock: number | undefined;
+  // Staleness floors, set at each commit: canvas events at or below them
+  // belong to an already-committed block. Steps and block ordinals are
+  // per-request, so both reset when the completion's request id changes.
+  stepFloor: number;
+  blockFloor: number | undefined;
+  suppressCanvasUntil: number;
+  // The most recent commit renders bright until flashUntil (the converged
+  // canvas frame the server never streams).
+  flashUntil: number;
+  flashChars: number;
   done: boolean;
 };
 
@@ -95,6 +119,9 @@ type CanvasEvent = {
   readonly requestId: string;
   readonly step: number;
   readonly text: string;
+  // Commit ordinal of the block this snapshot belongs to. Newer servers
+  // include it; when present it identifies stale snapshots exactly.
+  readonly block: number | undefined;
 };
 
 export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
@@ -207,6 +234,11 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       state.liveText = undefined;
       return;
     }
+    if (isStaleCanvas(state, event)) {
+      // A snapshot of an already-committed block that raced the commit
+      // chunk; rendering it would duplicate the settled text.
+      return;
+    }
     if (!state.liveMode) {
       // If the event stream came up after commits already animated in
       // simulated mode, those committed chars still sit in the resolve
@@ -218,6 +250,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     }
     state.liveText = event.text;
     state.liveStep = event.step;
+    state.liveBlock = event.block;
   }
 
   function closeEventStream(): void {
@@ -257,13 +290,17 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
 
   function headerText(state: TurnState): string {
     const mode = state.liveMode ? "live" : "simulated";
+    // The server's step counter is monotonic per request; subtracting the
+    // floor recorded at the last commit yields the step within the canvas
+    // currently being denoised.
+    const canvasStep = Math.max(state.liveStep - state.stepFloor, 0);
     if (state.firstBurstAt === undefined) {
       if (state.done) {
         return "diffusion canvas | no output";
       }
       const waited = ((Date.now() - state.startedAt) / 1000).toFixed(1);
       if (state.liveMode) {
-        return `diffusion canvas | live | denoising canvas 1, step ${String(state.liveStep)}... ${waited}s`;
+        return `diffusion canvas | live | denoising canvas 1, step ${String(canvasStep)}... ${waited}s`;
       }
       return `diffusion canvas | simulated | denoising canvas 1 server-side... ${waited}s | text appears when the canvas commits`;
     }
@@ -292,7 +329,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
       parts.push("done");
     } else if (state.liveMode) {
       parts.push(
-        `denoising canvas ${String(state.burstCount + 1)}, step ${String(state.liveStep)}...`
+        `denoising canvas ${String(state.burstCount + 1)}, step ${String(canvasStep)}...`
       );
     } else {
       parts.push(`denoising canvas ${String(state.burstCount + 1)}...`);
@@ -333,6 +370,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const requestTag = crypto.randomUUID().replace(/-/gu, "");
     event.headers["X-Request-Id"] = requestTag;
     state.responseId = `chatcmpl-${requestTag}`;
+    resetLiveCorrelation(state);
     openEventStream(state.responseId);
     refreshLiveCanvas(state);
   });
@@ -350,6 +388,7 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     const responseId = responseIdFromEvent(event.assistantMessageEvent);
     if (responseId !== undefined && responseId !== state.responseId) {
       state.responseId = responseId;
+      resetLiveCorrelation(state);
       openEventStream(responseId);
       refreshLiveCanvas(state);
     }
@@ -411,8 +450,41 @@ function newTurnState(): TurnState {
     latestCanvasByRequest: new Map(),
     liveText: undefined,
     liveStep: 0,
+    liveBlock: undefined,
+    stepFloor: 0,
+    blockFloor: undefined,
+    suppressCanvasUntil: 0,
+    flashUntil: 0,
+    flashChars: 0,
     done: false
   };
+}
+
+// A commit ends its block, but the block's canvas events can still be in
+// flight (the SSE feed and the completion stream are separate connections);
+// rendering one after the commit shows the committed text twice. The block
+// ordinal identifies such snapshots exactly. Servers without it fall back to
+// the per-request step counter (a replayed step is always stale) plus a
+// short post-commit grace window absorbing cross-connection reordering.
+function isStaleCanvas(state: TurnState, event: CanvasEvent): boolean {
+  if (event.block !== undefined) {
+    return state.blockFloor !== undefined && event.block <= state.blockFloor;
+  }
+  if (event.step <= state.stepFloor) {
+    return true;
+  }
+  return Date.now() < state.suppressCanvasUntil;
+}
+
+// A new completion is a new server request whose step counter and block
+// ordinals restart from zero; the previous completion's staleness floors
+// must not swallow its first canvas events.
+function resetLiveCorrelation(state: TurnState): void {
+  state.liveStep = 0;
+  state.liveBlock = undefined;
+  state.stepFloor = 0;
+  state.blockFloor = undefined;
+  state.suppressCanvasUntil = 0;
 }
 
 function recordBurst(state: TurnState, added: string, display: boolean): void {
@@ -424,12 +496,23 @@ function recordBurst(state: TurnState, added: string, display: boolean): void {
   state.lastBurstAt = now;
   state.burstCount += 1;
   state.totalChars += added.length;
+  // This commit ends the block being denoised: raise the staleness floors so
+  // the block's in-flight canvas events cannot re-render after the settled
+  // text (see isStaleCanvas).
+  state.stepFloor = state.liveStep;
+  state.blockFloor = state.liveBlock;
+  state.suppressCanvasUntil = now + commitGraceMs;
   if (state.liveMode) {
     // Truthful mode: the emergence was already shown live via the real
-    // canvas states, so committed text settles immediately. Clear the live
-    // canvas; the next denoising step brings the next block.
+    // canvas states. The committed text is the converged canvas the server
+    // never streams (commit steps emit no event), so render it bright for a
+    // moment before it mutes into the settled document. The next denoising
+    // step brings the next block.
     if (display) {
-      state.settledText += sanitize(added);
+      const settled = sanitize(added);
+      state.settledText += settled;
+      state.flashChars = [...settled].length;
+      state.flashUntil = now + flashMs;
     }
     state.liveText = undefined;
     return;
@@ -459,7 +542,7 @@ function finishTurn(state: TurnState): void {
 
 function animationDone(state: TurnState): boolean {
   const now = Date.now();
-  return state.active.every((cell) => now >= cell.resolveAt);
+  return now >= state.flashUntil && state.active.every((cell) => now >= cell.resolveAt);
 }
 
 function resolveDuration(state: TurnState): number {
@@ -563,6 +646,7 @@ function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[
   const rows: RenderCell[][] = [];
   let row: RenderCell[] = [];
   let rowWidth = 0;
+  let seamRow = 0;
   for (const cell of cells) {
     if (rowWidth + cell.width > cols) {
       rows.push(row);
@@ -571,16 +655,24 @@ function canvasRows(state: TurnState, cols: number, theme: WidgetTheme): string[
     }
     row.push(cell);
     rowWidth += cell.width;
+    if (cell.kind === "settled" || cell.kind === "resolved") {
+      seamRow = rows.length;
+    }
   }
   if (row.length > 0) {
     rows.push(row);
   }
   // Live mode packs the whole settled+canvas document from its start, so row
-  // boundaries of already-committed text never move; the widget is a tail
-  // window over it, scrolling up only as new rows are produced (like a
-  // terminal). Simulated mode builds a budget-sized window, so its rows are
-  // the head.
-  const visible = state.liveMode ? rows.slice(-rowCap) : rows.slice(0, rowCap);
+  // boundaries of already-committed text never move. The window anchors to
+  // the seam (the row where the settled text ends): a fixed amount of
+  // settled context stays above it and the canvas fills the rest. The
+  // canvas's decoded width fluctuates on every denoising step, so an
+  // end-anchored window would shift all visible rows each step; anchored to
+  // the seam, the committed text holds still and the view scrolls only when
+  // a commit moves the seam (like a terminal). Simulated mode builds a
+  // budget-sized window, so its rows are the head.
+  const windowStart = state.liveMode ? Math.max(0, seamRow - liveSettledContextRows) : 0;
+  const visible = rows.slice(windowStart, windowStart + rowCap);
   return visible.map((cellsRow) => styleRow(cellsRow, theme));
 }
 
@@ -594,11 +686,21 @@ function renderCells(state: TurnState, budget: number): RenderCell[] {
 // Live mode: one continuous document, the committed text concatenated with
 // the canvas snapshot currently being denoised. It is never clipped here;
 // canvasRows packs it from the start (stable row boundaries for committed
-// text) and windows the tail, so on a commit the resolved text stays in
-// place and the next canvas continues mid-row without a gap.
+// text) and anchors its window to the seam, so on a commit the resolved text
+// stays in place and the next canvas continues mid-row without a gap. The
+// freshest commit renders bright until its flash expires.
 function renderLiveCells(state: TurnState): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
-  return [...cellsFromText(state.settledText, "settled"), ...cellsFromText(canvas, "noise")];
+  const settled = [...state.settledText];
+  const flashCount =
+    Date.now() < state.flashUntil ? Math.min(state.flashChars, settled.length) : 0;
+  const stable = settled.slice(0, settled.length - flashCount).join("");
+  const flashing = settled.slice(settled.length - flashCount).join("");
+  return [
+    ...cellsFromText(stable, "settled"),
+    ...cellsFromText(flashing, "resolved"),
+    ...cellsFromText(canvas, "noise")
+  ];
 }
 
 // Simulated mode: while the turn runs, glyph noise fills all window space not
@@ -733,10 +835,11 @@ function parseEventFrame(frame: string): CanvasEvent | undefined {
     const requestId = object["request_id"];
     const step = object["step"];
     const text = object["text"];
+    const block = object["block"];
     if (typeof requestId !== "string" || typeof step !== "number" || typeof text !== "string") {
       return undefined;
     }
-    return { requestId, step, text };
+    return { requestId, step, text, block: typeof block === "number" ? block : undefined };
   } catch {
     return undefined;
   }

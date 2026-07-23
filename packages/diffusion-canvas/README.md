@@ -16,7 +16,7 @@ final text right above your editor.
 ```bash
 VLLM_USE_PRECOMPILED=1 \
 VLLM_PRECOMPILED_WHEEL_COMMIT=4e5ca89cfe98121642d76b40e32a006f4d0fbf3b \
-pip install git+https://github.com/osolmaz/vllm@canvas-v0.23.1rc2
+pip install git+https://github.com/osolmaz/vllm@canvas-v0.23.1rc3
 ```
 
 Without the side channel the widget falls back to a clearly labeled
@@ -54,8 +54,8 @@ To point it elsewhere (e.g. a separate metrics port), set:
 ```
 
 - Committed text is muted, the resolving canvas is accented, and both flow as
-  one continuous document; on a commit the resolved text stays in place and
-  the next canvas continues mid-row.
+  one continuous document; on a commit the converged text flashes bright,
+  stays in place as it mutes, and the next canvas continues mid-row.
 - The stats line shows commits, tokens per commit, throughput, and the
   server-wide denoising steps per canvas from vLLM's Prometheus counters.
 - After the turn, the widget collapses to the stats line.
