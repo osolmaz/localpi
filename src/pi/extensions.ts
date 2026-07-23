@@ -1,5 +1,7 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { LocalpiOptions } from "../localpi/options.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
@@ -66,10 +68,31 @@ export async function writeDefaultExtensions(
   if (options.tokenStatus) {
     paths.push(await writeExtension(extensionDir, "token-status.ts", tokenStatusExtensionSource()));
   }
+  if (options.diffusionCanvas) {
+    paths.push(diffusionCanvasExtensionPath());
+  }
   return {
     paths,
     systemPrompt: localpiSystemPrompt(options.approval)
   };
+}
+
+// The diffusion canvas widget is maintained as a standalone Pi package in
+// this repository (packages/diffusion-canvas), so plain Pi users can install
+// it too. localpi loads the packaged extension file directly; the extension
+// derives the server URLs from the active model's baseUrl at runtime.
+export function diffusionCanvasExtensionPath(): string {
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const relative = path.join("packages", "diffusion-canvas", "extensions", "diffusion-canvas.ts");
+  // src/pi/ in the repo, dist/src/pi/ in the build: walk up to the root that
+  // contains the package.
+  for (let dir = moduleDir; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+    const candidate = path.join(dir, relative);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error("localpi installation is missing packages/diffusion-canvas");
 }
 
 async function writeExtension(extensionDir: string, name: string, source: string): Promise<string> {

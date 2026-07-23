@@ -91,6 +91,38 @@ describe("Pi extensions", () => {
     }
   });
 
+  it("loads the packaged diffusion canvas extension when enabled", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions({ ...options(stateDir), diffusionCanvas: true });
+      expect(bundle.paths).toHaveLength(4);
+      const extensionPath = bundle.paths[3] ?? "";
+      expect(path.basename(extensionPath)).toBe("diffusion-canvas.ts");
+      // The extension is not a generated copy: it is the packaged file from
+      // packages/diffusion-canvas, the standalone Pi package in this repo.
+      expect(extensionPath).toContain(path.join("packages", "diffusion-canvas", "extensions"));
+      const source = await readFile(extensionPath, "utf8");
+      expect(source).toContain('pi.on("turn_start"');
+      expect(source).toContain('pi.on("message_update"');
+      expect(source).toContain("ctx.ui.setWidget");
+      expect(source).toContain("vllm:diffusion");
+      expect(source).toContain("resolveServerUrls");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the diffusion canvas extension by default", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions(options(stateDir));
+      const names = bundle.paths.map((extensionPath) => path.basename(extensionPath));
+      expect(names).not.toContain("diffusion-canvas.ts");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("writes a Pi-native startup model selector extension when requested", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
@@ -166,6 +198,7 @@ function options(stateDir: string): LocalpiOptions {
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
     tokenStatus: true,
+    diffusionCanvas: false,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

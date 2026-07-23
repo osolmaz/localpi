@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
+
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { demoModeExtensionSource } from "../src/pi/extension-sources/demo-mode.js";
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
+import { diffusionCanvasExtensionPath } from "../src/pi/extensions.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "../src/pi/extension-sources/token-status.js";
 import { approvalExtensionSource } from "../src/pi/extension-sources/tool-approval.js";
@@ -24,7 +27,11 @@ describe("generated Pi extension sources", () => {
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
     { fileName: "tool-approval.ts", source: approvalExtensionSource() },
-    { fileName: "token-status.ts", source: tokenStatusExtensionSource() }
+    { fileName: "token-status.ts", source: tokenStatusExtensionSource() },
+    {
+      fileName: "diffusion-canvas.ts",
+      source: readFileSync(diffusionCanvasExtensionPath(), "utf8")
+    }
   ] as const;
 
   for (const { fileName, source } of sources) {

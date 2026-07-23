@@ -39,10 +39,9 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
 
     const connection = await resolveRuntime(options);
     const selectorOptions = startupModelSelectorOptions(options, connection);
-    const extensions = await writeDefaultExtensions(
-      options,
-      selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions }
-    );
+    const extensions = await writeDefaultExtensions(options, {
+      ...(selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions })
+    });
     const app = createLocalpiAppDefinition(options, connection, extensions);
     return await launchResolvedRuntime(app, connection);
   } catch (error) {
