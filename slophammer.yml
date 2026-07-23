@@ -18,7 +18,7 @@ typescript:
   mutation:
     targets:
       - src/localpi/options.ts
-      - src/pi/config.ts
+      - src/pi/app.ts
   dependency_boundaries:
     - from: src/cli
       allow:
