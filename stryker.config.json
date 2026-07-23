@@ -4,7 +4,7 @@
   "testRunner": "vitest",
   "checkers": ["typescript"],
   "tsconfigFile": "tsconfig.json",
-  "mutate": ["src/localpi/options.ts", "src/pi/config.ts"],
+  "mutate": ["src/localpi/options.ts", "src/pi/app.ts"],
   "thresholds": {
     "high": 60,
     "low": 50,
