@@ -42,8 +42,6 @@ export type LocalpiOptions = {
   readonly approval: boolean;
   readonly tokenStatus: boolean;
   readonly diffusionCanvas: boolean;
-  /** undefined = auto: enabled when the diffusion canvas is enabled. */
-  readonly smoothStream: boolean | undefined;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -55,10 +53,6 @@ export type LocalpiOptions = {
   readonly list: boolean;
   readonly forwardedArgs: readonly string[];
 };
-
-export function smoothStreamEnabled(options: LocalpiOptions): boolean {
-  return options.smoothStream ?? options.diffusionCanvas;
-}
 
 export function defaultOptions(): LocalpiOptions {
   const home = envString("HOME", ".");
@@ -94,7 +88,6 @@ export function defaultOptions(): LocalpiOptions {
     approval: envBoolean("LOCALPI_APPROVAL", true),
     tokenStatus: envBoolean("LOCALPI_TOKEN_STATUS", true),
     diffusionCanvas: envBoolean("LOCALPI_DIFFUSION_CANVAS", false),
-    smoothStream: envOptionalSingleBoolean("LOCALPI_SMOOTH_STREAM"),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -176,9 +169,6 @@ export function usage(): string {
     "  --no-token-status       do not install token status extension",
     "  --diffusion-canvas      show a diffusion canvas visualizer widget",
     "  --no-diffusion-canvas   disable the diffusion canvas visualizer",
-    "  --smooth-stream         re-pace large stream chunks for gradual scroll",
-    "                          (default: on when --diffusion-canvas is on)",
-    "  --no-smooth-stream      pass stream chunks through unmodified",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -255,8 +245,6 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--no-token-status": (options) => ({ ...options, tokenStatus: false }),
   "--diffusion-canvas": (options) => ({ ...options, diffusionCanvas: true }),
   "--no-diffusion-canvas": (options) => ({ ...options, diffusionCanvas: false }),
-  "--smooth-stream": (options) => ({ ...options, smoothStream: true }),
-  "--no-smooth-stream": (options) => ({ ...options, smoothStream: false }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
@@ -413,11 +401,6 @@ function envNonNegativeInteger(name: string, fallback: string): number {
 function envOptionalPositiveInteger(name: string): number | undefined {
   const value = process.env[name];
   return value === undefined ? undefined : parsePositiveInteger(value);
-}
-
-function envOptionalSingleBoolean(name: string): boolean | undefined {
-  const value = process.env[name];
-  return value === undefined ? undefined : parseBoolean(value, name);
 }
 
 function envOptionalBoolean(primaryName: string, fallbackName: string): boolean | undefined {

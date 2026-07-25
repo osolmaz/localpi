@@ -2,10 +2,8 @@ import { runPiApp } from "@dutifuldev/pi-factory";
 
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { runGridCommand } from "../localpi/grid.js";
-import { parseLocalpiArgs, smoothStreamEnabled, usage } from "../localpi/options.js";
+import { parseLocalpiArgs, usage } from "../localpi/options.js";
 import { runRecordCommand } from "../localpi/record.js";
-import type { RuntimeConnection } from "../localpi/runtime-types.js";
-import { startSmoothStreamProxy } from "../localpi/smooth-stream.js";
 import {
   aliasListOutput,
   connectionStatus,
@@ -44,7 +42,8 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
     const extensions = await writeDefaultExtensions(options, {
       ...(selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions })
     });
-    return await launchWithOptionalSmoothStream(options, connection, extensions);
+    const app = createLocalpiAppDefinition(options, connection, extensions);
+    return await launchResolvedRuntime(app, connection);
   } catch (error) {
     return fail(`localpi: ${errorMessage(error)}`);
   }
@@ -304,40 +303,6 @@ function isPiUnknownLongFlagValue(arg: string, next: string | undefined): boolea
 
 function isPiUnknownLongFlagNextValue(arg: string | undefined): boolean {
   return arg !== undefined && !arg.startsWith("-") && !arg.startsWith("@");
-}
-
-// The smooth-stream proxy re-paces huge stream chunks (diffusion canvas
-// commits) into word-sized deltas so the TUI scrolls gradually.
-async function launchWithOptionalSmoothStream(
-  options: ParsedOptions,
-  connection: RuntimeConnection,
-  extensions: Awaited<ReturnType<typeof writeDefaultExtensions>>
-): Promise<CommandResult> {
-  const smooth =
-    smoothStreamEnabled(options) && connection.baseUrl.startsWith("http://")
-      ? await startSmoothStreamProxy(connection.baseUrl)
-      : undefined;
-  try {
-    const proxied =
-      smooth === undefined ? connection : withProxiedBaseUrl(connection, smooth.baseUrl);
-    const app = createLocalpiAppDefinition(options, proxied, extensions);
-    return await launchResolvedRuntime(app, connection);
-  } finally {
-    await smooth?.close();
-  }
-}
-
-function withProxiedBaseUrl(
-  connection: RuntimeConnection,
-  proxyBaseUrl: string
-): RuntimeConnection {
-  return {
-    ...connection,
-    baseUrl: proxyBaseUrl,
-    catalogModels: connection.catalogModels.map((model) =>
-      model.baseUrl === connection.baseUrl ? { ...model, baseUrl: proxyBaseUrl } : model
-    )
-  };
 }
 
 async function launchResolvedRuntime(

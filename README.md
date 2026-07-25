@@ -105,13 +105,6 @@ In both modes a stats line shows real numbers: commits, tokens per commit,
 commit interval, smoothed tok/s, and denoising steps per canvas from the
 server's Prometheus `/metrics` endpoint when available.
 
-Because a diffusion server commits whole canvases (~256 tokens) at once, the
-chat would otherwise jump by dozens of lines per commit. `--diffusion-canvas`
-therefore also enables a local smooth-stream proxy that re-paces those huge
-stream chunks into word-sized deltas (draining each commit within ~2 seconds),
-so the chat scrolls gradually. Control it explicitly with `--smooth-stream` /
-`--no-smooth-stream` or `LOCALPI_SMOOTH_STREAM`.
-
 ```bash
 localpi --runtime vllm --model nvidia/diffusiongemma-26B-A4B-it-NVFP4 --diffusion-canvas
 ```
@@ -298,9 +291,6 @@ installed. `--font-size`, `--columns`, and `--rows` control the window;
 - `--no-token-status`: disable the token status extension
 - `--diffusion-canvas`: show a diffusion canvas visualizer widget above the editor
 - `--no-diffusion-canvas`: disable the diffusion canvas visualizer
-- `--smooth-stream`: re-pace large stream chunks for gradual scroll (default: on
-  when the diffusion canvas is on)
-- `--no-smooth-stream`: pass stream chunks through unmodified
 - `--status`: print runtime, model, and Pi config status
 - `--stop`: stop the managed `llama-server` process
 - `--list`: list configured model aliases
