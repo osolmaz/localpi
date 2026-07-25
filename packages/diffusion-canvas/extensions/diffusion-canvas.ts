@@ -328,7 +328,9 @@ export default function localpiDiffusionCanvas(pi: ExtensionAPI): void {
     if (state.done) {
       parts.push("done");
     } else if (state.liveMode) {
-      parts.push(`denoising canvas ${String(state.burstCount + 1)}, step ${String(canvasStep)}...`);
+      parts.push(
+        `denoising canvas ${String(state.burstCount + 1)}, step ${String(canvasStep)}...`
+      );
     } else {
       parts.push(`denoising canvas ${String(state.burstCount + 1)}...`);
     }
@@ -690,7 +692,8 @@ function renderCells(state: TurnState, budget: number): RenderCell[] {
 function renderLiveCells(state: TurnState): RenderCell[] {
   const canvas = state.liveText === undefined ? "" : sanitize(state.liveText);
   const settled = [...state.settledText];
-  const flashCount = Date.now() < state.flashUntil ? Math.min(state.flashChars, settled.length) : 0;
+  const flashCount =
+    Date.now() < state.flashUntil ? Math.min(state.flashChars, settled.length) : 0;
   const stable = settled.slice(0, settled.length - flashCount).join("");
   const flashing = settled.slice(settled.length - flashCount).join("");
   return [
