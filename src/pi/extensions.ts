@@ -66,7 +66,13 @@ export async function writeDefaultExtensions(
     paths.push(await writeExtension(extensionDir, "tool-approval.ts", approvalExtensionSource()));
   }
   if (options.tokenStatus) {
-    paths.push(await writeExtension(extensionDir, "token-status.ts", tokenStatusExtensionSource()));
+    paths.push(
+      await writeExtension(
+        extensionDir,
+        "token-status.ts",
+        tokenStatusExtensionSource({ includeContext: !options.demo })
+      )
+    );
   }
   if (options.diffusionCanvas) {
     paths.push(diffusionCanvasExtensionPath());

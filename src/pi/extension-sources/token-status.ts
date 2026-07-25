@@ -1,5 +1,13 @@
-export function tokenStatusExtensionSource(): string {
+export type TokenStatusOptions = {
+  /** Append the "ctx N%/Nk" segment to the end-of-turn status (default true). */
+  readonly includeContext?: boolean;
+};
+
+export function tokenStatusExtensionSource(options: TokenStatusOptions = {}): string {
+  const includeContext = options.includeContext ?? true;
   return `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+const includeContext = ${JSON.stringify(includeContext)};
 
 type Usage = {
   input?: number;
@@ -74,9 +82,10 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
     const elapsedSeconds = elapsed(state, now);
     const decodeSeconds = generationElapsed(state, now);
     const prefillText = prefillStatusText(state, input, cacheWrite);
-    const context = ctx.getContextUsage();
-    const contextText =
-      context && context.percent !== null
+    const context = includeContext ? ctx.getContextUsage() : undefined;
+    const contextText = !includeContext
+      ? undefined
+      : context && context.percent !== null
         ? \`ctx \${Math.round(context.percent)}%/\${Math.round(context.contextWindow / 1000)}k\`
         : "ctx ?";
 
