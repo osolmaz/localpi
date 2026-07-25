@@ -204,6 +204,7 @@ function options(stateDir: string): LocalpiOptions {
     approval: true,
     tokenStatus: true,
     diffusionCanvas: false,
+    smoothStream: undefined,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,
