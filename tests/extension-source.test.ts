@@ -50,6 +50,60 @@ describe("generated Pi extension sources", () => {
     });
   }
 
+  it("token status omits the context segment when includeContext is false", () => {
+    expect(tokenStatusExtensionSource({ includeContext: false })).toContain(
+      "const includeContext = false;"
+    );
+    expect(tokenStatusExtensionSource()).toContain("const includeContext = true;");
+  });
+
+  it("demo mode replaces the footer with a status+model line and hides the editor", async () => {
+    const pi = new DemoPiHarness();
+    const extension = await loadDemoExtension(
+      demoModeExtensionSource({ initial: "Begin.", followup: "Continue." })
+    );
+    extension(pi);
+
+    pi.emitSessionStart({ mode: "tui", percent: 0 });
+    await flushMicrotasks();
+
+    expect(pi.footerFactory).toBeDefined();
+    const component = pi.footerFactory?.(
+      undefined,
+      { fg: (_color: string, text: string) => text },
+      {
+        getExtensionStatuses: () => new Map([["localpi-perf", "gen 42.0 tok/s | out 100"]])
+      }
+    );
+    expect(component).toBeDefined();
+
+    // Wide enough: one line with the model right-aligned.
+    const wide = component?.render(80) ?? [];
+    expect(wide).toHaveLength(1);
+    expect(wide[0]).toContain("gen 42.0 tok/s | out 100");
+    expect(wide[0]?.trimEnd().endsWith("demo-model")).toBe(true);
+    expect(wide[0]).not.toContain("~/");
+
+    // Too narrow for both: statuses first, model on its own line.
+    const narrow = component?.render(30) ?? [];
+    expect(narrow).toHaveLength(2);
+    expect(narrow[0]).toBe("gen 42.0 tok/s | out 100");
+    expect(narrow[1]?.trimStart()).toBe("demo-model");
+  });
+
+  it("demo mode leaves the footer alone when the UI does not support it", async () => {
+    const pi = new DemoPiHarness({ supportsChrome: false });
+    const extension = await loadDemoExtension(
+      demoModeExtensionSource({ initial: "Begin.", followup: "Continue." })
+    );
+    extension(pi);
+
+    pi.emitSessionStart({ mode: "tui", percent: 0 });
+    await flushMicrotasks();
+    expect(pi.footerFactory).toBeUndefined();
+    expect(pi.sentMessages).toEqual([{ content: "Begin.", options: undefined }]);
+  });
+
   it("demo mode compacts before sending the next followup under context pressure", async () => {
     const pi = new DemoPiHarness();
     const extension = await loadDemoExtension(
@@ -138,11 +192,19 @@ type DemoTurnOptions = DemoContextOptions & {
   readonly stopReason: "stop" | "length" | "toolUse" | "error" | "aborted";
 };
 
+type DemoFooterFactory = (
+  tui: unknown,
+  theme: { fg(color: string, text: string): string },
+  footerData: { getExtensionStatuses(): ReadonlyMap<string, string> }
+) => { render(width: number): string[] };
+
 type DemoContext = {
   readonly mode: "tui" | "print";
-  readonly model: { readonly contextWindow: number };
+  readonly model: { readonly id: string; readonly contextWindow: number };
   readonly ui: {
     notify(message: string, type: "error"): void;
+    setFooter?(factory: DemoFooterFactory | undefined): void;
+    setEditorComponent?(factory: unknown): void;
   };
   getContextUsage(): {
     readonly tokens: number | null;
@@ -193,10 +255,16 @@ class DemoPiHarness {
     readonly onError?: (error: Error) => void;
   }[] = [];
   readonly notifications: Notification[] = [];
+  footerFactory: DemoFooterFactory | undefined;
 
+  private readonly supportsChrome: boolean;
   private readonly sessionStartHandlers: SessionStartHandler[] = [];
   private readonly turnEndHandlers: TurnEndHandler[] = [];
   private readonly shutdownHandlers: ShutdownHandler[] = [];
+
+  constructor(options: { readonly supportsChrome?: boolean } = {}) {
+    this.supportsChrome = options.supportsChrome ?? true;
+  }
 
   on(event: "session_start", handler: SessionStartHandler): void;
   on(event: "turn_end", handler: TurnEndHandler): void;
@@ -267,13 +335,22 @@ class DemoPiHarness {
   }
 
   private createContext(options: DemoContextOptions): DemoContext {
+    const chrome = this.supportsChrome
+      ? {
+          setFooter: (factory: DemoFooterFactory | undefined) => {
+            this.footerFactory = factory;
+          },
+          setEditorComponent: () => undefined
+        }
+      : {};
     return {
       mode: options.mode,
-      model: { contextWindow: 100_000 },
+      model: { id: "demo-model", contextWindow: 100_000 },
       ui: {
         notify: (message, type) => {
           this.notifications.push({ message, type });
-        }
+        },
+        ...chrome
       },
       getContextUsage: () => ({
         tokens: options.percent === null ? null : Math.round((options.percent / 100) * 100_000),
