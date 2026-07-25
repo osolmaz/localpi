@@ -8,7 +8,7 @@ intermediate denoising states, rendered live in the Pi TUI.
 
 | Piece                 | Where it lives                                                                                                       | What it does                                                                                                                                                                                                                                                                                                                                                             |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| vLLM canvas streaming | [`osolmaz/vllm`](https://github.com/osolmaz/vllm), branch `diffusion-canvas-events`, release tag `canvas-v0.23.1rc3` | Adds the opt-in `--diffusion-stream-canvas` server flag and the `GET /v1/diffusion/events` SSE side channel that emits the detokenized canvas on every denoising step. See the fork's [`DIFFUSION_CANVAS.md`](https://github.com/osolmaz/vllm/blob/diffusion-canvas-events/DIFFUSION_CANVAS.md). Tracked as [PR #1 on the fork](https://github.com/osolmaz/vllm/pull/1). |
+| vLLM canvas streaming | [`osolmaz/vllm`](https://github.com/osolmaz/vllm), branch `diffusion-canvas-events`, release tag `canvas-v0.23.1rc4` | Adds the opt-in `--diffusion-stream-canvas` server flag and the `GET /v1/diffusion/events` SSE side channel that emits the detokenized canvas on every denoising step. See the fork's [`DIFFUSION_CANVAS.md`](https://github.com/osolmaz/vllm/blob/diffusion-canvas-events/DIFFUSION_CANVAS.md). Tracked as [PR #1 on the fork](https://github.com/osolmaz/vllm/pull/1). |
 | Pi widget             | [`packages/diffusion-canvas`](../packages/diffusion-canvas/) in this repo                                            | Standalone Pi package that renders the canvas above the editor. Not published to a registry; this repo is its home.                                                                                                                                                                                                                                                      |
 | localpi wiring        | `--diffusion-canvas` flag                                                                                            | Loads the packaged extension into the Pi session it launches.                                                                                                                                                                                                                                                                                                            |
 
@@ -24,7 +24,7 @@ official precompiled kernels — no compilation:
 ```bash
 VLLM_USE_PRECOMPILED=1 \
 VLLM_PRECOMPILED_WHEEL_COMMIT=4e5ca89cfe98121642d76b40e32a006f4d0fbf3b \
-pip install git+https://github.com/osolmaz/vllm@canvas-v0.23.1rc3
+pip install git+https://github.com/osolmaz/vllm@canvas-v0.23.1rc4
 ```
 
 `VLLM_PRECOMPILED_WHEEL_COMMIT` pins the official wheel that provides the
