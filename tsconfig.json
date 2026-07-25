@@ -18,5 +18,5 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "tests", "packages"]
+  "include": ["src", "tests"]
 }
