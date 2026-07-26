@@ -1,6 +1,6 @@
 {
   "name": "localpi",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Swiss army knife for running Pi with local inference engines.",
   "type": "module",
   "license": "MIT",
@@ -27,6 +27,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/src/cli/main.js",
+    "prepare": "npm run build",
     "format": "prettier --check .",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
