@@ -18,7 +18,9 @@ type LocalpiRuntimeSelection = Pick<
   "providers" | "defaultProvider" | "defaultModel" | "thinking"
 > &
   Partial<Pick<PiAppDefinition, "tools">>;
-type LocalpiExtensionConfig = Partial<Pick<PiAppDefinition, "extensions" | "appendSystemPrompts">>;
+type LocalpiExtensionConfig = Partial<
+  Pick<PiAppDefinition, "extensions" | "appendSystemPrompts" | "env">
+>;
 
 const localpiAppIdentity: LocalpiAppIdentity = {
   id: "localpi",
@@ -202,6 +204,7 @@ function extensionConfig(extensions: ExtensionBundle | undefined): LocalpiExtens
   }
   return {
     extensions: extensions.paths.map((extensionPath) => ({ path: extensionPath })),
-    appendSystemPrompts: [extensions.systemPrompt]
+    appendSystemPrompts: [extensions.systemPrompt],
+    ...(Object.keys(extensions.env).length === 0 ? {} : { env: extensions.env })
   };
 }

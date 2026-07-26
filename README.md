@@ -123,7 +123,7 @@ Run an endless TUI demo:
 localpi --demo --model gemma-e4b
 ```
 
-Demo mode requires an explicit model, opens the normal Pi TUI, and keeps one live Pi session so followup prompts continue from the first prompt while Pi owns streaming, tok/s status, slash commands, and exit behavior.
+Demo mode requires an explicit model, opens the normal Pi TUI, and keeps one live Pi session so followup prompts continue from the first prompt while Pi owns streaming, tok/s status, slash commands, and exit behavior. Under the hood it loads the shared [pi-demo-mode](https://github.com/osolmaz/pi-demo-mode) extension, configured through the `--demo-*` flags below.
 
 Override the demo prompts:
 

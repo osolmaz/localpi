@@ -14,6 +14,7 @@ describe("Pi launch plan", () => {
     const plan = await createPiLaunchPlan(
       createLocalpiAppDefinition(options(stateDir), connection("gemma-4-e4b-it"), {
         paths: ["/tmp/localpi-state/pi-extensions/tool-approval.ts"],
+        env: {},
         systemPrompt: "localpi prompt"
       }),
       runtimeConfig(stateDir)
@@ -43,7 +44,7 @@ describe("Pi launch plan", () => {
       createLocalpiAppDefinition(
         { ...options(stateDir), forwardedArgs: ["--tools", "bash", "-p", "say ok"] },
         connection("gemma-4-e4b-it"),
-        { paths: [], systemPrompt: "localpi prompt" }
+        { paths: [], env: {}, systemPrompt: "localpi prompt" }
       ),
       runtimeConfig(stateDir)
     );
@@ -63,13 +64,19 @@ describe("Pi launch plan", () => {
           forwardedArgs: ["--tools", "bash", "--exclude-tools=write", "--approve", "--verbose"]
         },
         connection("gemma-4-e4b-it"),
-        { paths: [], systemPrompt: "localpi prompt" }
+        {
+          paths: [],
+          env: { PI_DEMO_MODE: "1", PI_DEMO_INITIAL_PROMPT: "Begin." },
+          systemPrompt: "localpi prompt"
+        }
       ),
       runtimeConfig(stateDir)
     );
 
     expect(plan.args).toContain("--no-tools");
     expect(plan.args).toContain("--no-approve");
+    expect(plan.env["PI_DEMO_MODE"]).toBe("1");
+    expect(plan.env["PI_DEMO_INITIAL_PROMPT"]).toBe("Begin.");
     expect(plan.args).toContain("--verbose");
     expect(plan.args).not.toContain("--tools");
     expect(plan.args).not.toContain("bash");

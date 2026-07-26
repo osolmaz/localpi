@@ -419,7 +419,7 @@ describe("localpi cli", () => {
     expect(result).toEqual({ code: 7, stdout: "", stderr: "" });
   });
 
-  it("launches demo mode once with a generated TUI extension", async () => {
+  it("launches demo mode once with the packaged pi-demo-mode extension", async () => {
     const stateDir = await tempStateDir();
     const baseUrl = await startModelServer("served-model", 4096);
     const scriptPath = path.join(stateDir, "fake-pi.cjs");
@@ -451,6 +451,7 @@ describe("localpi cli", () => {
     expect(result).toEqual({ code: 0, stdout: "", stderr: "" });
     const record = JSON.parse(await readFile(logPath, "utf8")) as {
       readonly args: readonly string[];
+      readonly env: Readonly<Record<string, string>>;
     };
     expect(record.args).toContain("--no-tools");
     expect(record.args).toContain("--no-approve");
@@ -462,13 +463,16 @@ describe("localpi cli", () => {
     const demoPath = extensionArgs.find(
       (extensionPath) => path.basename(extensionPath) === "demo-mode.ts"
     );
-    expect(demoPath).toBe(path.join(stateDir, "pi-extensions", "demo-mode.ts"));
+    expect(demoPath).toContain(path.join("pi-demo-mode", "extensions", "demo-mode.ts"));
     const demo = await readFile(demoPath ?? "", "utf8");
-    expect(demo).toContain('const initialPrompt = "- start story";');
-    expect(demo).toContain('const followupPrompt = "@keep going";');
+    expect(demo).toContain('process.env["PI_DEMO_MODE"] === "1"');
     expect(demo).toContain('pi.on("session_start"');
     expect(demo).toContain('pi.on("turn_end"');
-    expect(demo).toContain("pi.sendUserMessage(initialPrompt)");
+    expect(record.env).toEqual({
+      PI_DEMO_MODE: "1",
+      PI_DEMO_INITIAL_PROMPT: "- start story",
+      PI_DEMO_FOLLOWUP_PROMPT: "@keep going"
+    });
   });
 
   it("requires a TTY in demo mode", async () => {
@@ -575,8 +579,11 @@ describe("localpi cli", () => {
     return [
       "const fs = require('node:fs');",
       "const args = process.argv.slice(2);",
+      "const env = Object.fromEntries(",
+      "  Object.entries(process.env).filter(([key]) => key.startsWith('PI_DEMO_'))",
+      ");",
       `const logPath = ${JSON.stringify(logPath)};`,
-      "fs.writeFileSync(logPath, JSON.stringify({ args }));"
+      "fs.writeFileSync(logPath, JSON.stringify({ args, env }));"
     ].join("\n");
   }
 });

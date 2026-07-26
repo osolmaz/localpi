@@ -58,7 +58,7 @@ describe("Pi extensions", () => {
     }
   });
 
-  it("writes a TUI demo extension when demo mode is enabled", async () => {
+  it("loads the packaged pi-demo-mode extension and env when demo mode is enabled", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const bundle = await writeDefaultExtensions({
@@ -68,24 +68,27 @@ describe("Pi extensions", () => {
         demoFollowupPrompt: "@keep going"
       });
       expect(bundle.paths).toHaveLength(4);
-      expect(path.basename(bundle.paths[0] ?? "")).toBe("demo-mode.ts");
-      const demo = await readFile(bundle.paths[0] ?? "", "utf8");
+      const demoPath = bundle.paths[0] ?? "";
+      expect(demoPath).toContain(path.join("pi-demo-mode", "extensions", "demo-mode.ts"));
+      const demo = await readFile(demoPath, "utf8");
+      expect(demo).toContain('process.env["PI_DEMO_MODE"] === "1"');
       expect(demo).toContain('pi.on("session_start"');
-      expect(demo).toContain('event.reason !== "startup"');
-      expect(demo).toContain('ctx.mode !== "tui"');
       expect(demo).toContain('pi.on("turn_end"');
-      expect(demo).toContain('event.message.role !== "assistant"');
-      expect(demo).toContain("switch (event.message.stopReason)");
-      expect(demo).toContain('case "aborted"');
-      expect(demo).toContain('case "error"');
-      expect(demo).toContain('case "toolUse"');
-      expect(demo).toContain("stopped = true");
-      expect(demo).toContain("pi.sendUserMessage(initialPrompt)");
-      expect(demo).toContain('pi.sendUserMessage(followupPrompt, { deliverAs: "followUp" })');
-      expect(demo).toContain('const initialPrompt = "- start story";');
-      expect(demo).toContain('const followupPrompt = "@keep going";');
-      expect(demo).not.toContain("-p");
-      expect(demo).not.toContain("--prompt");
+      expect(bundle.env).toEqual({
+        PI_DEMO_MODE: "1",
+        PI_DEMO_INITIAL_PROMPT: "- start story",
+        PI_DEMO_FOLLOWUP_PROMPT: "@keep going"
+      });
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes no extension env outside demo mode", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions(options(stateDir));
+      expect(bundle.env).toEqual({});
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }

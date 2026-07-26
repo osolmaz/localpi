@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 
 import type { LocalpiOptions } from "../localpi/options.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
-import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "./extension-sources/token-status.js";
@@ -12,6 +12,7 @@ import { approvalExtensionSource } from "./extension-sources/tool-approval.js";
 
 export type ExtensionBundle = {
   readonly paths: readonly string[];
+  readonly env: Readonly<Record<string, string>>;
   readonly systemPrompt: string;
 };
 
@@ -35,6 +36,7 @@ export async function writeDefaultExtensions(
   const extensionDir = path.join(options.stateDir, "pi-extensions");
   await mkdir(extensionDir, { recursive: true });
   const paths: string[] = [];
+  let env: Record<string, string> = {};
   if (extensionOptions.startupModelSelector !== undefined) {
     paths.push(
       await writeExtension(
@@ -45,13 +47,14 @@ export async function writeDefaultExtensions(
     );
   }
   if (options.demo) {
-    paths.push(
-      await writeExtension(
-        extensionDir,
-        "demo-mode.ts",
-        demoModeExtensionSource(await resolveDemoPrompts(options))
-      )
-    );
+    paths.push(demoModeExtensionPath());
+    const prompts = await resolveDemoPrompts(options);
+    env = {
+      ...env,
+      PI_DEMO_MODE: "1",
+      PI_DEMO_INITIAL_PROMPT: prompts.initial,
+      PI_DEMO_FOLLOWUP_PROMPT: prompts.followup
+    };
   }
   paths.push(
     await writeExtension(
@@ -74,8 +77,17 @@ export async function writeDefaultExtensions(
   }
   return {
     paths,
+    env,
     systemPrompt: localpiSystemPrompt(options.approval)
   };
+}
+
+// Demo mode is the shared pi-demo-mode package (a git dependency), loaded
+// straight from node_modules and configured through PI_DEMO_* env vars.
+export function demoModeExtensionPath(): string {
+  const require = createRequire(import.meta.url);
+  const packageJson = require.resolve("pi-demo-mode/package.json");
+  return path.join(path.dirname(packageJson), "extensions", "demo-mode.ts");
 }
 
 async function writeExtension(extensionDir: string, name: string, source: string): Promise<string> {
