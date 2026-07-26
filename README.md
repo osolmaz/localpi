@@ -18,6 +18,12 @@ See:
 npm install -g localpi
 ```
 
+Or the latest GitHub release directly:
+
+```bash
+npm install -g https://github.com/osolmaz/localpi/releases/latest/download/localpi.tgz
+```
+
 During development:
 
 ```bash

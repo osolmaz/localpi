@@ -1,83 +1,48 @@
 name: publish
 
 on:
-  workflow_dispatch:
   release:
     types: [published]
 
-concurrency:
-  group: publish-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 jobs:
-  npm:
-    name: npm
+  publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
-          registry-url: "https://registry.npmjs.org"
-
-      - run: npm install -g npm@latest
-      - run: npm ci
-
-      - name: Validate release metadata
+          registry-url: https://registry.npmjs.org
+      - name: Validate release tag
         run: |
-          node - <<'NODE'
-          const { readFileSync } = require("node:fs");
-
-          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
-          const errors = [];
-
-          if (pkg.name !== "localpi") {
-            errors.push(`package.json name must be localpi; found ${pkg.name ?? "<missing>"}`);
-          }
-
-          if (pkg.private === true) {
-            errors.push("package.json must not be private for npm publishing.");
-          }
-
-          if (pkg.publishConfig?.access !== "public") {
-            errors.push("package.json publishConfig.access must be public.");
-          }
-
-          if (pkg.bin?.localpi !== "dist/src/cli/main.js") {
-            errors.push(
-              `package.json bin.localpi must be dist/src/cli/main.js; found ${pkg.bin?.localpi ?? "<missing>"}`
-            );
-          }
-
-          if (errors.length > 0) {
-            for (const error of errors) {
-              console.error(error);
-            }
-            process.exit(1);
-          }
-
-          console.log("Release metadata validated.");
-          NODE
-
-      - name: Ensure version is not already published
-        run: |
-          set -euo pipefail
-          package_version="$(node -p "require('./package.json').version")"
-          published_version="$(npm view "localpi@$package_version" version 2>/dev/null || true)"
-
-          if [ "$published_version" = "$package_version" ]; then
-            echo "localpi@$package_version is already published on npm."
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$version" ]; then
+            echo "release tag v$tag does not match package version $version" >&2
             exit 1
           fi
-
-          echo "Publishing localpi@$package_version"
-
-      - run: npm run build
-      - run: npm pack --dry-run
-      - run: npm publish --access public --provenance
+          git fetch origin main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "tagged commit is not on main" >&2
+            exit 1
+          fi
+      - run: npm ci
+      - name: Pack tarball
+        run: npm pack && mv localpi-*.tgz localpi.tgz
+      - name: Attach tarball to release
+        run: gh release upload "$GITHUB_REF_NAME" localpi.tgz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+      # Trusted publishing (OIDC) needs a recent npm and the trusted publisher
+      # configured for this repository on npmjs.com.
+      - name: Publish to npm
+        run: |
+          npm install -g npm@latest
+          npm publish
