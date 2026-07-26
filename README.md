@@ -205,9 +205,17 @@ localpi grid --concurrency 16 --allow-high-concurrency --min-available-gb 24 --s
 tmux attach -t pi-demo-<timestamp>
 ```
 
-Safety gates: the per-pane command must select a model explicitly (`--model`
-or `LOCALPI_MODEL`); pane counts above the safe limit (default 4, or
-`PI_DEMO_GRID_MAX_SAFE_CONCURRENCY`) need `--allow-high-concurrency`, which
+The pane command does not have to be localpi. Any command works, for example
+a wall of [diffusionpi](https://github.com/osolmaz/diffusionpi) sessions:
+
+```bash
+localpi grid --concurrency 4 --start -- diffusionpi demo
+```
+
+Safety gates: localpi pane commands must select a model explicitly (`--model`
+or `LOCALPI_MODEL`) so N panes cannot each auto-resolve a model; other pane
+commands own their model configuration. Pane counts above the safe limit
+(default 4, or `PI_DEMO_GRID_MAX_SAFE_CONCURRENCY`) need `--allow-high-concurrency`, which
 should reflect the backend's real capacity (for vLLM, its `--max-num-seqs`);
 `--min-available-gb` refuses to launch on a memory-tight machine. Each pane
 runs with `LOCALPI_DEMO_INDEX` and `LOCALPI_DEMO_TOTAL` set and tmux's

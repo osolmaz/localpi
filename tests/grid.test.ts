@@ -113,6 +113,34 @@ describe("localpi grid", () => {
     expect(result.code).toBe(0);
   });
 
+  it("skips the model gate for pane commands that do not run localpi", async () => {
+    const calls: string[][] = [];
+    const result = await runGridCommand(
+      ["--concurrency", "2", "--start", "--", "diffusionpi", "demo"],
+      deps({ calls })
+    );
+
+    expect(result.code).toBe(0);
+    const splits = calls.filter((call) => call[0] === "split-window");
+    expect(splits[0]?.[5]).toContain("diffusionpi demo");
+  });
+
+  it("still gates localpi pane commands prefixed with env assignments or paths", async () => {
+    const viaPath = await runGridCommand(
+      ["--concurrency", "2", "--start", "--", "/usr/local/bin/localpi", "--demo"],
+      deps({})
+    );
+    expect(viaPath.code).toBe(2);
+    expect(viaPath.stderr).toContain("requires an explicit model");
+
+    const viaEnvPrefix = await runGridCommand(
+      ["--concurrency", "2", "--start", "--", "FOO=1", "localpi", "--demo"],
+      deps({})
+    );
+    expect(viaEnvPrefix.code).toBe(2);
+    expect(viaEnvPrefix.stderr).toContain("requires an explicit model");
+  });
+
   it("enforces the minimum available memory floor", async () => {
     const result = await runGridCommand(
       [

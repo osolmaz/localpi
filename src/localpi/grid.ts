@@ -89,14 +89,15 @@ export function gridUsage(): string {
     "                              (default: PI_DEMO_GRID_MIN_AVAILABLE_GB, if set)",
     "  -h, --help                  show this help",
     "",
-    "The per-pane command defaults to `localpi --demo` and must select a model",
-    "explicitly (--model <id> or LOCALPI_MODEL). Each pane runs with",
-    "LOCALPI_DEMO_INDEX and LOCALPI_DEMO_TOTAL set and tmux's tiled layout keeps",
-    "the grid balanced (2x2 for 4 panes, 4x4 for 16).",
+    "The per-pane command defaults to `localpi --demo`. localpi pane commands",
+    "must select a model explicitly (--model <id> or LOCALPI_MODEL); other",
+    "commands (e.g. diffusionpi) own their model configuration. Each pane runs",
+    "with LOCALPI_DEMO_INDEX and LOCALPI_DEMO_TOTAL set and tmux's tiled layout",
+    "keeps the grid balanced (2x2 for 4 panes, 4x4 for 16).",
     "",
     "examples:",
     "  localpi grid -n 16 --allow-high-concurrency -- localpi --demo --model gemma4-26b",
-    "  localpi grid -n 4 --start -- localpi --demo --model gemma-e4b",
+    "  localpi grid -n 4 --start -- diffusionpi demo",
     "  localpi record --session pi-demo-... --out demo.mp4   # record the grid"
   ].join("\n")}\n`;
 }
@@ -232,13 +233,28 @@ async function runPreflight(plan: GridPlan, deps: GridDeps): Promise<void> {
         `--allow-high-concurrency (current safe limit: ${String(plan.maxSafeConcurrency)})`
     );
   }
-  if (!hasExplicitModel(plan.command, deps.env)) {
+  if (paneCommandRunsLocalpi(plan.command) && !hasExplicitModel(plan.command, deps.env)) {
     throw new Error(
       "demo grid launch requires an explicit model: add --model <id> " +
         "or set LOCALPI_MODEL for the command"
     );
   }
   await assertMemoryFloor(plan, deps);
+}
+
+// The explicit-model gate protects against N localpi panes each resolving the
+// `auto` model (and potentially starting N managed llama-server processes).
+// Other pane commands (diffusionpi, plain pi, ...) declare their model in
+// their own configuration, so the gate does not apply to them.
+export function paneCommandRunsLocalpi(command: string): boolean {
+  for (const part of command.split(/\s+/u)) {
+    if (part === "" || /^[A-Za-z_][A-Za-z0-9_]*=/u.test(part)) {
+      continue;
+    }
+    const executable = part.split("/").pop() ?? part;
+    return executable === "localpi";
+  }
+  return false;
 }
 
 async function assertMemoryFloor(plan: GridPlan, deps: GridDeps): Promise<void> {
