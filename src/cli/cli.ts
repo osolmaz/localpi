@@ -1,4 +1,4 @@
-import { runPiApp } from "@dutifuldev/pi-factory";
+import { runPiApp } from "@osolmaz/pi-factory";
 
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";

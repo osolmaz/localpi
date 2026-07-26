@@ -1,7 +1,7 @@
 import path from "node:path";
 
-import { createPiLaunchPlan, execPiLaunchPlan } from "@dutifuldev/pi-factory";
-import type { PiLaunchPlan, PiRuntimeConfig } from "@dutifuldev/pi-factory";
+import { createPiLaunchPlan, execPiLaunchPlan } from "@osolmaz/pi-factory";
+import type { PiLaunchPlan, PiRuntimeConfig } from "@osolmaz/pi-factory";
 import { describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";

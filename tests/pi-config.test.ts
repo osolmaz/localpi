@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { writePiRuntimeConfig } from "@dutifuldev/pi-factory";
+import { writePiRuntimeConfig } from "@osolmaz/pi-factory";
 import { describe, expect, it } from "vitest";
 
 import type { CatalogModel } from "../src/localpi/catalog.js";

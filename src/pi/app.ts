@@ -1,8 +1,4 @@
-import type {
-  PiAppDefinition,
-  PiModelDefinition,
-  PiProviderDefinition
-} from "@dutifuldev/pi-factory";
+import type { PiAppDefinition, PiModelDefinition, PiProviderDefinition } from "@osolmaz/pi-factory";
 
 import type { CatalogModel } from "../localpi/catalog.js";
 import type { LocalpiOptions } from "../localpi/options.js";
