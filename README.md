@@ -80,8 +80,7 @@ The live diffusion canvas visualizer (watching DiffusionGemma denoise its
 answer in the TUI) lives in its own project now:
 [diffusionpi](https://github.com/osolmaz/diffusionpi). It is a pi-factory app
 bundle plus a standalone Pi widget package; the widget also installs into any
-Pi session via `pi install`. Demo grid panes can run it too, since
-`localpi grid` accepts an arbitrary pane command after `--`.
+Pi session via `pi install`.
 
 ## LM Studio Alternative
 
@@ -185,54 +184,15 @@ localpi --stop
 
 ## Demo Grid and Recording
 
-`localpi grid` launches a balanced tmux wall of concurrent `localpi --demo`
-panes, and `localpi record` records any tmux session in a themed Ghostty
-window. Together they turn a local model server into a screen-filling live
-demo (for example 16 concurrent DiffusionGemma sessions) and an mp4 of it.
-
-`localpi grid` previews by default and only creates panes with `--start`:
+The `localpi grid` and `localpi record` subcommands moved to
+[demowall](https://github.com/osolmaz/demowall), a standalone tool that runs
+N copies of any command in a tiled tmux wall and records tmux sessions to
+video. A wall of localpi demo sessions is:
 
 ```bash
-# Preview the plan (no tmux session is created):
-localpi grid --concurrency 16 --allow-high-concurrency \
-  -- localpi --runtime vllm --demo --model nvidia/diffusiongemma-26B-A4B-it-NVFP4
-
-# Launch it:
-localpi grid --concurrency 16 --allow-high-concurrency --min-available-gb 24 --start \
-  -- localpi --runtime vllm --demo --model nvidia/diffusiongemma-26B-A4B-it-NVFP4
-
-# View the wall:
-tmux attach -t pi-demo-<timestamp>
+demowall grid --concurrency 4 --start -- localpi --demo --model gemma-e4b
+demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 ```
-
-The pane command does not have to be localpi. Any command works, for example
-a wall of [diffusionpi](https://github.com/osolmaz/diffusionpi) sessions:
-
-```bash
-localpi grid --concurrency 4 --start -- diffusionpi demo
-```
-
-Safety gates: localpi pane commands must select a model explicitly (`--model`
-or `LOCALPI_MODEL`) so N panes cannot each auto-resolve a model; other pane
-commands own their model configuration. Pane counts above the safe limit
-(default 4, or `PI_DEMO_GRID_MAX_SAFE_CONCURRENCY`) need `--allow-high-concurrency`, which
-should reflect the backend's real capacity (for vLLM, its `--max-num-seqs`);
-`--min-available-gb` refuses to launch on a memory-tight machine. Each pane
-runs with `LOCALPI_DEMO_INDEX` and `LOCALPI_DEMO_TOTAL` set and tmux's
-`tiled` layout keeps the grid square (2x2 for 4, 4x4 for 16).
-
-`localpi record` attaches a Ghostty window (default theme: Catppuccin Mocha)
-to the session and captures exactly that window with ffmpeg:
-
-```bash
-localpi record --session pi-demo-<timestamp> --out demo.mp4 --seconds 360
-```
-
-Recording stops when the Ghostty window closes, when `--seconds` elapses, or
-on `ctrl-c`, and the mp4 is finalized cleanly in all cases. It needs an X11
-desktop with `tmux`, `ghostty`, `ffmpeg`, `xdotool`, and `xwininfo`
-installed. `--font-size`, `--columns`, and `--rows` control the window;
-`--theme` accepts any `ghostty +list-themes` entry.
 
 ## Options
 
