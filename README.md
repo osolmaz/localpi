@@ -84,7 +84,7 @@ The approval gate makes failed or denied tool calls explicit to the model so the
 
 The live diffusion canvas visualizer (watching DiffusionGemma denoise its
 answer in the TUI) lives in its own project now:
-[diffusionpi](https://github.com/osolmaz/pi-diffusion). It is a pi-factory app
+[diffusionpi](https://github.com/osolmaz/diffusionpi). It is a pi-factory app
 bundle plus a standalone Pi widget package; the widget also installs into any
 Pi session via `pi install`.
 
