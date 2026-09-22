@@ -3,10 +3,12 @@ import { settingsFileSource } from "./settings-file.js";
 export type ToolApprovalConfig = {
   readonly enabled: boolean;
   readonly settingsPath: string;
+  readonly approveReadTools: boolean;
 };
 
 export function approvalExtensionSource(config: ToolApprovalConfig): string {
   const initialEnabledSource = JSON.stringify(config.enabled);
+  const approveReadToolsSource = JSON.stringify(config.approveReadTools);
   return `import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -26,6 +28,9 @@ const approvalRule =
   "\\n\\nTool approval rule: if any tool result says the tool was blocked, denied, or requires approval, the tool did not run. Do not claim blocked tools ran.";
 const modes: readonly PermissionMode[] = ["ask", "allow"];
 const aliases: readonly string[] = ["on", "off"];
+// Read-only Pi tools cannot change the workspace, so the gate lets them run. bash is not in this
+// list, because a bash command can write. An unknown tool also stays behind the gate.
+const readOnlyTools: readonly string[] = ["read", "grep", "find", "ls"];
 const statusKey = "localpi-approval";
 const allowOnce = "Allow once";
 const allowSession = "Allow all tools for this session";
@@ -36,6 +41,7 @@ const noUiReason = " was blocked and did not run because interactive approval is
 // the session-only choice in the tool call dialog never writes it.
 ${settingsFileSource(config.settingsPath)}
 const initialEnabled: boolean = ${initialEnabledSource};
+const gateReadTools: boolean = ${approveReadToolsSource};
 
 export default function localpiToolApproval(pi: ExtensionAPI): void {
   let enabled = initialEnabled;
@@ -79,6 +85,10 @@ export default function localpiToolApproval(pi: ExtensionAPI): void {
 
   pi.on("tool_call", async (event, ctx) => {
     if (!enabled) {
+      return undefined;
+    }
+
+    if (!gateReadTools && readOnlyTools.includes(event.toolName)) {
       return undefined;
     }
 

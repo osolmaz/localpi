@@ -4,6 +4,7 @@ __pycache__/
 .DS_Store
 dist/
 coverage/
+reports/
 node_modules/
 .env
 .env.*

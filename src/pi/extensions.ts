@@ -82,7 +82,8 @@ export async function writeDefaultExtensions(
       "tool-approval.ts",
       approvalExtensionSource({
         enabled: options.approval,
-        settingsPath: localpiSettingsPath(options)
+        settingsPath: localpiSettingsPath(options),
+        approveReadTools: options.approveReadTools
       })
     )
   );

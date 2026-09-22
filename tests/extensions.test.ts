@@ -31,6 +31,10 @@ describe("Pi extensions", () => {
       expect(approval).toContain("const initialEnabled: boolean = true;");
       expect(approval).toContain("Tool approval rule:");
       expect(approval).toContain("Allow all tools for this session");
+      expect(approval).toContain(
+        'const readOnlyTools: readonly string[] = ["read", "grep", "find", "ls"]'
+      );
+      expect(approval).toContain("const gateReadTools: boolean = false;");
       expect(approval).toContain('settings["permission"] = mode');
       expect(approval).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
       expect(status).toContain("tok/s");
@@ -230,7 +234,7 @@ function options(stateDir: string): LocalpiOptions {
     modelThinkingFormat: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
-    piCommand: "pi",
+    piCommand: ["pi"],
     thinking: "off",
     contextWindow: undefined,
     maxTokens: 8192,
@@ -243,6 +247,7 @@ function options(stateDir: string): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
+    approveReadTools: false,
     stats: "full",
     demo: false,
     demoFromCli: false,

@@ -4,7 +4,7 @@ import { createPiLaunchPlan, execPiLaunchPlan } from "@osolmaz/pi-factory";
 import type { PiLaunchPlan, PiRuntimeConfig } from "@osolmaz/pi-factory";
 import { describe, expect, it } from "vitest";
 
-import type { LocalpiOptions } from "../src/localpi/options.js";
+import { parsePiCommand, type LocalpiOptions } from "../src/localpi/options.js";
 import type { RuntimeConnection } from "../src/localpi/runtime.js";
 import { createLocalpiAppDefinition } from "../src/pi/app.js";
 
@@ -157,15 +157,23 @@ describe("Pi launch plan", () => {
     ).resolves.toBe(0);
   });
 
-  it("preserves shell-style pi command values", async () => {
-    await expect(
-      execPiLaunchPlan(
-        executablePlan({
-          command: "LOCALPI_TEST=ok sh -c 'test \"$LOCALPI_TEST\" = ok' --",
-          args: []
-        })
-      )
-    ).resolves.toBe(0);
+  it("splits the pi launch command into a program and its arguments", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        {
+          ...options(stateDir),
+          piCommand: parsePiCommand("npx -y @earendil-works/pi-coding-agent@latest")
+        },
+        connection("gemma-4-e4b-it"),
+        { paths: [], env: {}, systemPrompt: "localpi prompt" }
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.command).toBe("npx");
+    expect(plan.args.slice(0, 2)).toEqual(["-y", "@earendil-works/pi-coding-agent@latest"]);
+    expect(plan.args).toContain("--provider");
   });
 });
 
@@ -198,7 +206,7 @@ function options(stateDir: string): LocalpiOptions {
     modelThinkingFormat: undefined,
     stateDir,
     sessionDir: path.join(stateDir, "sessions"),
-    piCommand: "pi",
+    piCommand: ["pi"],
     thinking: "off",
     contextWindow: undefined,
     maxTokens: 8192,
@@ -211,6 +219,7 @@ function options(stateDir: string): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
+    approveReadTools: false,
     stats: "full",
     demo: false,
     demoFromCli: false,

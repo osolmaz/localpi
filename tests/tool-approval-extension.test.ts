@@ -105,6 +105,41 @@ describe("generated localpi tool approval extension", () => {
     expect(fake.dialogs).toHaveLength(0);
   });
 
+  it("runs read-only tools without asking and keeps bash behind the gate", async () => {
+    const { pi } = await enabledPi();
+
+    for (const toolName of ["read", "grep", "find", "ls"]) {
+      const fake = fakeContext({ selections: [] });
+      expect(await callToolNamed(pi, fake, toolName)).toBeUndefined();
+      expect(fake.dialogs).toHaveLength(0);
+    }
+
+    const bash = fakeContext({ selections: [] });
+    expect(blockReason(await callToolNamed(pi, bash, "bash"))).toBe(
+      "Tool call was blocked by the user and did not run."
+    );
+    expect(bash.dialogs).toHaveLength(1);
+  });
+
+  it("keeps an unknown tool behind the gate", async () => {
+    const { pi } = await enabledPi();
+    const fake = fakeContext({ selections: [] });
+
+    expect(blockReason(await callToolNamed(pi, fake, "mystery_tool"))).toBe(
+      "Tool call was blocked by the user and did not run."
+    );
+    expect(fake.dialogs).toHaveLength(1);
+  });
+
+  it("asks before read-only tools when the read gate is on", async () => {
+    const { pi } = await enabledPi({}, true, true);
+    const fake = fakeContext({ selections: [allowOnce] });
+
+    expect(await callToolNamed(pi, fake, "read")).toBeUndefined();
+    expect(fake.dialogs).toHaveLength(1);
+    expect(fake.dialogs[0]).toContain("Allow tool call: read?");
+  });
+
   it("appends the approval rule to the system prompt", async () => {
     const { pi } = await enabledPi();
 
@@ -198,7 +233,8 @@ describe("generated localpi tool approval extension", () => {
 
 async function enabledPi(
   settings: Record<string, unknown> = {},
-  enabled = true
+  enabled = true,
+  approveReadTools = false
 ): Promise<{ readonly pi: FakePi; readonly settingsPath: string }> {
   const dir = await makeTemporaryDir("localpi-approval");
   const settingsPath = path.join(dir, "settings.json");
@@ -206,7 +242,7 @@ async function enabledPi(
     await writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf8");
   }
   const extension = await loadGeneratedExtension(
-    approvalExtensionSource({ enabled, settingsPath })
+    approvalExtensionSource({ enabled, settingsPath, approveReadTools })
   );
   const pi = fakePi();
   extension(pi);
@@ -222,7 +258,11 @@ async function readSettings(settingsPath: string): Promise<Record<string, unknow
 }
 
 function callTool(pi: FakePi, fake: FakeContext): unknown {
-  return pi.handlers.get("tool_call")?.({ toolName: "bash", input: { command: "ls" } }, fake.ctx);
+  return callToolNamed(pi, fake, "bash");
+}
+
+function callToolNamed(pi: FakePi, fake: FakeContext, toolName: string): unknown {
+  return pi.handlers.get("tool_call")?.({ toolName, input: { command: "ls" } }, fake.ctx);
 }
 
 function blockReason(result: unknown): string {

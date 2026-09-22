@@ -19,6 +19,15 @@ Rules:
 - Store persistent localpi user settings in `<state-dir>/settings.json`. Do not create a new top-level state file for each setting; add a field to the settings object instead. Separate files are only for distinct generated artifacts, runtime metadata, caches, logs, or external config formats.
 - Follow the Slophammer agent entrypoint in `osolmaz/slophammer/docs/AGENT_ENTRYPOINT.md` when changing repo structure or quality gates.
 - llama.cpp is the default local engine. Keep the `llama-cpp` provider first in `auto` discovery order so a loaded llama.cpp model wins automatic selection, and keep the managed `llama-server` fallback llama.cpp-based. Do not move another engine ahead of llama.cpp.
+- Keep `@osolmaz/pi-factory` on the newest published version. When its API changes, adapt localpi instead of pinning an old release.
+- Keep `@earendil-works/pi-coding-agent` as a devDependency on the newest Pi release, and keep the generated-extension typecheck test. Pi extension API drift must fail `npm test`, not a launch.
+- Keep mutation testing out of the default gate. `npm run check` and the push/PR CI stay fast; `npm run mutate` is a manual, occasional run and the weekly `mutation` workflow.
+
+## Pi Launch
+
+- Keep the default Pi launch command at `npx -y @earendil-works/pi-coding-agent@latest`, so a normal launch runs the newest Pi release. Keep `--pi-command` and `LOCALPI_PI_CMD` as the escape hatches.
+- Keep the Pi launch command a program plus arguments. pi-factory spawns it without a shell, so do not pass shell syntax, quoting, or environment prefixes through `--pi-command`.
+- Split a typed Pi launch command with `parsePiCommand`, and keep quoted words together so a path with spaces survives.
 
 ## llama.cpp
 
@@ -53,7 +62,8 @@ Tool approval follows `docs/design-principles.md`: on by default, off on request
 - Offer three choices in the dialogs: allow once, allow every tool call for this session, and deny. Treat a cancelled dialog as deny, and treat a missing terminal as deny.
 - Keep the dialog choice session-scoped. Only `/approval ask|allow` writes the `permission` setting in `<state-dir>/settings.json`, and only as the launch default for new sessions.
 - Keep `/approval` in the gate extension, next to the code that blocks tool calls. Keep the system-prompt rule in the same extension.
-- Keep the gate blocking every tool call when `ctx.hasUI` is false and approval is on. Do not auto-approve, and do not silently turn approval off, in a non-interactive run.
+- Keep the gate blocking every tool call that can change the workspace or that localpi does not know. `read`, `grep`, `find`, and `ls` are read-only and run without a dialog; `bash` stays behind the gate, because a bash command can write, and an unknown tool stays behind the gate too. Keep `--approve-read-tools` and `LOCALPI_APPROVE_READ_TOOLS` as the escape hatches that put read-only tools back behind the gate.
+- Keep the gate blocking every tool call without a terminal when approval is on and the tool can change the workspace. Do not auto-approve, and do not silently turn approval off, in a non-interactive run.
 - Keep a visible status item while approval is off, so a session never runs unguarded without a sign on screen.
 - Do not make approval the default choice for other tools. Keep the dialog as the only approval surface.
 

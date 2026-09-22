@@ -54,8 +54,8 @@ type StatusModel = {
 type StatusContext = {
   readonly mode: string;
   readonly cwd: string;
-  readonly model?: StatusModel;
-  readonly thinkingLevel?: string;
+  readonly model?: StatusModel | undefined;
+  readonly thinkingLevel?: string | undefined;
   readonly sessionManager: {
     getEntries(): readonly EntryLike[];
     getCwd(): string;
@@ -67,8 +67,9 @@ type StatusContext = {
 };
 
 type FooterData = {
-  getGitBranch(): string | undefined;
-  getExtensionStatuses(): Map<string, string>;
+  // Pi types this as string | null, so accept every absent-branch shape.
+  getGitBranch(): string | null | undefined;
+  getExtensionStatuses(): ReadonlyMap<string, string>;
   onBranchChange(callback: () => void): () => void;
 };
 type TuiLike = { requestRender(): void };

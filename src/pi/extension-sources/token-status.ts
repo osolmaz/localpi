@@ -19,10 +19,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 type StatsMode = "off" | "line" | "full";
 
 type Usage = {
-  input?: number;
-  output?: number;
-  cacheRead?: number;
-  cacheWrite?: number;
+  input?: number | undefined;
+  output?: number | undefined;
+  cacheRead?: number | undefined;
+  cacheWrite?: number | undefined;
 };
 
 type PrefillProgress = {
@@ -40,16 +40,16 @@ type TurnState = {
 };
 
 type StatsEntry = {
-  rate?: number;
-  output?: number;
-  input?: number;
-  cacheRead?: number;
-  cacheWrite?: number;
-  prefillSeconds?: number;
-  elapsedSeconds?: number;
-  contextTokens?: number;
-  contextWindow?: number;
-  contextPercent?: number;
+  rate?: number | undefined;
+  output?: number | undefined;
+  input?: number | undefined;
+  cacheRead?: number | undefined;
+  cacheWrite?: number | undefined;
+  prefillSeconds?: number | undefined;
+  elapsedSeconds?: number | undefined;
+  contextTokens?: number | undefined;
+  contextWindow?: number | undefined;
+  contextPercent?: number | undefined;
 };
 
 type ContextUsage = {

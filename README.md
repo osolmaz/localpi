@@ -37,6 +37,22 @@ After build:
 node dist/src/cli/main.js --status
 ```
 
+## Pi and pi-factory Versions
+
+Localpi launches Pi through `npx -y @earendil-works/pi-coding-agent@latest`, so a normal launch
+runs the newest Pi release. Point it somewhere else with `--pi-command`, or `LOCALPI_PI_CMD`, as a
+program plus arguments:
+
+```bash
+localpi --pi-command "node /opt/pi/bin/pi"
+```
+
+Localpi builds its Pi launch on [pi-factory](https://github.com/osolmaz/pi-factory) and keeps that
+dependency current. The `@earendil-works/pi-coding-agent` devDependency pins the Pi release that
+localpi is written against, and `tests/generated-extension-types.test.ts` typechecks every
+generated extension against those types, so Pi extension API drift fails `npm test` instead of
+failing at launch.
+
 ## Runtime Model
 
 Target default:
@@ -102,6 +118,11 @@ Deny                              # block the call
 ```
 
 A blocked call and a cancelled dialog do not run, and the model is told that the call was blocked.
+
+Read-only tools (`read`, `grep`, `find`, `ls`) run without a dialog, because they cannot change the
+workspace. `bash` still asks, because a bash command can write. An unknown tool also asks, because
+localpi cannot know what it does. Use `--approve-read-tools`, or `LOCALPI_APPROVE_READ_TOOLS=1`, to
+put read-only tools behind the gate too.
 
 The dialog choice lasts for this session only. Use the permission setting to change what new
 sessions do:
@@ -381,7 +402,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--chat-template <path>`: optional llama.cpp chat template file
 - `--state-dir <path>`: runtime state directory. Default: `~/.local/state/localpi`
 - `--session-dir <path>`: Pi session directory. Default: `<state-dir>/sessions`
-- `--pi-command <command>`: Pi launch command
+- `--pi-command <command>`: Pi launch command as a program and its arguments. Quotes group words, and the command runs without a shell. Default: `npx -y @earendil-works/pi-coding-agent@latest`, so a normal launch runs the newest Pi release
 - `--providers-file <path>`: provider registry JSON
 - `--model-profile <path>`: local model capability profile JSON
 - `--model-reasoning <bool>`: override generated Pi reasoning capability
@@ -394,6 +415,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--demo-initial-prompt-file <path>`: UTF-8 file for the first demo prompt
 - `--demo-followup-prompt-file <path>`: UTF-8 file for repeated demo prompts
 - `--no-approval`: start with the tool approval gate off for the session
+- `--approve-read-tools`: also ask before read-only tools (`read`, `grep`, `find`, `ls`)
 - `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
 - `--no-token-status`: disable the token status extension. Alias for `--stats off`
 - `--status`: print runtime, model, and Pi config status
@@ -443,6 +465,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_TOOLS`
 - `LOCALPI_THINKING`
 - `LOCALPI_STATS`
+- `LOCALPI_APPROVE_READ_TOOLS`
 - `LOCALPI_DEMO`
 - `LOCALPI_DEMO_INITIAL_PROMPT`
 - `LOCALPI_DEMO_FOLLOWUP_PROMPT`
@@ -515,3 +538,6 @@ npm test
 npm run build
 npm run check
 ```
+
+`npm run check` is the default gate. It does not run mutation testing, because the mutation run takes
+minutes. Run `npm run mutate` by hand once in a while; the `mutation` workflow runs it weekly.

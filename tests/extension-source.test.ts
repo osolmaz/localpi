@@ -21,7 +21,11 @@ describe("generated Pi extension sources", () => {
     },
     {
       fileName: "tool-approval.ts",
-      source: approvalExtensionSource({ enabled: true, settingsPath: "/tmp/localpi/settings.json" })
+      source: approvalExtensionSource({
+        enabled: true,
+        settingsPath: "/tmp/localpi/settings.json",
+        approveReadTools: false
+      })
     },
     {
       fileName: "token-status.ts",

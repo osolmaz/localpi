@@ -18,6 +18,9 @@ export const statsModes: readonly StatsMode[] = ["off", "line", "full"];
 
 export const permissionModes: readonly PermissionMode[] = ["ask", "allow"];
 
+// localpi launches Pi through npx, so a normal launch always runs the newest Pi release.
+const defaultPiCommand = "npx -y @earendil-works/pi-coding-agent@latest";
+
 export const thinkingLevels: readonly ThinkingLevel[] = [
   "off",
   "minimal",
@@ -39,7 +42,7 @@ export type LocalpiOptions = {
   readonly modelThinkingFormat: ModelThinkingFormat | undefined;
   readonly stateDir: string;
   readonly sessionDir: string;
-  readonly piCommand: string;
+  readonly piCommand: readonly string[];
   readonly thinking: ThinkingLevel;
   readonly contextWindow: number | undefined;
   readonly maxTokens: number;
@@ -52,6 +55,7 @@ export type LocalpiOptions = {
   readonly chatTemplate: string | undefined;
   readonly tools: string | undefined;
   readonly approval: boolean;
+  readonly approveReadTools: boolean;
   readonly stats: StatsMode;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
@@ -84,7 +88,7 @@ export function defaultOptions(): LocalpiOptions {
     ),
     stateDir,
     sessionDir: defaultSessionDir(stateDir),
-    piCommand: envString("LOCALPI_PI_CMD", "npx -y @earendil-works/pi-coding-agent@latest"),
+    piCommand: parsePiCommand(envString("LOCALPI_PI_CMD", defaultPiCommand)),
     thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "medium")),
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
@@ -97,6 +101,7 @@ export function defaultOptions(): LocalpiOptions {
     chatTemplate: process.env["LOCALPI_CHAT_TEMPLATE"],
     tools: envString("LOCALPI_TOOLS", "read,bash,edit,write,grep,find,ls"),
     approval: envBoolean("LOCALPI_APPROVAL", true),
+    approveReadTools: envBoolean("LOCALPI_APPROVE_READ_TOOLS", false),
     stats: defaultStatsMode(),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
@@ -169,6 +174,7 @@ export function usage(): string {
     "  --model-thinking-format <format>",
     "                          override generated Pi thinking format",
     "  --no-approval           start with tool approval off for this session",
+    "  --approve-read-tools    also ask before read-only tools (read, grep, find, ls)",
     "  --no-token-status       alias for --stats off",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
@@ -184,7 +190,7 @@ export function usage(): string {
     "  --list                  list model aliases",
     "  --state-dir <path>      localpi runtime state directory",
     "  --session-dir <path>    Pi session directory",
-    "  --pi-command <command>  Pi launch command",
+    "  --pi-command <command>  Pi launch command, split on whitespace and quotes",
     "  --thinking <level>      thinking level: off, minimal, low, medium, high, xhigh",
     "  --timeout-ms <n>        backend probe timeout",
     "  -h, --help              show this help",
@@ -241,6 +247,7 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--stop": (options) => ({ ...options, stop: true }),
   "--list": (options) => ({ ...options, list: true }),
   "--no-approval": (options) => ({ ...options, approval: false }),
+  "--approve-read-tools": (options) => ({ ...options, approveReadTools: true }),
   "--no-token-status": (options) => ({ ...options, stats: "off" }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
@@ -262,7 +269,7 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   }),
   "--state-dir": (options, value) => ({ ...options, stateDir: value }),
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
-  "--pi-command": (options, value) => ({ ...options, piCommand: value }),
+  "--pi-command": (options, value) => ({ ...options, piCommand: parsePiCommand(value) }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
@@ -387,6 +394,24 @@ export function parsePermissionMode(value: string): PermissionMode {
     }
   }
   throw new Error(`unknown permission mode ${value}; expected ask or allow`);
+}
+
+/**
+ * Split a Pi launch command into a program and its arguments. Quotes group words, so a quoted
+ * argument stays one piece.
+ */
+export function parsePiCommand(value: string): readonly string[] {
+  const parts = (value.match(/"[^"]*"|'[^']*'|\S+/gu) ?? []).map(unquotePiCommandPart);
+  if (parts.length === 0) {
+    throw new Error("Pi launch command must not be empty");
+  }
+  return parts;
+}
+
+function unquotePiCommandPart(part: string): string {
+  const quote = part[0];
+  const quoted = part.length > 1 && (quote === '"' || quote === "'");
+  return quoted && part.endsWith(quote) ? part.slice(1, -1) : part;
 }
 
 function defaultStatsMode(): StatsMode {

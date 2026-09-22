@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { parseLocalpiArgs, usage } from "../src/localpi/options.js";
+import { parseLocalpiArgs, parsePiCommand, usage } from "../src/localpi/options.js";
 
 describe("localpi option parsing", () => {
   it("keeps pi args as pass-through arguments", () => {
@@ -26,6 +26,7 @@ describe("localpi option parsing", () => {
       "--port",
       "18195",
       "--no-approval",
+      "--approve-read-tools",
       "--no-token-status"
     ]);
     expect(options.runtime).toBe("lmstudio");
@@ -33,8 +34,14 @@ describe("localpi option parsing", () => {
     expect(options.contextWindow).toBe(32768);
     expect(options.port).toBe(18195);
     expect(options.approval).toBe(false);
+    expect(options.approveReadTools).toBe(true);
     expect(options.stats).toBe("off");
     expect(parseLocalpiArgs(["--runtime", "vllm"]).runtime).toBe("vllm");
+  });
+
+  it("keeps read-only tools out of the approval gate by default", () => {
+    expect(parseLocalpiArgs([]).approveReadTools).toBe(false);
+    expect(parseLocalpiArgs(["--approve-read-tools"]).approveReadTools).toBe(true);
   });
 
   it("parses and validates stats modes", () => {
@@ -137,7 +144,7 @@ describe("localpi option parsing", () => {
       modelThinkingFormat: "qwen-chat-template",
       stateDir: "/tmp/localpi-state",
       sessionDir: "/tmp/localpi-sessions",
-      piCommand: "my-pi",
+      piCommand: ["my-pi"],
       contextWindow: 4096,
       maxTokens: 2048,
       timeoutMs: 1500,
@@ -305,6 +312,26 @@ describe("localpi environment defaults", () => {
       demoInitialPromptFile: undefined,
       demoFollowupPromptFile: undefined
     });
+  });
+
+  it("splits the pi launch command and keeps quoted arguments", () => {
+    expect(parsePiCommand("npx -y @earendil-works/pi-coding-agent@latest")).toEqual([
+      "npx",
+      "-y",
+      "@earendil-works/pi-coding-agent@latest"
+    ]);
+    expect(parsePiCommand('"/opt/pi bin/pi" --model "local model"')).toEqual([
+      "/opt/pi bin/pi",
+      "--model",
+      "local model"
+    ]);
+    expect(parsePiCommand("'/opt/pi bin/pi' --model 'local model'")).toEqual([
+      "/opt/pi bin/pi",
+      "--model",
+      "local model"
+    ]);
+    expect(() => parsePiCommand("   ")).toThrow("must not be empty");
+    expect(parsePiCommand('"unclosed')).toEqual(['"unclosed']);
   });
 
   it("keeps explicit demo prompt files ahead of explicit demo prompt text", () => {
