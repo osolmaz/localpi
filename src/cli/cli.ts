@@ -3,6 +3,7 @@ import { runPiApp } from "@dutifuldev/pi-factory";
 import { paint } from "../common/catppuccin.js";
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
+import { engineEntries, providerConfigs } from "../localpi/provider-registry.js";
 import {
   aliasListOutput,
   connectionStatus,
@@ -40,7 +41,8 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
         providerId: connection.providerId,
         baseUrl: connection.baseUrl,
         model: connection.model
-      }
+      },
+      engines: engineEntries(await providerConfigs(options))
     });
     const app = createLocalpiAppDefinition(
       options,

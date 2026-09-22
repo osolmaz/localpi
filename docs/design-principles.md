@@ -79,11 +79,11 @@ The status display shows the same principles in a small feature.
 
 The three modes exist because users want different amounts of information:
 
-| Mode   | Live line | Transcript entry |
-| ------ | --------- | ---------------- |
-| `off`  | no        | no               |
-| `line` | yes       | no               |
-| `full` | yes       | yes              |
+| Mode   | Live line | Transcript entry | Engine label |
+| ------ | --------- | ---------------- | ------------ |
+| `off`  | no        | no               | no           |
+| `line` | yes       | no               | no           |
+| `full` | yes       | yes              | yes          |
 
 ## Worked example: the default look
 

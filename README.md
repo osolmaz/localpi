@@ -134,14 +134,17 @@ Point at a llama.cpp server on another port with a provider registry entry:
 The status display answers one question: is this machine keeping up? It shows elapsed time, output
 tokens, token rate, and context use. Pick a mode with `--stats`:
 
-| Mode             | Live line | Transcript entry |
-| ---------------- | --------- | ---------------- |
-| `off`            | no        | no               |
-| `line`           | yes       | no               |
-| `full` (default) | yes       | yes              |
+| Mode             | Live line | Transcript entry | Engine label |
+| ---------------- | --------- | ---------------- | ------------ |
+| `off`            | no        | no               | no           |
+| `line`           | yes       | no               | no           |
+| `full` (default) | yes       | yes              | yes          |
 
-Pi already shows context usage in its own footer, so localpi adds no footer item of its own. The
-same numbers never appear twice on screen at the same time.
+Pi owns the footer, so localpi cannot change the model name in it. In `full` mode localpi adds one
+footer status item with the inference engine that serves the current model, for example `llama.cpp`.
+The label follows the model, so switching to a model from another provider changes it. Localpi shows
+the label only when it knows the engine, from the provider it built the catalog with. For an unknown
+engine, it shows nothing instead of a guess.
 
 The live line replaces Pi's plain `Working` text while the model runs:
 

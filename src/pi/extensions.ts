@@ -2,9 +2,12 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { LocalpiOptions } from "../localpi/options.js";
+import type { EngineEntry } from "../localpi/provider-registry.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
 import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
+import { engineStatusExtensionSource } from "./extension-sources/engine-status.js";
+
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import {
@@ -21,6 +24,7 @@ export type ExtensionBundle = {
 export type ExtensionOptions = {
   readonly startupModelSelector?: StartupModelSelectorOptions;
   readonly runtime?: RuntimeStatsTarget;
+  readonly engines?: readonly EngineEntry[];
 };
 
 export type RuntimeStatsTarget = {
@@ -83,6 +87,16 @@ export async function writeDefaultExtensions(
         extensionDir,
         "token-status.ts",
         tokenStatusExtensionSource(tokenStatusConfig(options, extensionOptions.runtime))
+      )
+    );
+  }
+  const engines = extensionOptions.engines ?? [];
+  if (options.stats === "full" && engines.length > 0) {
+    paths.push(
+      await writeExtension(
+        extensionDir,
+        "engine-status.ts",
+        engineStatusExtensionSource({ engines })
       )
     );
   }

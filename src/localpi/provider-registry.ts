@@ -102,6 +102,44 @@ export function defaultLlamaCppBaseUrl(): string {
   return "http://127.0.0.1:8080/v1";
 }
 
+export type EngineEntry = {
+  readonly provider: string;
+  readonly engine: string;
+};
+
+// Known engines for the built-in openai-compatible providers. A configured openai-compatible
+// provider gets no entry, because its engine is unknown.
+const builtInEngineLabels: Readonly<Record<string, string>> = {
+  lmstudio: "LM Studio",
+  vllm: "vLLM"
+};
+
+/**
+ * Map localpi providers to the inference engine that serves them. Only providers whose engine is
+ * known appear in the result, so callers never show a guessed engine name.
+ */
+export function engineEntries(providers: readonly ProviderConfig[]): readonly EngineEntry[] {
+  const engines = new Map<string, string>();
+  for (const provider of providers) {
+    const engine = engineLabel(provider);
+    if (engine !== undefined && !engines.has(provider.id)) {
+      engines.set(provider.id, engine);
+    }
+  }
+  return [...engines].map(([provider, engine]) => ({ provider, engine }));
+}
+
+function engineLabel(provider: Pick<ProviderConfig, "id" | "type">): string | undefined {
+  switch (provider.type) {
+    case "llama-cpp":
+      return "llama.cpp";
+    case "managed-llama-server":
+      return "llama-server";
+    case "openai-compatible":
+      return builtInEngineLabels[provider.id];
+  }
+}
+
 function managedLlamaProvider(): ProviderConfig {
   return {
     id: "llama-server",
