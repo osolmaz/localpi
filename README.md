@@ -1,10 +1,10 @@
 # localpi
 
 <p align="center">
-  <img src="assets/cover.svg" alt="localpi points Pi at a local engine that is already running, picks the model, and keeps the engine, speed, and context on one status line" width="880">
+  <img src="assets/cover.svg" alt="localpi: an unopinionated Pi distribution that makes it easy to test and work with small local models on constrained systems" width="880">
 </p>
 
-Localpi is a Swiss army knife for running Pi with local inference engines.
+Localpi is an unopinionated Pi distribution that makes it easy to test and work with small local models on constrained systems.
 
 By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
 
