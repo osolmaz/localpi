@@ -8,51 +8,123 @@ import type { LocalpiOptions } from "../src/localpi/options.js";
 import { writeDefaultExtensions } from "../src/pi/extensions.js";
 
 describe("Pi extensions", () => {
-  it("writes thinking control, approval, and token status extensions", async () => {
+  it("writes thinking control, approval, token status, and status line extensions", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
-      const bundle = await writeDefaultExtensions(options(stateDir));
-      expect(bundle.paths).toHaveLength(3);
-      expect(bundle.systemPrompt).toContain("Tool calls require user approval");
+      const bundle = await writeDefaultExtensions(options(stateDir), {
+        engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
+      });
+      expect(bundle.paths).toHaveLength(4);
+      expect(bundle.systemPrompt).toContain("may require user approval");
       const thinking = await readFile(bundle.paths[0] ?? "", "utf8");
       const approval = await readFile(bundle.paths[1] ?? "", "utf8");
       const status = await readFile(bundle.paths[2] ?? "", "utf8");
-      expect(thinking).toContain('pi.registerCommand("thinking"');
-      expect(thinking).toContain("pi.setThinkingLevel(level)");
+      const line = await readFile(bundle.paths[3] ?? "", "utf8");
       expect(thinking).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
-      expect(thinking).toContain("persistThinking(actual)");
+      expect(thinking).toContain("persistThinking(pi.getThinkingLevel())");
       expect(thinking).toContain("persistThinking(event.level)");
       expect(thinking).toContain("thinking_level_select");
+      expect(thinking).not.toContain("registerCommand");
+      expect(thinking).not.toContain("setThinkingLevel");
       expect(approval).toContain("ctx.ui.confirm");
+      expect(approval).toContain('pi.registerCommand("approval"');
+      expect(approval).toContain("const initialEnabled: boolean = true;");
+      expect(approval).toContain("Tool approval rule:");
       expect(status).toContain("tok/s");
-      expect(status).toContain("message_update");
-      expect(status).toContain("currentTurn");
-      expect(status).toContain("firstOutputAt");
-      expect(status).toContain("generationElapsed");
-      expect(status).toContain("prefillTokenCount");
-      expect(status).toContain("input + cacheWrite");
-      expect(status).toContain("prefill ");
-      expect(status).toContain("gen ");
-      expect(status).toContain("outputText += update.text");
-      expect(status).toContain('kind: "delta"');
+      expect(status).toContain('pi.on("turn_start"');
+      expect(status).toContain('pi.on("message_update"');
+      expect(status).toContain('pi.on("turn_end"');
+      expect(status).toContain("ctx.ui.setWorkingMessage");
+      expect(status).toContain("registerEntryRenderer");
+      expect(status).toContain("pi.appendEntry(entryType, data)");
+      expect(status).toContain('pi.registerCommand("stats"');
+      expect(status).toContain("n_prompt_tokens_processed");
+      expect(status).toContain("formatTokenCount");
+      expect(status).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
+      expect(status).not.toContain("slots?model=");
       expect(status).not.toContain("turns.get(event.turnIndex)");
+      expect(status).not.toContain("setStatus");
+      expect(line).toContain('pi.on("session_start"');
+      expect(line).toContain("ctx.ui.setFooter");
+      expect(line).toContain("getExtensionStatuses");
+      expect(line).toContain('[{"provider":"llama-cpp","engine":"llama.cpp"}]');
+      expect(line).not.toContain("setStatus(");
+      expect(line).not.toContain("appendEntry");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
   });
 
-  it("keeps thinking control and reports disabled approval when optional extensions are off", async () => {
+  it("writes the status line extension only when the stats display is on", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const engines = [{ provider: "llama-cpp", engine: "llama.cpp" }];
+
+      const line = await writeDefaultExtensions(
+        { ...options(stateDir), stats: "line" },
+        { engines }
+      );
+      expect(line.paths.map((entry) => path.basename(entry))).toContain("status-line.ts");
+
+      const off = await writeDefaultExtensions({ ...options(stateDir), stats: "off" }, { engines });
+      expect(off.paths.map((entry) => path.basename(entry))).not.toContain("status-line.ts");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("starts with approval off and keeps remembering thinking when optional extensions are off", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const bundle = await writeDefaultExtensions({
         ...options(stateDir),
         approval: false,
-        tokenStatus: false
+        stats: "off"
       });
-      expect(bundle.paths).toHaveLength(1);
+      expect(bundle.paths).toHaveLength(2);
       const thinking = await readFile(bundle.paths[0] ?? "", "utf8");
-      expect(thinking).toContain('pi.registerCommand("thinking"');
-      expect(bundle.systemPrompt).toContain("Tool approval is disabled for this session.");
+      expect(thinking).toContain("thinking_level_select");
+      const approval = await readFile(bundle.paths[1] ?? "", "utf8");
+      expect(approval).toContain("const initialEnabled: boolean = false;");
+      expect(approval).toContain('pi.registerCommand("approval"');
+      expect(bundle.systemPrompt).toContain("may require user approval");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds llama.cpp prefill polling only for llama.cpp runtimes", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const llama = await writeDefaultExtensions(options(stateDir), {
+        runtime: {
+          providerId: "llama-cpp",
+          baseUrl: "http://127.0.0.1:8080/v1",
+          model: "local-model"
+        }
+      });
+      const llamaStatus = await readFile(llama.paths[2] ?? "", "utf8");
+      expect(llamaStatus).toContain("http://127.0.0.1:8080/slots?model=local-model");
+
+      const managed = await writeDefaultExtensions(options(stateDir), {
+        runtime: {
+          providerId: "llama-server",
+          baseUrl: "http://127.0.0.1:18194/v1",
+          model: "local-model"
+        }
+      });
+      expect(await readFile(managed.paths[2] ?? "", "utf8")).toContain(
+        "http://127.0.0.1:18194/slots?model=local-model"
+      );
+
+      const vllm = await writeDefaultExtensions(options(stateDir), {
+        runtime: {
+          providerId: "vllm",
+          baseUrl: "http://127.0.0.1:8000/v1",
+          model: "qwen"
+        }
+      });
+      expect(await readFile(vllm.paths[2] ?? "", "utf8")).not.toContain("slots?model=");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -67,7 +139,7 @@ describe("Pi extensions", () => {
         demoInitialPrompt: "- start story",
         demoFollowupPrompt: "@keep going"
       });
-      expect(bundle.paths).toHaveLength(4);
+      expect(bundle.paths).toHaveLength(5);
       const demoPath = bundle.paths[0] ?? "";
       expect(demoPath).toContain(path.join("pi-demo-mode", "extensions", "demo-mode.ts"));
       const demo = await readFile(demoPath, "utf8");
@@ -105,7 +177,7 @@ describe("Pi extensions", () => {
           ]
         }
       });
-      expect(bundle.paths).toHaveLength(4);
+      expect(bundle.paths).toHaveLength(5);
       const selector = await readFile(bundle.paths[0] ?? "", "utf8");
       expect(selector).toContain("ModelSelectorComponent");
       expect(selector).toContain('pi.on("session_start"');
@@ -115,7 +187,7 @@ describe("Pi extensions", () => {
       expect(selector).toContain("startupModelRegistry(ctx.modelRegistry)");
       expect(selector).not.toContain("readline");
       const thinking = await readFile(bundle.paths[1] ?? "", "utf8");
-      expect(thinking).toContain('pi.registerCommand("thinking"');
+      expect(thinking).toContain("thinking_level_select");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -168,7 +240,7 @@ function options(stateDir: string): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
-    tokenStatus: true,
+    stats: "full",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

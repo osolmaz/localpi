@@ -2,10 +2,16 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { asObject, optionalString } from "../common/json.js";
-import { parseThinkingLevel, type LocalpiOptions } from "./options.js";
+import {
+  parseStatsMode,
+  parseThinkingLevel,
+  type LocalpiOptions,
+  type StatsMode
+} from "./options.js";
 
 export type LocalpiSettings = {
   readonly thinking?: LocalpiOptions["thinking"];
+  readonly stats?: StatsMode;
 };
 
 export function localpiSettingsPath(options: Pick<LocalpiOptions, "stateDir">): string {
@@ -14,13 +20,14 @@ export function localpiSettingsPath(options: Pick<LocalpiOptions, "stateDir">): 
 
 export async function applyRememberedSettings(
   options: LocalpiOptions,
-  explicit: { readonly thinking: boolean }
+  explicit: { readonly thinking: boolean; readonly stats: boolean }
 ): Promise<LocalpiOptions> {
   const settings = await readLocalpiSettings(options);
   return {
     ...options,
     thinking:
-      explicit.thinking || settings.thinking === undefined ? options.thinking : settings.thinking
+      explicit.thinking || settings.thinking === undefined ? options.thinking : settings.thinking,
+    stats: explicit.stats || settings.stats === undefined ? options.stats : settings.stats
   };
 }
 
@@ -39,7 +46,11 @@ async function readLocalpiSettings(
   try {
     const root = asObject(JSON.parse(raw) as unknown, "localpi settings");
     const thinking = optionalString(root["thinking"]);
-    return thinking === undefined ? {} : { thinking: parseThinkingLevel(thinking) };
+    const stats = optionalString(root["stats"]);
+    return {
+      ...(thinking === undefined ? {} : { thinking: parseThinkingLevel(thinking) }),
+      ...(stats === undefined ? {} : { stats: parseStatsMode(stats) })
+    };
   } catch {
     return {};
   }

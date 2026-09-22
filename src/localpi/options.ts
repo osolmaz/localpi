@@ -2,9 +2,18 @@ import path from "node:path";
 
 import { normalizeBaseUrl } from "../llm/openai.js";
 
-export type RuntimeKind = "auto" | "llama-server" | "lmstudio" | "vllm" | "openai-compatible";
+export type RuntimeKind =
+  | "auto"
+  | "llama-server"
+  | "llama-cpp"
+  | "lmstudio"
+  | "vllm"
+  | "openai-compatible";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 export type ModelThinkingFormat = "deepseek" | "qwen-chat-template";
+export type StatsMode = "off" | "line" | "full";
+
+export const statsModes: readonly StatsMode[] = ["off", "line", "full"];
 
 export const thinkingLevels: readonly ThinkingLevel[] = [
   "off",
@@ -40,7 +49,7 @@ export type LocalpiOptions = {
   readonly chatTemplate: string | undefined;
   readonly tools: string | undefined;
   readonly approval: boolean;
-  readonly tokenStatus: boolean;
+  readonly stats: StatsMode;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -85,7 +94,7 @@ export function defaultOptions(): LocalpiOptions {
     chatTemplate: process.env["LOCALPI_CHAT_TEMPLATE"],
     tools: envString("LOCALPI_TOOLS", "read,bash,edit,write,grep,find,ls"),
     approval: envBoolean("LOCALPI_APPROVAL", true),
-    tokenStatus: envBoolean("LOCALPI_TOKEN_STATUS", true),
+    stats: defaultStatsMode(),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -135,7 +144,7 @@ export function usage(): string {
     "  localpi [localpi options] [pi options/messages]",
     "",
     "localpi options:",
-    "  --runtime <kind>         auto, llama-server, lmstudio, vllm, or openai-compatible",
+    "  --runtime <kind>         auto, llama-server, llama-cpp, lmstudio, vllm, or openai-compatible",
     "  --provider <id>          catalog provider id to use",
     "  --model <alias|id|path>  model alias, backend id, or GGUF path",
     "  --base-url <url>         OpenAI-compatible endpoint",
@@ -150,13 +159,14 @@ export function usage(): string {
     "  --parallel <n>           llama-server parallel slots",
     "  --chat-template <path>   llama.cpp chat template file",
     "  --tools <list>           Pi tools allow list",
+    "  --stats <mode>           stats: off, line, or full (default: full)",
     "  --providers-file <path>  localpi provider registry JSON",
     "  --model-profile <path>   local model capability profile JSON",
     "  --model-reasoning <bool> override generated Pi reasoning capability",
     "  --model-thinking-format <format>",
     "                          override generated Pi thinking format",
-    "  --no-approval           do not ask before tool calls",
-    "  --no-token-status       do not install token status extension",
+    "  --no-approval           start with tool approval off for this session",
+    "  --no-token-status       alias for --stats off",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -228,7 +238,7 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--stop": (options) => ({ ...options, stop: true }),
   "--list": (options) => ({ ...options, list: true }),
   "--no-approval": (options) => ({ ...options, approval: false }),
-  "--no-token-status": (options) => ({ ...options, tokenStatus: false }),
+  "--no-token-status": (options) => ({ ...options, stats: "off" }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
@@ -251,6 +261,7 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: value }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),
+  "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
   "--context-window": (options, value) => ({
     ...options,
@@ -334,6 +345,7 @@ function parseRuntime(value: string): RuntimeKind {
   if (
     value === "auto" ||
     value === "llama-server" ||
+    value === "llama-cpp" ||
     value === "lmstudio" ||
     value === "vllm" ||
     value === "openai-compatible"
@@ -341,7 +353,7 @@ function parseRuntime(value: string): RuntimeKind {
     return value;
   }
   throw new Error(
-    `unknown runtime ${value}; expected auto, llama-server, lmstudio, vllm, or openai-compatible`
+    `unknown runtime ${value}; expected auto, llama-server, llama-cpp, lmstudio, vllm, or openai-compatible`
   );
 }
 
@@ -354,6 +366,23 @@ export function parseThinkingLevel(value: string): ThinkingLevel {
   throw new Error(
     `unknown thinking level ${value}; expected off, minimal, low, medium, high, or xhigh`
   );
+}
+
+export function parseStatsMode(value: string): StatsMode {
+  for (const mode of statsModes) {
+    if (value === mode) {
+      return mode;
+    }
+  }
+  throw new Error(`unknown stats mode ${value}; expected off, line, or full`);
+}
+
+function defaultStatsMode(): StatsMode {
+  const explicit = process.env["LOCALPI_STATS"];
+  if (explicit !== undefined) {
+    return parseStatsMode(explicit);
+  }
+  return envBoolean("LOCALPI_TOKEN_STATUS", true) ? "full" : "off";
 }
 
 function parseModelThinkingFormat(value: string): ModelThinkingFormat {

@@ -1,4 +1,4 @@
-import { listModels } from "../llm/openai.js";
+import { fetchServerProps, listModels } from "../llm/openai.js";
 import type { ModelInfo } from "../llm/openai.js";
 import {
   getManagedLlamaServerMetadata,
@@ -75,6 +75,8 @@ async function discoverProvider(
   switch (config.type) {
     case "openai-compatible":
       return discoverOpenAiCompatibleProvider(config, options, profile);
+    case "llama-cpp":
+      return discoverLlamaCppProvider(config, options, profile);
     case "managed-llama-server":
       return discoverManagedLlamaProvider(config, options);
   }
@@ -121,7 +123,8 @@ function openAiCatalogModel(
   config: ProviderConfig,
   model: ModelInfo,
   options: LocalpiOptions,
-  profile?: LocalModelProfile
+  profile?: LocalModelProfile,
+  availability: ModelAvailability = "loaded"
 ): CatalogModel {
   const baseUrl = config.baseUrl ?? "";
   const profileConfig = profileCapabilityConfig(profile, baseUrl, model.id);
@@ -138,9 +141,79 @@ function openAiCatalogModel(
     maxTokens: profileConfig.maxTokens ?? options.maxTokens,
     ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
     capabilities: ["text"],
-    availability: "loaded",
+    availability,
     ...(contextWindow === undefined ? {} : { contextWindow })
   };
+}
+
+async function discoverLlamaCppProvider(
+  config: ProviderConfig,
+  options: LocalpiOptions,
+  profile?: LocalModelProfile
+): Promise<ModelCatalog> {
+  const baseUrl = config.baseUrl;
+  if (baseUrl === undefined) {
+    return { models: [], warnings: [] };
+  }
+  if (!config.discover) {
+    const explicitModel = explicitOpenAiCatalogModel(config, [], options, profile);
+    return { models: explicitModel === undefined ? [] : [explicitModel], warnings: [] };
+  }
+  let models: readonly ModelInfo[];
+  try {
+    models = await listModels(baseUrl, options.timeoutMs);
+  } catch (error) {
+    if (explicitOpenAiProviderSelected(options, config.id)) {
+      throw error;
+    }
+    return {
+      models: [],
+      warnings: [
+        catalogWarning(config.id, config.name, "provider-not-responding", {
+          message: `not responding at ${baseUrl}`
+        })
+      ]
+    };
+  }
+  const loaded = models.filter((model) => model.status !== "unloaded");
+  const unloaded = models.filter((model) => model.status === "unloaded");
+  const autoload = await llamaCppAutoload(baseUrl, options);
+  const startable = autoload === true ? unloaded : [];
+  return {
+    models: [
+      ...loaded.map((model) => openAiCatalogModel(config, model, options, profile, "loaded")),
+      ...startable.map((model) => openAiCatalogModel(config, model, options, profile, "startable"))
+    ],
+    warnings: llamaCppUnloadedWarnings(config, unloaded, autoload)
+  };
+}
+
+async function llamaCppAutoload(
+  baseUrl: string,
+  options: LocalpiOptions
+): Promise<boolean | undefined> {
+  try {
+    return (await fetchServerProps(baseUrl, options.timeoutMs)).modelsAutoload;
+  } catch {
+    return undefined;
+  }
+}
+
+function llamaCppUnloadedWarnings(
+  config: ProviderConfig,
+  unloaded: readonly ModelInfo[],
+  autoload: boolean | undefined
+): readonly CatalogWarning[] {
+  if (unloaded.length === 0 || autoload === true) {
+    return [];
+  }
+  return [
+    catalogWarning(config.id, config.name, "runtime-warning", {
+      message: `${config.name} reported unloaded models: ${unloaded
+        .map((model) => model.id)
+        .join(", ")}; the server does not autoload models`
+    })
+  ];
 }
 
 function profileAliases(
@@ -202,6 +275,7 @@ function explicitOpenAiProviderSelected(options: LocalpiOptions, providerId: str
     (options.provider === undefined &&
       (options.runtime === "lmstudio" ||
         options.runtime === "vllm" ||
+        options.runtime === "llama-cpp" ||
         options.runtime === "openai-compatible"))
   );
 }

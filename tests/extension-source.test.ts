@@ -2,6 +2,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
+import { statusLineExtensionSource } from "../src/pi/extension-sources/status-line.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "../src/pi/extension-sources/token-status.js";
 import { approvalExtensionSource } from "../src/pi/extension-sources/tool-approval.js";
@@ -18,8 +19,23 @@ describe("generated Pi extension sources", () => {
       fileName: "thinking-control.ts",
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
-    { fileName: "tool-approval.ts", source: approvalExtensionSource() },
-    { fileName: "token-status.ts", source: tokenStatusExtensionSource() }
+    { fileName: "tool-approval.ts", source: approvalExtensionSource({ enabled: true }) },
+    {
+      fileName: "token-status.ts",
+      source: tokenStatusExtensionSource({
+        settingsPath: "/tmp/localpi/settings.json",
+        mode: "full",
+        engine: "llama-cpp",
+        baseUrl: "http://127.0.0.1:8080/v1",
+        modelId: "local-model"
+      })
+    },
+    {
+      fileName: "status-line.ts",
+      source: statusLineExtensionSource({
+        engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
+      })
+    }
   ] as const;
 
   for (const { fileName, source } of sources) {
@@ -37,13 +53,6 @@ describe("generated Pi extension sources", () => {
       expect(formatDiagnostics(result.diagnostics ?? [])).toBe("");
     });
   }
-
-  it("token status omits the context segment when includeContext is false", () => {
-    expect(tokenStatusExtensionSource({ includeContext: false })).toContain(
-      "const includeContext = false;"
-    );
-    expect(tokenStatusExtensionSource()).toContain("const includeContext = true;");
-  });
 });
 
 function formatDiagnostics(diagnostics: readonly ts.Diagnostic[]): string {

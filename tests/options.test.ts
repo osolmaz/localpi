@@ -33,8 +33,17 @@ describe("localpi option parsing", () => {
     expect(options.contextWindow).toBe(32768);
     expect(options.port).toBe(18195);
     expect(options.approval).toBe(false);
-    expect(options.tokenStatus).toBe(false);
+    expect(options.stats).toBe("off");
     expect(parseLocalpiArgs(["--runtime", "vllm"]).runtime).toBe("vllm");
+  });
+
+  it("parses and validates stats modes", () => {
+    expect(parseLocalpiArgs([]).stats).toBe("full");
+    expect(parseLocalpiArgs(["--stats", "line"]).stats).toBe("line");
+    expect(parseLocalpiArgs(["--stats", "off"]).stats).toBe("off");
+    expect(() => parseLocalpiArgs(["--stats", "banana"])).toThrow(
+      "unknown stats mode banana; expected off, line, or full"
+    );
   });
 
   it("parses and validates thinking levels", () => {
@@ -172,6 +181,7 @@ describe("localpi environment defaults", () => {
     "LOCALPI_CONTEXT_WINDOW",
     "LOCALPI_APPROVAL",
     "LOCALPI_TOKEN_STATUS",
+    "LOCALPI_STATS",
     "LOCALPI_MODEL",
     "LOCALPI_PROVIDER",
     "LOCALPI_PROVIDERS_FILE",
@@ -225,7 +235,7 @@ describe("localpi environment defaults", () => {
       baseUrl: "http://127.0.0.1:9999/v1",
       contextWindow: 16384,
       approval: false,
-      tokenStatus: true,
+      stats: "full",
       model: "env-model",
       provider: "env-provider",
       providersFile: "/tmp/env-providers.json",
@@ -253,6 +263,16 @@ describe("localpi environment defaults", () => {
       modelReasoning: true,
       modelThinkingFormat: "qwen-chat-template"
     });
+  });
+
+  it("reads the stats mode from the environment", () => {
+    process.env["LOCALPI_STATS"] = "line";
+    expect(parseLocalpiArgs([]).stats).toBe("line");
+
+    delete process.env["LOCALPI_STATS"];
+    process.env["LOCALPI_TOKEN_STATUS"] = "0";
+    expect(parseLocalpiArgs([]).stats).toBe("off");
+    expect(parseLocalpiArgs(["--stats", "full"]).stats).toBe("full");
   });
 
   it("defaults thinking to medium when LOCALPI_THINKING is not set", () => {
