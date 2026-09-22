@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 320" role="img" aria-label="localpi points Pi at a local engine that is already running, picks the model, and keeps the engine, speed, and context on one status line">
+  <defs>
+    <style>
+      .mono { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; }
+      .sans { font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+      .chip { fill: #161b22; stroke: #30363d; stroke-width: 1.5; }
+      .chiplabel { font-size: 10px; text-anchor: middle; }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L7,4 L0,8 Z" fill="#8b949e"/>
+    </marker>
+  </defs>
+
+  <rect x="1" y="1" width="958" height="318" rx="16" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Left: name, tagline, command line (content spans y 76-244, centered on 160) -->
+  <g>
+    <text x="56" y="110" class="mono" font-size="46" font-weight="700">
+      <tspan fill="#58a6ff">local</tspan><tspan fill="#e6edf3">pi</tspan>
+    </text>
+    <text x="56" y="148" class="sans" font-size="16" fill="#8b949e">Point Pi at a local engine you already run,</text>
+    <text x="56" y="174" class="sans" font-size="16" fill="#8b949e">pick the model, and keep the speed visible</text>
+
+    <rect x="56" y="200" width="392" height="44" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="74" y="228" class="mono" font-size="14">
+      <tspan fill="#3fb950">$</tspan><tspan fill="#e6edf3" dx="8">localpi "add tests for the parser"</tspan>
+    </text>
+  </g>
+
+  <!-- The launch enters the Pi session localpi configures (drawn after the panel, so the arrowhead stays visible) -->
+
+  <!-- Right: what localpi shows and what it launches (content spans y 52-272) -->
+  <g>
+    <rect x="520" y="52" width="384" height="220" rx="12" fill="#0d1117" stroke="#58a6ff" stroke-width="2"/>
+    <text x="536" y="74" class="mono" font-size="12">
+      <tspan fill="#58a6ff" font-weight="700">Pi</tspan><tspan fill="#8b949e">&#160;· one status line, engine next to the model</tspan>
+    </text>
+
+    <!-- Pi's footer, as localpi renders it: totals, speed, context, then the engine -->
+    <line x1="536" y1="86" x2="888" y2="86" stroke="#21262d" stroke-width="1"/>
+    <text x="536" y="104" class="mono" font-size="10" fill="#8b949e">~/repos/localpi · <tspan fill="#58a6ff">9.4 tok/s</tspan> · 4.2%/131k</text>
+    <text x="888" y="104" class="mono" font-size="10" fill="#3fb950" text-anchor="end">(llama.cpp)</text>
+    <line x1="536" y1="116" x2="888" y2="116" stroke="#21262d" stroke-width="1"/>
+
+    <!-- The live line while the model runs -->
+    <text x="536" y="140" class="mono" font-size="10">
+      <tspan fill="#e6edf3" font-weight="700">Working</tspan><tspan fill="#8b949e"> (1.8s · 100 out · 55.6 tok/s)</tspan>
+    </text>
+    <text x="888" y="140" class="mono" font-size="10" fill="#8b949e" text-anchor="end">ctx 34k/131k (26%)</text>
+
+    <!-- The engines localpi can point Pi at, with llama.cpp as the default -->
+    <rect class="chip" x="536" y="166" width="126" height="24" rx="7" stroke="#58a6ff"/>
+    <text x="599" y="182" class="mono chiplabel" fill="#58a6ff">llama.cpp · default</text>
+
+    <rect class="chip" x="670" y="166" width="78" height="24" rx="7"/>
+    <text x="709" y="182" class="mono chiplabel" fill="#c9d1d9">LM Studio</text>
+
+    <rect class="chip" x="756" y="166" width="56" height="24" rx="7"/>
+    <text x="784" y="182" class="mono chiplabel" fill="#c9d1d9">vLLM</text>
+
+    <rect class="chip" x="820" y="166" width="68" height="24" rx="7"/>
+    <text x="854" y="182" class="mono chiplabel" fill="#c9d1d9">Ollama</text>
+
+    <line x1="712" y1="196" x2="712" y2="210" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+
+    <!-- Pi keeps the interface and the guardrails -->
+    <rect x="536" y="216" width="352" height="40" rx="8" fill="#161b22" stroke="#30363d"/>
+    <text x="552" y="232" class="mono" font-size="10" fill="#3fb950">&#10003; read-only tools run without a dialog</text>
+    <text x="552" y="248" class="mono" font-size="10" fill="#d29922">bash asks first · deny stops the turn</text>
+  </g>
+
+  <line x1="456" y1="222" x2="512" y2="222" stroke="#8b949e" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>

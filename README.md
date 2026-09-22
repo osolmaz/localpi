@@ -1,5 +1,9 @@
 # localpi
 
+<p align="center">
+  <img src="assets/cover.svg" alt="localpi points Pi at a local engine that is already running, picks the model, and keeps the engine, speed, and context on one status line" width="880">
+</p>
+
 Localpi is a Swiss army knife for running Pi with local inference engines.
 
 By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
