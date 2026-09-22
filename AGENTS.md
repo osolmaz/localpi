@@ -33,9 +33,9 @@ llama.cpp is localpi's default and preferred local engine.
 
 The status display follows `docs/design-principles.md`: simple, unopinionated, customizable.
 
-- Keep two surfaces only: one live line and one transcript entry per turn. Pi owns the footer and already shows context usage there, so localpi must not add a footer item with the same numbers. Do not add more status surfaces for the same information.
-- Show the inference engine in Pi's footer status line through `setStatus`. Do not call `setFooter`, which replaces Pi's whole footer, and do not edit Pi's model name.
-- Build the engine label from the launch-time provider map (`engineEntries`) and follow the current model's provider. Never guess an engine from a model name or a base URL. When the engine is unknown, show nothing.
+- Keep two surfaces only: one live line and one transcript entry per turn. Pi owns the footer and already shows context usage there, so localpi must not add a footer item or any other status line. Do not add more status surfaces for the same information.
+- Show the inference engine as the first segment of the live line and of the transcript entry. Do not call `setStatus` or `setFooter`, and do not edit Pi's model name.
+- Build the engine label from the launch-time provider map (`engineEntries`) and follow the current model's provider. Never guess an engine from a model name or a base URL. When the engine is unknown, show no segment.
 - Keep the mode order `off`, `line`, `full`, with `full` as the default.
 - Keep the precedence order: `--stats`, `LOCALPI_STATS`, the saved `/stats` value in `<state-dir>/settings.json`, then the default. Keep `--no-token-status` as an alias for `--stats off`.
 - Keep the live line in Pi's native working row through `ctx.ui.setWorkingMessage`, and keep the word `Working` in that line.

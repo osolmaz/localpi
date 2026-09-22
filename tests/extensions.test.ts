@@ -8,18 +8,17 @@ import type { LocalpiOptions } from "../src/localpi/options.js";
 import { writeDefaultExtensions } from "../src/pi/extensions.js";
 
 describe("Pi extensions", () => {
-  it("writes thinking control, approval, token status, and engine status extensions", async () => {
+  it("writes thinking control, approval, and token status extensions", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const bundle = await writeDefaultExtensions(options(stateDir), {
         engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
       });
-      expect(bundle.paths).toHaveLength(4);
+      expect(bundle.paths).toHaveLength(3);
       expect(bundle.systemPrompt).toContain("may require user approval");
       const thinking = await readFile(bundle.paths[0] ?? "", "utf8");
       const approval = await readFile(bundle.paths[1] ?? "", "utf8");
       const status = await readFile(bundle.paths[2] ?? "", "utf8");
-      const engine = await readFile(bundle.paths[3] ?? "", "utf8");
       expect(thinking).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
       expect(thinking).toContain("persistThinking(pi.getThinkingLevel())");
       expect(thinking).toContain("persistThinking(event.level)");
@@ -43,16 +42,14 @@ describe("Pi extensions", () => {
       expect(status).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
       expect(status).not.toContain("slots?model=");
       expect(status).not.toContain("turns.get(event.turnIndex)");
-      expect(engine).toContain('pi.on("model_select"');
-      expect(engine).toContain('const statusKey = "localpi-engine";');
-      expect(engine).toContain('"engine":"llama.cpp"');
-      expect(engine).not.toContain("setFooter");
+      expect(status).toContain('[{"provider":"llama-cpp","engine":"llama.cpp"}]');
+      expect(status).not.toContain("setStatus");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
   });
 
-  it("writes the engine status extension only in full stats mode", async () => {
+  it("writes no extra footer status extension", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const engines = [{ provider: "llama-cpp", engine: "llama.cpp" }];
@@ -63,11 +60,8 @@ describe("Pi extensions", () => {
       );
       expect(line.paths.map((entry) => path.basename(entry))).not.toContain("engine-status.ts");
 
-      const unknown = await writeDefaultExtensions(options(stateDir), { engines: [] });
-      expect(unknown.paths.map((entry) => path.basename(entry))).not.toContain("engine-status.ts");
-
       const full = await writeDefaultExtensions(options(stateDir), { engines });
-      expect(full.paths.map((entry) => path.basename(entry))).toContain("engine-status.ts");
+      expect(full.paths.map((entry) => path.basename(entry))).not.toContain("engine-status.ts");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }

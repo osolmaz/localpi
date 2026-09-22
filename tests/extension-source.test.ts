@@ -2,7 +2,6 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { demoModeExtensionSource } from "../src/pi/extension-sources/demo-mode.js";
-import { engineStatusExtensionSource } from "../src/pi/extension-sources/engine-status.js";
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "../src/pi/extension-sources/token-status.js";
@@ -25,12 +24,6 @@ describe("generated Pi extension sources", () => {
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
     { fileName: "tool-approval.ts", source: approvalExtensionSource({ enabled: true }) },
-    {
-      fileName: "engine-status.ts",
-      source: engineStatusExtensionSource({
-        engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
-      })
-    },
     {
       fileName: "token-status.ts",
       source: tokenStatusExtensionSource({

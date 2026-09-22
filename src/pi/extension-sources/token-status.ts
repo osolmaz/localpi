@@ -1,8 +1,10 @@
 import type { StatsMode } from "../../localpi/options.js";
+import type { EngineEntry } from "../../localpi/provider-registry.js";
 
 export type TokenStatusConfig = {
   readonly settingsPath: string;
   readonly mode: StatsMode;
+  readonly engines?: readonly EngineEntry[];
   readonly engine?: "llama-cpp";
   readonly baseUrl?: string;
   readonly modelId?: string;
@@ -11,6 +13,7 @@ export type TokenStatusConfig = {
 export function tokenStatusExtensionSource(config: TokenStatusConfig): string {
   const settingsPathSource = JSON.stringify(config.settingsPath);
   const initialModeSource = JSON.stringify(config.mode);
+  const enginesSource = JSON.stringify(config.engines ?? []);
   const slotsUrlSource = JSON.stringify(slotsUrl(config));
   return `import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -30,9 +33,15 @@ type PrefillProgress = {
   total: number;
 };
 
+type EngineEntry = {
+  provider: string;
+  engine: string;
+};
+
 type TurnState = {
   startedAt: number;
   firstOutputAt?: number;
+  engine?: string;
   outputText: string;
   estimatedOutputTokens: number;
   prefill?: PrefillProgress;
@@ -40,6 +49,7 @@ type TurnState = {
 };
 
 type StatsEntry = {
+  engine?: string;
   rate?: number;
   output?: number;
   input?: number;
@@ -70,6 +80,7 @@ type Segment = {
 
 type StatsContext = {
   readonly hasUI: boolean;
+  readonly model?: { readonly provider?: string };
   readonly ui: {
     setWorkingMessage(message?: string): void;
     notify(message: string, type?: "info" | "warning" | "error"): void;
@@ -86,6 +97,7 @@ const initialMode: StatsMode = ${initialModeSource};
 // llama.cpp exposes live prefill progress on /slots. Other engines have no equivalent endpoint.
 const slotsUrl: string | undefined = ${slotsUrlSource};
 
+const engines: readonly EngineEntry[] = ${enginesSource};
 const entryType = "localpi-stats";
 const modes: readonly StatsMode[] = ["off", "line", "full"];
 const renderIntervalMs = 200;
@@ -132,7 +144,13 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
 
   pi.on("turn_start", (_event, ctx) => {
     stopTimers();
-    state = { startedAt: Date.now(), outputText: "", estimatedOutputTokens: 0, lastRenderAt: 0 };
+    state = {
+      startedAt: Date.now(),
+      engine: engineLabel(ctx.model),
+      outputText: "",
+      estimatedOutputTokens: 0,
+      lastRenderAt: 0
+    };
     if (!ctx.hasUI || mode === "off") {
       return;
     }
@@ -275,6 +293,9 @@ function workingLine(
 
 function workingParts(state: TurnState, now: number, usage: ContextUsage | undefined): Segment[][] {
   const parts: Segment[][] = [];
+  if (state.engine !== undefined) {
+    parts.push([{ text: state.engine, color: "muted" }]);
+  }
   if (state.firstOutputAt === undefined) {
     parts.push(...prefillParts(state, now));
   } else {
@@ -324,6 +345,9 @@ function entryLine(data: StatsEntry, theme: ThemeLike, width: number): string {
 
 function entryParts(data: StatsEntry): Segment[][] {
   const parts: Segment[][] = [];
+  if (data.engine !== undefined) {
+    parts.push([{ text: data.engine, color: "muted" }]);
+  }
   if (data.elapsedSeconds !== undefined) {
     parts.push([{ text: formatElapsed(data.elapsedSeconds), color: "dim" }]);
   }
@@ -404,6 +428,7 @@ function turnEntry(
   const firstOutputAt = state.firstOutputAt;
   const output = usage?.output ?? state.estimatedOutputTokens;
   return withoutUndefined({
+    engine: state.engine,
     rate: firstOutputAt === undefined ? undefined : output / secondsBetween(firstOutputAt, now),
     output,
     input: usage?.input,
@@ -422,11 +447,17 @@ function contextUsage(ctx: StatsContext): ContextUsage | undefined {
   return ctx.getContextUsage();
 }
 
+function engineLabel(model: { readonly provider?: string } | undefined): string | undefined {
+  const provider = model?.provider;
+  return engines.find((entry) => entry.provider === provider)?.engine;
+}
+
 function readEntry(data: unknown): StatsEntry {
   if (!isRecord(data)) {
     return {};
   }
   return withoutUndefined({
+    engine: stringOrUndefined(data["engine"]),
     rate: numberOrUndefined(data["rate"]),
     output: numberOrUndefined(data["output"]),
     input: numberOrUndefined(data["input"]),
@@ -574,6 +605,10 @@ function secondsBetween(start: number, end: number): number {
 
 function numberOrUndefined(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

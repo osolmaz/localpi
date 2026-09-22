@@ -6,8 +6,6 @@ import type { EngineEntry } from "../localpi/provider-registry.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
 import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
-import { engineStatusExtensionSource } from "./extension-sources/engine-status.js";
-
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import {
@@ -86,17 +84,9 @@ export async function writeDefaultExtensions(
       await writeExtension(
         extensionDir,
         "token-status.ts",
-        tokenStatusExtensionSource(tokenStatusConfig(options, extensionOptions.runtime))
-      )
-    );
-  }
-  const engines = extensionOptions.engines ?? [];
-  if (options.stats === "full" && engines.length > 0) {
-    paths.push(
-      await writeExtension(
-        extensionDir,
-        "engine-status.ts",
-        engineStatusExtensionSource({ engines })
+        tokenStatusExtensionSource(
+          tokenStatusConfig(options, extensionOptions.runtime, extensionOptions.engines)
+        )
       )
     );
   }
@@ -114,11 +104,13 @@ async function writeExtension(extensionDir: string, name: string, source: string
 
 function tokenStatusConfig(
   options: LocalpiOptions,
-  runtime: RuntimeStatsTarget | undefined
+  runtime: RuntimeStatsTarget | undefined,
+  engines: readonly EngineEntry[] | undefined
 ): TokenStatusConfig {
   return {
     settingsPath: localpiSettingsPath(options),
     mode: options.stats,
+    ...(engines === undefined ? {} : { engines }),
     ...runtimeConfig(runtime)
   };
 }

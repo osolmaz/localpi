@@ -134,38 +134,39 @@ Point at a llama.cpp server on another port with a provider registry entry:
 The status display answers one question: is this machine keeping up? It shows elapsed time, output
 tokens, token rate, and context use. Pick a mode with `--stats`:
 
-| Mode             | Live line | Transcript entry | Engine label |
-| ---------------- | --------- | ---------------- | ------------ |
-| `off`            | no        | no               | no           |
-| `line`           | yes       | no               | no           |
-| `full` (default) | yes       | yes              | yes          |
+| Mode             | Live line | Transcript entry |
+| ---------------- | --------- | ---------------- |
+| `off`            | no        | no               |
+| `line`           | yes       | no               |
+| `full` (default) | yes       | yes              |
 
-Pi owns the footer, so localpi cannot change the model name in it. In `full` mode localpi adds one
-footer status item with the inference engine that serves the current model, for example `llama.cpp`.
-The label follows the model, so switching to a model from another provider changes it. Localpi shows
-the label only when it knows the engine, from the provider it built the catalog with. For an unknown
-engine, it shows nothing instead of a guess.
+Pi owns the footer. Localpi adds no footer status line, so the status display never costs an extra
+row on screen.
 
 The live line replaces Pi's plain `Working` text while the model runs:
 
 ```text
-Working (1.8s · 100 out · 55.6 tok/s · ctx 34k/131k (26%))
+Working (llama.cpp · 1.8s · 100 out · 55.6 tok/s · ctx 34k/131k (26%))
 ```
 
 During prefill, the same line reports progress through the prompt:
 
 ```text
-Working (prefill 25% · 5k/20k tok · 3.2s · ctx 20k/33k (61%))
+Working (llama.cpp · prefill 25% · 5k/20k tok · 3.2s · ctx 20k/33k (61%))
 ```
 
 Prefill progress needs a llama.cpp server, because it reads the server's `/slots` endpoint. Localpi
 polls that endpoint only for llama.cpp runtimes. When the endpoint is missing or slow, localpi stops
 polling and shows elapsed prefill time instead.
 
+The first segment is the inference engine that serves the current model. Localpi knows the engine of
+the providers it built the catalog with, so the label is read, not guessed. A model from an unknown
+provider shows no engine segment.
+
 In `full` mode, each finished turn also adds one dim transcript line:
 
 ```text
-10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
+llama.cpp · 10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
 ```
 
 Context colors use the active theme: normal below 80 percent, warning from 80 percent, error from
