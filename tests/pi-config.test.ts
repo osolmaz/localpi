@@ -45,6 +45,25 @@ describe("Pi runtime config", () => {
     }
   });
 
+  it("writes image input for a catalog model that accepts images", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
+    try {
+      const base = catalogModel("llama-cpp", "llama.cpp", "http://127.0.0.1:8080/v1", "bonsai-27b");
+      const runtime = await writePiRuntimeConfig(
+        createLocalpiAppDefinition(options(stateDir), {
+          ...connection("bonsai-27b", "http://127.0.0.1:8080/v1"),
+          catalogModels: [{ ...base, capabilities: ["text", "image"] }]
+        })
+      );
+      const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
+        providers: Record<string, { models: readonly { input?: readonly string[] }[] }>;
+      };
+      expect(models.providers["llama-cpp"]?.models[0]?.input).toEqual(["text", "image"]);
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("writes context window only from an override or discovered metadata", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
     try {

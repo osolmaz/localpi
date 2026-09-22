@@ -18,7 +18,7 @@ import type { ProviderConfig } from "./provider-registry.js";
 import { providerConfigs } from "./provider-registry.js";
 
 export type ModelAvailability = "loaded" | "startable";
-export type ModelCapability = "text";
+export type ModelCapability = "text" | "image";
 export type CatalogRuntime = "openai-compatible" | "managed-llama-server";
 export type CatalogThinkingFormat = "deepseek" | "qwen-chat-template";
 
@@ -140,7 +140,7 @@ function openAiCatalogModel(
     displayName: `${config.name} / ${model.id}`,
     maxTokens: profileConfig.maxTokens ?? options.maxTokens,
     ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
-    capabilities: ["text"],
+    capabilities: modelCapabilities(model),
     availability,
     ...(contextWindow === undefined ? {} : { contextWindow })
   };
@@ -186,6 +186,12 @@ async function discoverLlamaCppProvider(
     ],
     warnings: llamaCppUnloadedWarnings(config, unloaded, autoload)
   };
+}
+
+// Pi passes image input to a model only when the model catalog says the model takes images. A
+// llama.cpp server reports that in the model architecture, so read it there and never guess.
+function modelCapabilities(model: ModelInfo): readonly ModelCapability[] {
+  return model.inputModalities?.includes("image") === true ? ["text", "image"] : ["text"];
 }
 
 async function llamaCppAutoload(

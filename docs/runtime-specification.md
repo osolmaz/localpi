@@ -151,6 +151,12 @@ When the served model id matches `model` or `id`, localpi uses the profile to ge
 
 Name-based capability detection remains fallback behavior. Built-in vLLM Gemma 4 model ids are treated as reasoning-capable with `qwen-chat-template`, matching vLLM Gemma servers launched with `--reasoning-parser gemma4`.
 
+### Image input
+
+A llama.cpp server reports model architecture in `/v1/models`. Localpi reads `architecture.input_modalities` and writes `input: ["text", "image"]` into the Pi model config when the entry lists `image`, so Pi passes image attachments to that model. Every other model is written as `input: ["text"]`.
+
+The server side must hold up its end: the model needs a multimodal projector, and the server must run with `--mmproj <file>.gguf`. A llama.cpp router passes the projector of a model directory to the child server on its own. Test a model with one real image request before you trust it, because a text-only server answers an image request with text about the prompt, not the picture.
+
 ## Model Selection
 
 `--model` should accept:

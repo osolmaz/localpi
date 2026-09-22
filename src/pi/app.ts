@@ -164,7 +164,7 @@ function modelDefinition(options: LocalpiOptions, model: CatalogModel): PiModelD
     name: model.displayName,
     reasoning: model.reasoning ?? false,
     ...(model.thinkingFormat === undefined ? {} : { thinkingFormat: model.thinkingFormat }),
-    input: ["text"],
+    input: model.capabilities.includes("image") ? ["text", "image"] : ["text"],
     ...(contextWindow === undefined ? {} : { contextWindow }),
     ...(model.maxTokens === undefined
       ? { maxTokens: options.maxTokens }

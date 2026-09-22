@@ -7,6 +7,7 @@ export type ModelStatus = "loaded" | "unloaded";
 export type ModelInfo = {
   readonly id: string;
   readonly contextWindow?: number;
+  readonly inputModalities?: readonly string[];
   readonly status?: ModelStatus;
 };
 
@@ -95,11 +96,28 @@ function modelInfo(entry: Record<string, unknown>): ModelInfo | undefined {
     return undefined;
   }
   const contextWindow = findContextWindow(entry);
+  const inputModalities = findInputModalities(entry);
   return {
     id,
     ...optionalModelStatus(modelStatus(entry["status"])),
-    ...(contextWindow === undefined ? {} : { contextWindow })
+    ...(contextWindow === undefined ? {} : { contextWindow }),
+    ...(inputModalities === undefined ? {} : { inputModalities })
   };
+}
+
+// llama.cpp reports the model architecture in /v1/models, and a model that accepts images says so
+// in input_modalities. Anything else stays unknown instead of guessed.
+function findInputModalities(entry: Record<string, unknown>): readonly string[] | undefined {
+  const architecture = entry["architecture"];
+  if (architecture === null || typeof architecture !== "object" || Array.isArray(architecture)) {
+    return undefined;
+  }
+  const value = (architecture as Record<string, unknown>)["input_modalities"];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const modalities = value.filter((item): item is string => typeof item === "string");
+  return modalities.length === 0 ? undefined : modalities;
 }
 
 function optionalModelStatus(status: ModelStatus | undefined): { readonly status?: ModelStatus } {

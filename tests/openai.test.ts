@@ -48,6 +48,28 @@ describe("OpenAI-compatible model discovery", () => {
     ]);
   });
 
+  it("reads the input modalities a llama.cpp server reports", async () => {
+    const models = await listModels("http://local.test/v1", 1000, () =>
+      Promise.resolve(
+        jsonResponse({
+          data: [
+            {
+              id: "bonsai-27b",
+              architecture: { input_modalities: ["text", "image"], output_modalities: ["text"] }
+            },
+            { id: "text-only" },
+            { id: "broken", architecture: { input_modalities: "image" } }
+          ]
+        })
+      )
+    );
+    expect(models).toEqual([
+      { id: "bonsai-27b", inputModalities: ["text", "image"] },
+      { id: "text-only" },
+      { id: "broken" }
+    ]);
+  });
+
   it("ignores unknown llama.cpp status values", async () => {
     const models = await listModels("http://local.test/v1", 1000, () =>
       Promise.resolve(jsonResponse({ data: [{ id: "kept", status: { value: "loading" } }] }))

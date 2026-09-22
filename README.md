@@ -182,6 +182,12 @@ Point at a llama.cpp server on another port with a provider registry entry:
 }
 ```
 
+### Image input
+
+When a llama.cpp model takes images, Localpi says so in the Pi model config, so the `read` tool and `@file` attachments can send a picture to that model. Localpi reads the fact from the server: an entry in `/v1/models` that lists `image` in `architecture.input_modalities` gets `input: ["text", "image"]`. Every other model stays text-only. No model name is used to guess this.
+
+The server must load a multimodal projector for the model, which a llama.cpp router does on its own from the model directory. Check it with one real image request before you rely on it.
+
 ## Status Display
 
 The status display answers one question: is this machine keeping up? It shows elapsed time, output

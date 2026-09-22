@@ -673,6 +673,34 @@ describe("runtime resolution", () => {
     });
   });
 
+  it("marks a llama.cpp model that accepts images as an image model", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [
+        {
+          id: "bonsai-27b",
+          status: { value: "loaded" },
+          architecture: { input_modalities: ["text", "image"] }
+        },
+        { id: "text-only-27b", status: { value: "loaded" } }
+      ],
+      { role: "router", models_autoload: false }
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
+
+    const connection = await resolveRuntime({
+      ...options(),
+      runtime: "auto",
+      model: "auto",
+      providersFile
+    });
+
+    expect(connection.catalogModels).toEqual([
+      expect.objectContaining({ modelId: "bonsai-27b", capabilities: ["text", "image"] }),
+      expect.objectContaining({ modelId: "text-only-27b", capabilities: ["text"] })
+    ]);
+  });
+
   it("offers unloaded llama.cpp models only when the server autoloads", async () => {
     const { stateDir } = await tempRuntimeState();
     const baseUrl = await startModelListServer(
