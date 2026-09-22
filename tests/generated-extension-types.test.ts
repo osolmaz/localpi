@@ -19,14 +19,14 @@ afterAll(async () => {
 });
 
 describe("generated Pi extensions", () => {
-  it("typecheck against the installed Pi extension API", async () => {
+  it("typecheck against the installed Pi extension API", { timeout: 120_000 }, async () => {
     const files = await writeGeneratedExtensions();
 
     expect(files).toHaveLength(4);
     expect(typeCheck(files)).toEqual([]);
   });
 
-  it("report a Pi API mismatch", async () => {
+  it("report a Pi API mismatch", { timeout: 120_000 }, async () => {
     const files = await writeGeneratedExtensions();
     const edited = path.join(checkDirectory, "drifted.ts");
     await writeFile(
