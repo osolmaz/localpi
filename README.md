@@ -12,10 +12,18 @@ Localpi is meant to be the practical bridge from Pi to local inference stacks su
 
 Localpi is intentionally generic. It does not contain classifier prompts, dataset workflows, GitHub routing logic, or final-schema output machinery. Structured classifier runs belong in caller tools such as `localpager-agent`.
 
+A Localpi session keeps its context light. Localpi appends three sentences to Pi's own system prompt and adds no datasets, prompt packs, or memory files, so a session starts with about 2.9k tokens of baseline context on the default tool set and a small context window still has room for real work.
+
 See:
 
 - [Runtime Specification](docs/runtime-specification.md)
 - [Design Principles](docs/design-principles.md)
+
+## Requirements
+
+- Node.js 22.19.0 or newer, which Pi requires.
+- A running inference server: llama.cpp/`llama-server`, LM Studio, vLLM, SGLang, or any OpenAI-compatible endpoint. Localpi never starts, stops, or unloads a server it did not start itself.
+- A terminal that Pi supports.
 
 ## Install
 
