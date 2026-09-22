@@ -43,12 +43,13 @@ llama.cpp is localpi's default and preferred local engine.
 The status display follows `docs/design-principles.md`: simple, unopinionated, customizable.
 
 - Keep the status line to one row. Localpi replaces Pi's footer through `ctx.ui.setFooter` and renders one line: working directory and branch, token totals and cache, context use, then the engine next to the model. Do not call `setStatus`, which would add another row.
-- Keep the live line as the only place for live turn numbers (elapsed time, output tokens, token rate, prefill progress, context use). Keep the word `Working` in it.
-- Show a number in one place at a time. The status line drops the context group while the model runs, because the live line shows it then.
+- Show a number in one place at a time. The status line drops the context group and the last rate while the model runs, because the live line shows both then.
+- Keep the live rate in the working line and the rate of the last finished turn in the status line while the model is idle, so the speed stays visible after an answer ends. Publish that turn between the two generated extensions through the typed `localpiStats` global. Do not use a second status item for it, because a status item adds a row. Drop the rate first when the line is too narrow.
 - Build the engine label from the launch-time provider map (`engineEntries`) and follow the current model's provider. Never guess an engine from a model name or a base URL. When the engine is unknown, show no label.
 - Treat absent footer data as absent. Pi can return `null` for the git branch and the session name, and an extension must not crash on it.
-- Keep the mode order `off`, `line`, `full`, with `full` as the default.
+- Keep the live line as the only place for live turn numbers (elapsed time, output tokens, token rate, prefill progress, context use). Keep the word `Working` in it, keep the statistics in plain parentheses after it, and keep the order elapsed time, output tokens, rate, then context use.
 - Keep the precedence order: `--stats`, `LOCALPI_STATS`, the saved `/stats` value in `<state-dir>/settings.json`, then the default. Keep `--no-token-status` as an alias for `--stats off`.
+- Keep the mode order `off`, `line`, `full`, with `full` as the default.
 - Keep the live line in Pi's native working row through `ctx.ui.setWorkingMessage`, and keep the word `Working` in that line.
 - Keep the status line extension (`status-line.ts`) written whenever the stats display is on, and keep the footer untouched in `off` mode.
 - Poll the llama.cpp `/slots` endpoint for prefill progress only for llama.cpp runtimes, and stop polling when the endpoint fails. Never invent a prefill percentage.

@@ -157,6 +157,14 @@ function footerData(): {
   };
 }
 
+function lastTurnBridge(): { lastTurn?: { rate?: number | undefined } | undefined } {
+  const holder = globalThis as unknown as {
+    localpiStats?: { lastTurn?: { rate?: number | undefined } | undefined };
+  };
+  holder.localpiStats ??= {};
+  return holder.localpiStats;
+}
+
 async function loadExtension(): Promise<(pi: unknown) => void> {
   return loadGeneratedExtension(statusLineExtensionSource({ engines }));
 }
@@ -165,6 +173,7 @@ describe("generated localpi status line", () => {
   afterEach(async () => {
     await cleanupTemporaryDirs();
     vi.restoreAllMocks();
+    lastTurnBridge().lastTurn = undefined;
   });
 
   it("renders one line with the engine next to the model", async () => {
@@ -281,6 +290,39 @@ describe("generated localpi status line", () => {
 
     expect(line).not.toContain("9.7%/33k");
     expect(line).toContain("(llama.cpp) ternary-bonsai-2-27b-pq2_0");
+  });
+
+  it("keeps the rate of the last completed turn while the model is idle", async () => {
+    const extension = await loadExtension();
+    const pi = fakePi();
+    extension(pi);
+    const context = fakeContext();
+    pi.handlers.get("session_start")?.({}, context);
+    lastTurnBridge().lastTurn = { rate: 24.13 };
+
+    const line = renderFooter(context)[0] ?? "";
+
+    expect(line).toContain("24.1 tok/s");
+    expect(context.ui.themeCalls.map((call) => `${call.color}:${call.text}`)).toContain(
+      "muted:24.1 tok/s"
+    );
+  });
+
+  it("hides the rate while the model runs and before a turn finishes", async () => {
+    const extension = await loadExtension();
+    const pi = fakePi();
+    extension(pi);
+    const working = fakeContext({ idle: false });
+    pi.handlers.get("session_start")?.({}, working);
+    lastTurnBridge().lastTurn = { rate: 24.13 };
+
+    expect(renderFooter(working)[0] ?? "").not.toContain("tok/s");
+
+    const idle = fakeContext();
+    pi.handlers.get("session_start")?.({}, idle);
+    lastTurnBridge().lastTurn = undefined;
+
+    expect(renderFooter(idle)[0] ?? "").not.toContain("tok/s");
   });
 
   it("shows the extension statuses on the same line", async () => {

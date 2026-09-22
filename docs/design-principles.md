@@ -75,7 +75,10 @@ The status display shows the same principles in a small feature.
    `setWorkingMessage` for the live line, `appendEntry` for the transcript summary, and
    `registerCommand` for `/stats`. It writes complete lines, so Pi keeps ownership of layout and
    wrapping. It renders the same facts Pi showed, plus the engine next to the model, and it adds no
-   row of its own.
+   row of its own. The status line and the stats line are separate generated files, so the last
+   finished turn travels between them through one typed global. Pi loads every extension into one
+   process, and a second status item would add the row this design exists to avoid. When the bridge
+   is absent, only the rate disappears.
 5. **Explicit.** Prefill progress comes from the llama.cpp `/slots` endpoint. When that endpoint is
    missing or slow, localpi stops polling and shows elapsed time instead of inventing a percentage.
 

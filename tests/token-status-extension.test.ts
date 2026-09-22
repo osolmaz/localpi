@@ -79,6 +79,7 @@ type StatsEntryData = {
 afterEach(async () => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  lastTurnBridge().lastTurn = undefined;
   await cleanupTemporaryDirs();
 });
 
@@ -205,6 +206,26 @@ describe("generated localpi stats extension", () => {
     expect(ctx.ui.messages.at(-1)).toBeUndefined();
   });
 
+  it("publishes the last completed turn for the status line", async () => {
+    setupClock();
+    const { extension } = await loadExtension({ mode: "line" });
+    const pi = fakePi();
+    extension(pi);
+    const ctx = fakeContext({ usage: contextUsage(34_000, 131_000) });
+
+    vi.setSystemTime(1_000);
+    pi.handlers.get("turn_start")?.({}, ctx);
+    vi.setSystemTime(1_400);
+    pi.handlers.get("message_update")?.(update("y".repeat(400)), ctx);
+    vi.setSystemTime(11_400);
+    pi.handlers.get("turn_end")?.({ message: assistantMessage({ output: 438 }) }, ctx);
+
+    expect(lastTurnBridge().lastTurn?.output).toBe(438);
+    expect(lastTurnBridge().lastTurn?.rate).toBeCloseTo(43.8, 1);
+    expect(lastTurnBridge().lastTurn?.elapsedSeconds).toBeCloseTo(10.4, 1);
+    expect(ctx.ui.messages.at(-1)).toBeUndefined();
+  });
+
   it("renders the transcript summary as one plain line", async () => {
     setupClock();
     const { extension } = await loadExtension({ mode: "full" });
@@ -277,6 +298,30 @@ function setupClock(): void {
 
 function themeColor(ctx: FakeContext, color: string, text: string): boolean {
   return ctx.ui.themeCalls.some((call) => call.color === color && call.text.includes(text));
+}
+
+function lastTurnBridge(): {
+  lastTurn?:
+    | {
+        rate?: number | undefined;
+        output?: number | undefined;
+        elapsedSeconds?: number | undefined;
+      }
+    | undefined;
+} {
+  const holder = globalThis as unknown as {
+    localpiStats?: {
+      lastTurn?:
+        | {
+            rate?: number | undefined;
+            output?: number | undefined;
+            elapsedSeconds?: number | undefined;
+          }
+        | undefined;
+    };
+  };
+  holder.localpiStats ??= {};
+  return holder.localpiStats;
 }
 
 function statsEntry(pi: FakePi): StatsEntryData {

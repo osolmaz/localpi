@@ -52,6 +52,16 @@ type StatsEntry = {
   contextPercent?: number | undefined;
 };
 
+// The status line extension renders the footer, and Pi loads every extension into one process, so
+// the last completed turn travels through this typed global. A missing bridge only hides the rate.
+type TurnSummary = {
+  rate?: number | undefined;
+  output?: number | undefined;
+  elapsedSeconds?: number | undefined;
+};
+
+type StatsBridge = { lastTurn?: TurnSummary | undefined };
+
 type ContextUsage = {
   tokens: number | null;
   contextWindow: number;
@@ -79,8 +89,8 @@ type StatsContext = {
 };
 
 // Stats mode is remembered per localpi launch. /stats updates both this session and the setting.
-// Pi owns the footer and already shows context usage there, so localpi shows stats in the working
-// line and in one transcript entry per turn only.
+// Pi owns Pi's own footer facts; localpi adds the live working line, one transcript entry per turn,
+// and the rate of the last completed turn in the status line.
 ${settingsFileSource(config.settingsPath)}
 const initialMode: StatsMode = ${initialModeSource};
 // llama.cpp exposes live prefill progress on /slots. Other engines have no equivalent endpoint.
@@ -186,6 +196,7 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
       return;
     }
     const data = turnEntry(current, usageOf(event.message), contextUsage(ctx), Date.now());
+    publishTurn(data);
     if (mode !== "full") {
       return;
     }
@@ -398,6 +409,20 @@ function renderParts(parts: readonly Segment[][], theme: ThemeLike): string {
   return parts
     .map((part) => part.map((segment) => theme.fg(segment.color, segment.text)).join(""))
     .join(theme.fg("dim", " · "));
+}
+
+function statsBridge(): StatsBridge {
+  const holder = globalThis as unknown as { localpiStats?: StatsBridge };
+  holder.localpiStats ??= {};
+  return holder.localpiStats;
+}
+
+function publishTurn(entry: StatsEntry): void {
+  statsBridge().lastTurn = {
+    rate: entry.rate,
+    output: entry.output,
+    elapsedSeconds: entry.elapsedSeconds
+  };
 }
 
 function turnEntry(

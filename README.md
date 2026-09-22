@@ -190,13 +190,14 @@ The status line is one row. Localpi replaces Pi's two-row footer with one line t
 facts plus the engine label next to the model:
 
 ```text
-~/repos/localpi (main) · ↑3.2k ↓100 R3.2k CH99.5% · 9.8%/33k      (llama.cpp) ternary-bonsai-2-27b-pq2_0
+~/repos/localpi (main) · ↑3.2k ↓100 R3.2k CH99.5% · 43.8 tok/s · 9.8%/33k      (llama.cpp) ternary-bonsai-2-27b-pq2_0
 ```
 
 The line holds, from left to right:
 
 - the working directory and the git branch,
 - the token totals, the cache read, and the cache hit rate of the session,
+- the token rate of the last finished turn,
 - the context use as a percentage of the window,
 - the engine that serves the model, then the model itself.
 
@@ -204,9 +205,10 @@ The engine label comes from the provider localpi built the catalog with, so it i
 model from a provider with no known engine shows no label. When the model reports reasoning, the line
 also shows the thinking level, the same way Pi does.
 
-One number never appears twice at the same time. While the model runs, the context moves to the live
-line, and the status line shows the rest. When the session is idle, the context returns to the status
-line.
+One number never appears twice at the same time. While the model runs, the live line owns the token
+rate and the context use, and the status line shows the rest. When the session is idle, the rate of
+the last finished turn and the context return to the status line, so the speed stays visible after
+the answer ends. The status line drops the rate first when the row is too narrow.
 
 The live line replaces Pi's plain `Working` text while the model runs:
 

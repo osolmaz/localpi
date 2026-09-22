@@ -24,6 +24,11 @@ type Segment = {
   color: string;
 };
 
+// The stats extension publishes the last completed turn to this typed global, so the status line
+// can keep showing the rate after the working line disappears. A missing bridge hides the rate only.
+type TurnSummary = { readonly rate?: number | undefined };
+type StatsBridge = { lastTurn?: TurnSummary | undefined };
+
 type UsageLike = {
   input?: number;
   output?: number;
@@ -75,7 +80,7 @@ type FooterData = {
 type TuiLike = { requestRender(): void };
 type ThemeLike = { fg(color: string, text: string): string };
 
-type GroupKey = "location" | "totals" | "context" | "statuses";
+type GroupKey = "location" | "totals" | "rate" | "context" | "statuses";
 
 type Group = {
   key: GroupKey;
@@ -86,8 +91,8 @@ const engines: readonly EngineEntry[] = ${enginesSource};
 const minPadding = 2;
 const groupJoiner = " \\u00b7 ";
 const segmentJoiner = " ";
-// The location, the extension statuses, and the token totals go first when the line is too narrow.
-const dropOrder: readonly GroupKey[] = ["location", "statuses", "totals"];
+// The rate is the least important group, so it goes first when the line is too narrow.
+const dropOrder: readonly GroupKey[] = ["rate", "location", "statuses", "totals"];
 
 export default function (pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
@@ -143,6 +148,10 @@ function leftGroups(ctx: StatusContext, footerData: FooterData): Group[] {
   const totals = totalsGroup(ctx);
   if (totals.length > 0) {
     groups.push({ key: "totals", segments: totals });
+  }
+  const rate = rateGroup(ctx);
+  if (rate.length > 0) {
+    groups.push({ key: "rate", segments: rate });
   }
   const context = contextGroup(ctx);
   if (context.length > 0) {
@@ -213,6 +222,25 @@ function totalsGroup(ctx: StatusContext): Segment[] {
     segments.push({ text: "$" + totals.cost.toFixed(3), color: "dim" });
   }
   return segments;
+}
+
+function rateGroup(ctx: StatusContext): Segment[] {
+  // The working line shows the live rate while the model runs, so the footer keeps the rate of the
+  // last completed turn, and only while the model is idle.
+  if (ctx.isIdle?.() !== true) {
+    return [];
+  }
+  const holder = globalThis as unknown as { localpiStats?: StatsBridge };
+  const rate = holder.localpiStats?.lastTurn?.rate;
+  if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) {
+    return [];
+  }
+  return [{ text: formatRate(rate), color: "muted" }];
+}
+
+function formatRate(rate: number): string {
+  const fixed = Number(rate.toFixed(1));
+  return (fixed < 100 ? fixed.toFixed(1) : String(Math.round(fixed))) + " tok/s";
 }
 
 function contextGroup(ctx: StatusContext): Segment[] {
