@@ -162,15 +162,17 @@ export async function stopManagedLlamaServer(options: LocalpiOptions): Promise<s
   return `stopped localpi-owned llama-server pid ${String(info.pid)}`;
 }
 
+import { paint } from "./catppuccin.js";
+
 export async function llamaServerStatus(options: LocalpiOptions): Promise<string> {
   const baseUrl = llamaBaseUrl(options);
   const info = await readActiveMetadataFile(options);
   const models = await getLlamaServerModels(options);
   return [
-    `runtime: llama-server`,
-    `base url: ${baseUrl}`,
-    `metadata: ${info === undefined ? "none" : metadataSummary(info)}`,
-    `server: ${models === undefined ? "not responding" : models.map((model) => model.id).join(", ")}`
+    `${paint("runtime:", "overlay1")} llama-server`,
+    `${paint("base url:", "overlay1")} ${baseUrl}`,
+    `${paint("metadata:", "overlay1")} ${info === undefined ? "none" : metadataSummary(info)}`,
+    `${paint("server:", "overlay1")} ${models === undefined ? "not responding" : models.map((model) => model.id).join(", ")}`
   ].join("\n");
 }
 

@@ -277,19 +277,14 @@ describe("runtime resolution", () => {
     await writeFile(
       modelsFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
+        providers: builtInProviderOverrides({
           vllm: {
             type: "openai-compatible",
             name: "vLLM",
             baseUrl: externalBaseUrl,
             discover: true
           }
-        },
+        }),
         models: { custom: { id: "custom-model", path: modelPath } }
       })
     );
@@ -627,19 +622,14 @@ describe("runtime resolution", () => {
     await writeFile(
       providersFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
+        providers: builtInProviderOverrides({
           vllm: {
             type: "openai-compatible",
             name: "vLLM",
             baseUrl,
             discover: true
           }
-        }
+        })
       })
     );
 
@@ -657,6 +647,72 @@ describe("runtime resolution", () => {
       baseUrl,
       model: "qwen-vllm",
       contextWindow: 131072
+    });
+  });
+
+  it("selects the loaded llama.cpp model and skips unloaded ones", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [
+        { id: "qwen3-27b", status: { value: "unloaded" } },
+        { id: "bonsai-27b", status: { value: "loaded" }, meta: { n_ctx: 32768 } }
+      ],
+      { role: "router", models_autoload: false }
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "auto", model: "auto", providersFile })
+    ).resolves.toMatchObject({
+      runtime: "llama-cpp",
+      providerId: "llama-cpp",
+      baseUrl,
+      model: "bonsai-27b",
+      contextWindow: 32768,
+      availableModels: ["bonsai-27b"]
+    });
+  });
+
+  it("offers unloaded llama.cpp models only when the server autoloads", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [{ id: "qwen3-27b", status: { value: "unloaded" } }],
+      { role: "router", models_autoload: true }
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "auto", model: "auto", providersFile })
+    ).resolves.toMatchObject({
+      runtime: "llama-cpp",
+      providerId: "llama-cpp",
+      baseUrl,
+      model: "qwen3-27b"
+    });
+  });
+
+  it("reports llama.cpp models that are unloaded and not autoloaded", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [{ id: "qwen3-27b", status: { value: "unloaded" } }],
+      { role: "router", models_autoload: false }
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
+
+    const status = await statusOutput({ ...options(), runtime: "auto", providersFile });
+    expect(status).toContain("loaded models: none");
+    expect(status).toContain("llama.cpp reported unloaded models: qwen3-27b");
+  });
+
+  it("runs the explicit llama-cpp runtime against a llama.cpp endpoint", async () => {
+    const baseUrl = await startModelServer("served-model");
+
+    await expect(
+      resolveRuntime({ ...options(), runtime: "llama-cpp", baseUrl, model: "served-model" })
+    ).resolves.toMatchObject({
+      runtime: "llama-cpp",
+      providerId: "llama-cpp",
+      model: "served-model"
     });
   });
 
@@ -698,19 +754,7 @@ describe("runtime resolution", () => {
     const { stateDir } = await tempRuntimeState();
     const providersFile = path.join(stateDir, "providers.json");
     const profilePath = path.join(stateDir, "profile.json");
-    await writeFile(
-      providersFile,
-      JSON.stringify({
-        providers: {
-          vllm: {
-            type: "openai-compatible",
-            name: "vLLM",
-            baseUrl: "http://127.0.0.1:8000/v1",
-            discover: false
-          }
-        }
-      })
-    );
+    await writeFile(providersFile, JSON.stringify({ providers: builtInProviderOverrides() }));
     await writeFile(
       profilePath,
       JSON.stringify({
@@ -907,18 +951,7 @@ describe("runtime resolution", () => {
     await writeFile(
       modelsFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
-          vllm: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:8000/v1",
-            discover: false
-          }
-        },
+        providers: builtInProviderOverrides(),
         models: { custom: { id: "custom-id", path: modelPath } }
       })
     );
@@ -986,19 +1019,14 @@ describe("runtime resolution", () => {
     await writeFile(
       modelsFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
+        providers: builtInProviderOverrides({
           vllm: {
             type: "openai-compatible",
             name: "vLLM",
             baseUrl,
             discover: true
           }
-        },
+        }),
         models: { custom: { id: "custom-id", path: modelPath } }
       })
     );
@@ -1074,18 +1102,7 @@ describe("runtime resolution", () => {
     await writeFile(
       modelsFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
-          vllm: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:8000/v1",
-            discover: false
-          }
-        },
+        providers: builtInProviderOverrides(),
         models: { custom: { id: "custom-id", path: modelPath } }
       })
     );
@@ -1157,18 +1174,7 @@ describe("runtime resolution", () => {
     await writeFile(
       modelsFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
-          vllm: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:8000/v1",
-            discover: false
-          }
-        },
+        providers: builtInProviderOverrides(),
         models: { custom: { id: "custom-id", path: modelPath } }
       })
     );
@@ -1202,6 +1208,9 @@ describe("runtime resolution", () => {
       "http://127.0.0.1:1234/v1"
     );
     expect(effectiveBaseUrl({ ...options(), runtime: "vllm" })).toBe("http://127.0.0.1:8000/v1");
+    expect(effectiveBaseUrl({ ...options(), runtime: "llama-cpp" })).toBe(
+      "http://127.0.0.1:8080/v1"
+    );
     expect(
       effectiveBaseUrl({ ...options(), runtime: "lmstudio", baseUrl: "http://10.0.0.5:1/v1" })
     ).toBe("http://10.0.0.5:1/v1");
@@ -1498,11 +1507,19 @@ describe("runtime resolution", () => {
     return startModelListServer([{ id: model, context_length: contextWindow }]);
   }
 
-  async function startModelListServer(models: readonly Record<string, unknown>[]): Promise<string> {
+  async function startModelListServer(
+    models: readonly Record<string, unknown>[],
+    props?: Record<string, unknown>
+  ): Promise<string> {
     const server = createServer((request, response) => {
       if (request.url === "/v1/models") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ data: models }));
+        return;
+      }
+      if (props !== undefined && request.url === "/props") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify(props));
         return;
       }
       response.writeHead(404);
@@ -1546,23 +1563,48 @@ describe("runtime resolution", () => {
     return { stateDir, modelPath };
   }
 
+  function builtInProviderOverrides(
+    overrides: Record<string, Record<string, unknown>> = {}
+  ): Record<string, Record<string, unknown>> {
+    return {
+      lmstudio: {
+        type: "openai-compatible",
+        baseUrl: "http://127.0.0.1:1234/v1",
+        discover: false
+      },
+      vllm: {
+        type: "openai-compatible",
+        baseUrl: "http://127.0.0.1:8000/v1",
+        discover: false
+      },
+      "llama-cpp": {
+        type: "llama-cpp",
+        baseUrl: "http://127.0.0.1:8080/v1",
+        discover: false
+      },
+      ...overrides
+    };
+  }
+
   async function disabledBuiltInProvidersFile(stateDir: string): Promise<string> {
     const providersFile = path.join(stateDir, "providers.json");
+    await writeFile(providersFile, JSON.stringify({ providers: builtInProviderOverrides() }));
+    return providersFile;
+  }
+
+  async function llamaCppProvidersFile(stateDir: string, baseUrl: string): Promise<string> {
+    const providersFile = path.join(stateDir, "llama-cpp-providers.json");
     await writeFile(
       providersFile,
       JSON.stringify({
-        providers: {
-          lmstudio: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:1234/v1",
-            discover: false
-          },
-          vllm: {
-            type: "openai-compatible",
-            baseUrl: "http://127.0.0.1:8000/v1",
-            discover: false
+        providers: builtInProviderOverrides({
+          "llama-cpp": {
+            type: "llama-cpp",
+            name: "llama.cpp",
+            baseUrl,
+            discover: true
           }
-        }
+        })
       })
     );
     return providersFile;
@@ -1694,7 +1736,7 @@ function options(): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
-    tokenStatus: true,
+    stats: "full",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

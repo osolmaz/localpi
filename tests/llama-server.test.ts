@@ -252,7 +252,7 @@ function options(): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
-    tokenStatus: true,
+    stats: "full",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

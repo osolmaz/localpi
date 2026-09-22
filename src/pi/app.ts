@@ -4,6 +4,7 @@ import type { CatalogModel } from "../localpi/catalog.js";
 import type { LocalpiOptions } from "../localpi/options.js";
 import type { RuntimeConnection } from "../localpi/runtime.js";
 import type { ExtensionBundle } from "./extensions.js";
+import { localpiThemeArgs } from "./theme.js";
 import { localpiVersion } from "./version.js";
 
 type LocalpiAppIdentity = Pick<PiAppDefinition, "id" | "name" | "version">;
@@ -41,12 +42,13 @@ const demoLaunchOverrideEqualsFlags = ["--tools=", "--exclude-tools="] as const;
 export function createLocalpiAppDefinition(
   options: LocalpiOptions,
   connection: RuntimeConnection,
-  extensions?: ExtensionBundle
+  extensions?: ExtensionBundle,
+  themePath?: string
 ): PiAppDefinition {
   return {
     ...localpiAppIdentity,
     ...appDirectories(options),
-    ...piCommand(options),
+    ...piCommand(options, themePath),
     ...runtimeSelection(options, connection),
     ...extensionConfig(extensions)
   };
@@ -59,10 +61,13 @@ function appDirectories(options: LocalpiOptions): LocalpiAppDirectories {
   };
 }
 
-function piCommand(options: LocalpiOptions): LocalpiPiCommand {
+function piCommand(options: LocalpiOptions, themePath: string | undefined): LocalpiPiCommand {
   return {
     piCommand: options.piCommand,
-    forwardedArgs: options.demo ? demoForwardedArgs(options.forwardedArgs) : options.forwardedArgs
+    forwardedArgs: [
+      ...localpiThemeArgs(themePath, options.forwardedArgs),
+      ...(options.demo ? demoForwardedArgs(options.forwardedArgs) : options.forwardedArgs)
+    ]
   };
 }
 

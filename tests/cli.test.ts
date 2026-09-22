@@ -317,6 +317,36 @@ describe("localpi cli", () => {
     await expect(
       access(path.join(stateDir, "pi-extensions", "tool-approval.ts"))
     ).resolves.toBeUndefined();
+    await expect(
+      access(path.join(stateDir, "pi-themes", "catppuccin-mocha.json"))
+    ).resolves.toBeUndefined();
+  });
+
+  it("uses remembered stats mode unless a localpi stats override is set", async () => {
+    const stateDir = await tempStateDir();
+    const baseUrl = await startModelServer("served-model", 4096);
+    await writeFile(path.join(stateDir, "settings.json"), JSON.stringify({ stats: "off" }));
+    const baseArgs = [
+      "--runtime",
+      "lmstudio",
+      "--base-url",
+      baseUrl,
+      "--state-dir",
+      stateDir,
+      "--session-dir",
+      path.join(stateDir, "sessions"),
+      "--pi-command",
+      "true"
+    ];
+
+    const remembered = await run(baseArgs);
+    expect(remembered).toEqual({ code: 0, stdout: "", stderr: "" });
+    await expect(access(path.join(stateDir, "pi-extensions", "token-status.ts"))).rejects.toThrow();
+
+    const overridden = await run([...baseArgs, "--stats", "line"]);
+    expect(overridden).toEqual({ code: 0, stdout: "", stderr: "" });
+    const source = await readFile(path.join(stateDir, "pi-extensions", "token-status.ts"), "utf8");
+    expect(source).toContain('const initialMode: StatsMode = "line";');
   });
 
   it("uses remembered thinking unless a localpi thinking override is set", async () => {
