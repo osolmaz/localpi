@@ -34,7 +34,7 @@ type FakeContext = {
 
 const allowOnce = "Allow once";
 const allowSession = "Allow all tools for this session";
-const deny = "Deny";
+const deny = "Deny and stop";
 
 afterEach(async () => {
   await cleanupTemporaryDirs();
@@ -77,22 +77,24 @@ describe("generated localpi tool approval extension", () => {
     await expect(readSettings(settingsPath)).resolves.toEqual({});
   });
 
-  it("blocks a denied tool call and reports it to the model", async () => {
+  it("blocks a denied tool call, stops the turn, and reports it to the model", async () => {
     const { pi } = await enabledPi();
     const fake = fakeContext({ selections: [deny] });
 
     const result = await callTool(pi, fake);
 
     expect(blockReason(result)).toBe("Tool call was blocked by the user and did not run.");
+    expect(terminates(result)).toBe(true);
   });
 
-  it("blocks a cancelled dialog and reports it to the model", async () => {
+  it("blocks a cancelled dialog, stops the turn, and reports it to the model", async () => {
     const { pi } = await enabledPi();
     const fake = fakeContext({ selections: [] });
 
     const result = await callTool(pi, fake);
 
     expect(blockReason(result)).toBe("Tool call was blocked by the user and did not run.");
+    expect(terminates(result)).toBe(true);
   });
 
   it("blocks tool calls without a terminal to confirm in", async () => {
@@ -102,6 +104,7 @@ describe("generated localpi tool approval extension", () => {
     const result = await callTool(pi, fake);
 
     expect(blockReason(result)).toContain("interactive approval is required");
+    expect(terminates(result)).toBe(true);
     expect(fake.dialogs).toHaveLength(0);
   });
 
@@ -269,6 +272,11 @@ function blockReason(result: unknown): string {
   const record = result as { readonly block?: boolean; readonly reason?: string } | undefined;
   expect(record?.block).toBe(true);
   return record?.reason ?? "";
+}
+
+function terminates(result: unknown): boolean {
+  const record = result as { readonly terminate?: boolean } | undefined;
+  return record?.terminate === true;
 }
 
 function systemPromptOf(result: unknown): string {

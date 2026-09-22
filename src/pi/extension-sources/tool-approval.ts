@@ -34,9 +34,11 @@ const readOnlyTools: readonly string[] = ["read", "grep", "find", "ls"];
 const statusKey = "localpi-approval";
 const allowOnce = "Allow once";
 const allowSession = "Allow all tools for this session";
-const deny = "Deny";
+const deny = "Deny and stop";
 const blockedReason = "Tool call was blocked by the user and did not run.";
 const noUiReason = " was blocked and did not run because interactive approval is required.";
+// A deny stops the turn instead of letting the model try again. Pi terminates the turn when every
+// blocked result in the tool batch asks for it, and a cancelled dialog counts as a deny.
 // The permission setting is the launch default for new sessions. The /approval command writes it;
 // the session-only choice in the tool call dialog never writes it.
 ${settingsFileSource(config.settingsPath)}
@@ -93,7 +95,11 @@ export default function localpiToolApproval(pi: ExtensionAPI): void {
     }
 
     if (!ctx.hasUI) {
-      return { block: true, reason: 'Tool call "' + event.toolName + '"' + noUiReason };
+      return {
+        block: true,
+        reason: 'Tool call "' + event.toolName + '"' + noUiReason,
+        terminate: true
+      };
     }
 
     const choice = await ctx.ui.select(
@@ -107,7 +113,7 @@ export default function localpiToolApproval(pi: ExtensionAPI): void {
     }
 
     if (choice !== allowOnce) {
-      return { block: true, reason: blockedReason };
+      return { block: true, reason: blockedReason, terminate: true };
     }
 
     return undefined;

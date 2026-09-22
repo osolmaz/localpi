@@ -60,7 +60,8 @@ The status display follows `docs/design-principles.md`: simple, unopinionated, c
 Tool approval follows `docs/design-principles.md`: on by default, off on request, never silent.
 
 - Always write the tool approval extension, with `initialEnabled` from `--no-approval`/`LOCALPI_APPROVAL` or from the saved `permission` setting. Never remove the extension to express a disabled gate, because that removes the `/approval` command too.
-- Offer three choices in the dialogs: allow once, allow every tool call for this session, and deny. Treat a cancelled dialog as deny, and treat a missing terminal as deny.
+- Offer three choices in the dialogs: allow once, allow every tool call for this session, and deny and stop the turn. Treat a cancelled dialog as a deny, and treat a missing terminal as a deny.
+- Make a deny stop the turn: return `{ block: true, reason, terminate: true }`, so the model does not retry the denied call in the same turn. Pi ends the turn only when every blocked result in the tool batch asks for it, so a batch that also holds an allowed read-only call finishes that call first.
 - Keep the dialog choice session-scoped. Only `/approval ask|allow` writes the `permission` setting in `<state-dir>/settings.json`, and only as the launch default for new sessions.
 - Keep `/approval` in the gate extension, next to the code that blocks tool calls. Keep the system-prompt rule in the same extension.
 - Keep the gate blocking every tool call that can change the workspace or that localpi does not know. `read`, `grep`, `find`, and `ls` are read-only and run without a dialog; `bash` stays behind the gate, because a bash command can write, and an unknown tool stays behind the gate too. Keep `--approve-read-tools` and `LOCALPI_APPROVE_READ_TOOLS` as the escape hatches that put read-only tools back behind the gate.

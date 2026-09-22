@@ -114,10 +114,13 @@ with three choices:
 ```text
 Allow once                        # run this call and keep asking for the next one
 Allow all tools for this session  # run every tool call in this session without asking
-Deny                              # block the call
+Deny and stop                     # block the call and end the turn
 ```
 
-A blocked call and a cancelled dialog do not run, and the model is told that the call was blocked.
+A denied call does not run, the model is told that the call was blocked, and the turn stops instead
+of letting the model try another way. Pressing escape in the dialog counts as a deny, so one key
+ends the turn. Pi stops the turn when every blocked result in the current tool batch asks for it,
+so a batch that also contains an allowed read-only call finishes that call first.
 
 Read-only tools (`read`, `grep`, `find`, `ls`) run without a dialog, because they cannot change the
 workspace. `bash` still asks, because a bash command can write. An unknown tool also asks, because
