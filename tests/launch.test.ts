@@ -53,6 +53,61 @@ describe("Pi launch plan", () => {
     expect(plan.args).toContain("bash");
   });
 
+  it("loads the localpi theme and selects it before user arguments", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const themePath = "/tmp/localpi-state/pi-themes/catppuccin-mocha.json";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        options(stateDir),
+        connection("gemma-4-e4b-it"),
+        { paths: [], systemPrompt: "localpi prompt" },
+        themePath
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args.indexOf("--theme")).toBeGreaterThan(-1);
+    expect(plan.args[plan.args.indexOf("--theme") + 1]).toBe(themePath);
+    expect(plan.args[plan.args.indexOf("--use-theme") + 1]).toBe("catppuccin-mocha");
+    expect(plan.args.indexOf("--use-theme")).toBeLessThan(plan.args.indexOf("-p"));
+  });
+
+  it("keeps a forwarded Pi theme choice ahead of the localpi theme", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        {
+          ...options(stateDir),
+          forwardedArgs: ["--use-theme", "light", "-p", "say ok"]
+        },
+        connection("gemma-4-e4b-it"),
+        { paths: [], systemPrompt: "localpi prompt" },
+        "/tmp/localpi-state/pi-themes/catppuccin-mocha.json"
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args).toContain("--theme");
+    expect(plan.args.filter((arg) => arg === "--use-theme")).toHaveLength(1);
+    expect(plan.args[plan.args.indexOf("--use-theme") + 1]).toBe("light");
+  });
+
+  it("adds no theme arguments when Pi themes are disabled", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        { ...options(stateDir), forwardedArgs: ["--no-themes", "-p", "say ok"] },
+        connection("gemma-4-e4b-it"),
+        { paths: [], systemPrompt: "localpi prompt" },
+        undefined
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args).not.toContain("--theme");
+    expect(plan.args).not.toContain("--use-theme");
+  });
+
   it("executes the pi-factory launch plan and reports the exit code", async () => {
     await expect(
       execPiLaunchPlan(executablePlan({ command: "sh", args: ["-c", "exit 0", "--"] }))
@@ -125,7 +180,7 @@ function options(stateDir: string): LocalpiOptions {
     chatTemplate: undefined,
     tools: "read,bash,edit,write,grep,find,ls",
     approval: true,
-    tokenStatus: true,
+    stats: "full",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

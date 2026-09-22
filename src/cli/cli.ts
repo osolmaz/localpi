@@ -1,5 +1,6 @@
 import { runPiApp } from "@dutifuldev/pi-factory";
 
+import { paint } from "../common/catppuccin.js";
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
 import {
@@ -11,6 +12,7 @@ import {
 } from "../localpi/runtime.js";
 import { applyRememberedSettings } from "../localpi/settings-state.js";
 import { createLocalpiAppDefinition } from "../pi/app.js";
+import { writeLocalpiTheme } from "../pi/theme.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
@@ -26,19 +28,29 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       return commandResult;
     }
     options = await applyRememberedSettings(options, {
-      thinking: hasExplicitThinkingOverride(args)
+      thinking: hasExplicitThinkingOverride(args),
+      stats: hasExplicitStatsOverride(args)
     });
 
     const connection = await resolveRuntime(options);
     const selectorOptions = startupModelSelectorOptions(options, connection);
-    const extensions = await writeDefaultExtensions(
+    const extensions = await writeDefaultExtensions(options, {
+      ...(selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions }),
+      runtime: {
+        providerId: connection.providerId,
+        baseUrl: connection.baseUrl,
+        model: connection.model
+      }
+    });
+    const app = createLocalpiAppDefinition(
       options,
-      selectorOptions === undefined ? {} : { startupModelSelector: selectorOptions }
+      connection,
+      extensions,
+      await writeLocalpiTheme(options.stateDir, options.forwardedArgs)
     );
-    const app = createLocalpiAppDefinition(options, connection, extensions);
     return await launchResolvedRuntime(app, connection);
   } catch (error) {
-    return fail(`localpi: ${errorMessage(error)}`);
+    return fail(`${paint("localpi:", "red")} ${errorMessage(error)}`);
   }
 }
 
@@ -323,6 +335,24 @@ function helpCommandResult(options: ParsedOptions): CommandResult | undefined {
   return options.forwardedArgs.length === 1 && options.forwardedArgs[0] === "--help"
     ? ok(usage())
     : undefined;
+}
+
+function hasExplicitStatsOverride(args: readonly string[]): boolean {
+  if (process.env["LOCALPI_STATS"] !== undefined) {
+    return true;
+  }
+  if (process.env["LOCALPI_TOKEN_STATUS"] !== undefined) {
+    return true;
+  }
+  for (const arg of args) {
+    if (arg === "--") {
+      return false;
+    }
+    if (arg === "--stats" || arg === "--no-token-status") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function hasExplicitThinkingOverride(args: readonly string[]): boolean {

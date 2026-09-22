@@ -1,4 +1,6 @@
 import { discoverModelCatalog, formatCatalogWarning } from "./catalog.js";
+import { paint } from "../common/catppuccin.js";
+
 import { llamaBaseUrl, llamaServerStatus, stopManagedLlamaServer } from "./llama-server.js";
 import { listModelAliases } from "./models.js";
 import {
@@ -7,6 +9,7 @@ import {
   statusModelList
 } from "./runtime-connection.js";
 import { resolveLlamaRuntime, resolveSelectedLlamaRuntime } from "./managed-runtime.js";
+import { defaultLlamaCppBaseUrl } from "./provider-registry.js";
 import { selectCatalogModel } from "./runtime-selection.js";
 import type { LocalpiOptions } from "./options.js";
 import type { RuntimeConnection } from "./runtime-types.js";
@@ -21,10 +24,9 @@ export async function resolveRuntime(options: LocalpiOptions): Promise<RuntimeCo
   switch (options.runtime) {
     case "llama-server":
       return resolveLlamaRuntime(options);
+    case "llama-cpp":
     case "lmstudio":
-      return resolveCatalogRuntime(options);
     case "vllm":
-      return resolveCatalogRuntime(options);
     case "openai-compatible":
       return resolveCatalogRuntime(options);
   }
@@ -34,6 +36,7 @@ export async function stopRuntime(options: LocalpiOptions): Promise<string> {
   if (
     options.runtime === "lmstudio" ||
     options.runtime === "vllm" ||
+    options.runtime === "llama-cpp" ||
     options.runtime === "openai-compatible"
   ) {
     return `runtime ${options.runtime} is externally managed; nothing stopped`;
@@ -92,10 +95,12 @@ async function catalogStatusOutput(options: LocalpiOptions): Promise<string> {
   const startable = catalog.models.filter((model) => model.availability === "startable");
   return (
     [
-      `runtime: ${options.runtime}`,
-      `loaded models: ${statusModelList(loaded)}`,
-      `startable models: ${statusModelList(startable)}`,
-      ...catalog.warnings.map((warning) => `warning: ${formatCatalogWarning(warning)}`)
+      `${paint("runtime:", "overlay1")} ${options.runtime}`,
+      `${paint("loaded models:", "overlay1")} ${statusModelList(loaded)}`,
+      `${paint("startable models:", "overlay1")} ${statusModelList(startable)}`,
+      ...catalog.warnings.map(
+        (warning) => `${paint("warning:", "peach")} ${formatCatalogWarning(warning)}`
+      )
     ].join("\n") + "\n"
   );
 }
@@ -107,6 +112,9 @@ function requiredOpenAiBaseUrl(options: LocalpiOptions): string {
   return options.baseUrl;
 }
 
-function defaultExternalBaseUrl(runtime: "auto" | "lmstudio" | "vllm"): string {
-  return runtime === "vllm" ? "http://127.0.0.1:8000/v1" : "http://127.0.0.1:1234/v1";
+function defaultExternalBaseUrl(runtime: "auto" | "lmstudio" | "vllm" | "llama-cpp"): string {
+  if (runtime === "vllm") {
+    return "http://127.0.0.1:8000/v1";
+  }
+  return runtime === "llama-cpp" ? defaultLlamaCppBaseUrl() : "http://127.0.0.1:1234/v1";
 }

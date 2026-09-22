@@ -4,13 +4,14 @@ Localpi is a Swiss army knife for running Pi with local inference engines.
 
 By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
 
-Localpi is meant to be the practical bridge from Pi to local inference stacks such as llama.cpp/`llama-server`, vLLM, SGLang, LM Studio, Ollama, and custom provider endpoints.
+Localpi is meant to be the practical bridge from Pi to local inference stacks such as llama.cpp/`llama-server`, vLLM, SGLang, LM Studio, Ollama, and custom provider endpoints. llama.cpp is the default engine: Localpi probes a running llama.cpp server first and prefers its loaded models.
 
 Localpi is intentionally generic. It does not contain classifier prompts, dataset workflows, GitHub routing logic, or final-schema output machinery. Structured classifier runs belong in caller tools such as `localpager-agent`.
 
 See:
 
 - [Runtime Specification](docs/runtime-specification.md)
+- [Design Principles](docs/design-principles.md)
 
 ## Install
 
@@ -66,13 +67,137 @@ Localpi launches Pi with:
 
 - default tools: `read,bash,edit,write,grep,find,ls`
 - a system prompt that explains local tool approval and local-model limits
-- an approval gate before every tool call
-- token speed and token count status while responses stream
+- an approval gate before every tool call, which you can turn off for the session with `/approval`
+- token speed, prefill progress, and context usage while responses stream
+- a Catppuccin Mocha theme for the Pi session, written into `<state-dir>/pi-themes/`
 - bounded Gemma/llama-server reasoning controlled by `--thinking`
-- an in-session `/thinking` command for changing Pi's active thinking level
+- in-session `/thinking` (Pi's own command) and `/approval` (localpi's) for changing session settings
 - local state under `~/.local/state/localpi`
 
 The approval gate makes failed or denied tool calls explicit to the model so the model does not claim that a blocked command ran.
+
+## Tool Approval
+
+Approval is on by default. Every tool call opens a confirmation dialog that shows the tool name and
+its input. A denied call does not run, and the model is told that it was denied.
+
+Turn approval off for the rest of the session when you trust the current task:
+
+```text
+/approval off    # run tool calls without asking until Pi exits
+/approval on     # ask again
+/approval        # pick on or off from a list, with the current value marked
+```
+
+While approval is off, Pi shows `approval: off` in the status area, so the state stays visible.
+
+Approval is a session setting. Localpi never writes it to `<state-dir>/settings.json`, and a new
+launch starts with approval on again. Use `--no-approval`, or `LOCALPI_APPROVAL=0`, to start a
+session with approval off; `/approval on` turns it back on.
+
+In a non-interactive launch, approval stays on and no dialog is possible, so every tool call is
+blocked. That keeps scripted runs from executing tools without a person watching.
+
+## llama.cpp (Default Engine)
+
+llama.cpp is Localpi's default local engine.
+
+```bash
+localpi
+```
+
+With the default `auto` runtime, Localpi probes a running llama.cpp server at `http://127.0.0.1:8080/v1` first. A loaded llama.cpp model wins automatic selection ahead of LM Studio, vLLM, and the managed `llama-server` fallback. Localpi reads llama.cpp `/v1/models` status: a model is usable when it is loaded or the server does not report status, and an unloaded model is offered only when `/props` reports `models_autoload`. Localpi never starts, stops, or unloads an external llama.cpp server.
+
+Run explicitly against llama.cpp:
+
+```bash
+localpi --runtime llama-cpp
+localpi --runtime llama-cpp --base-url http://127.0.0.1:8080/v1 --model ternary-bonsai-2-27b-pq2_0
+```
+
+Point at a llama.cpp server on another port with a provider registry entry:
+
+```json
+{
+  "providers": {
+    "llama-cpp": {
+      "type": "llama-cpp",
+      "baseUrl": "http://127.0.0.1:9931/v1",
+      "discover": true
+    }
+  }
+}
+```
+
+## Status Display
+
+The status display answers one question: is this machine keeping up? It shows elapsed time, output
+tokens, token rate, and context use. Pick a mode with `--stats`:
+
+| Mode             | Live line | Transcript entry | Footer |
+| ---------------- | --------- | ---------------- | ------ |
+| `off`            | no        | no               | no     |
+| `line`           | yes       | no               | no     |
+| `full` (default) | yes       | yes              | yes    |
+
+The live line replaces Pi's plain `Working` text while the model runs:
+
+```text
+Working (1.8s · 100 out · 55.6 tok/s · ctx 26%)
+```
+
+During prefill, the same line reports progress through the prompt:
+
+```text
+Working (prefill 25% · 5k/20k tok · 3.2s · ctx 61%)
+```
+
+Prefill progress needs a llama.cpp server, because it reads the server's `/slots` endpoint. Localpi
+polls that endpoint only for llama.cpp runtimes. When the endpoint is missing or slow, localpi stops
+polling and shows elapsed prefill time instead.
+
+In `full` mode, each finished turn also adds one dim transcript line and one footer item:
+
+```text
+10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
+```
+
+Context colors use the active theme: normal below 80 percent, warning from 80 percent, error from
+95 percent. The transcript line shows counts; the footer and the live line show percentages.
+
+Change the mode during a session with `/stats`:
+
+```text
+/stats          # pick a mode from a list
+/stats line     # or pass the mode directly
+```
+
+`/stats` saves the choice to `<state-dir>/settings.json`, so the next launch keeps it. Pass
+`--stats <mode>` or set `LOCALPI_STATS` to override the saved value for one launch.
+
+## Catppuccin Theme
+
+Localpi gives each Pi session the Catppuccin Mocha palette. It writes its own copy of the theme to
+`<state-dir>/pi-themes/catppuccin-mocha.json`, loads it into Pi, and selects it for the session. The
+theme covers the full Pi TUI: messages, tool cards, diffs, syntax highlighting, and the localpi
+status display.
+
+Localpi writes its own copy for a good reason. A localpi session uses a Pi config directory inside
+the localpi state directory, so Pi does not load the themes from your global Pi setup.
+
+The theme belongs to the session only. Localpi never edits your global Pi themes or settings.
+
+Localpi's own output uses the same palette: labels are `overlay1`, warnings are `peach`, and errors
+are `red`. Colors are truecolor and appear only on a terminal. Piped output stays plain, and
+`NO_COLOR` turns color off.
+
+Escape hatches:
+
+- `localpi --no-themes` starts the session with no theme at all.
+- `localpi --use-theme onur-dark` selects your own theme instead. The Catppuccin file is still
+  loaded, so `/settings` can offer it.
+- `localpi --theme <path>` adds another theme file, as Pi does in a normal session.
+- `FORCE_COLOR=1` forces color in localpi's own output; `NO_COLOR=1` removes it.
 
 ## LM Studio Alternative
 
@@ -135,7 +260,9 @@ Use a bounded reasoning budget with managed `llama-server`:
 localpi --model gemma-12b --thinking low -p "classify this item"
 ```
 
-In an interactive session, use `/thinking` to pick a level or `/thinking high` to set one directly. This changes Pi's active thinking level for later turns and saves it for the next localpi launch. For managed `llama-server`, the server-side reasoning budget is still chosen at startup because changing it requires restarting the local server process.
+In an interactive session, use Pi's own `/thinking` command to pick a level or to set one directly. This changes Pi's active thinking level for later turns. Localpi remembers the level Pi selected and starts the next localpi launch from it. For managed `llama-server`, the server-side reasoning budget is still chosen at startup because changing it requires restarting the local server process.
+
+Localpi does not register its own `/thinking` command, because Pi already owns that name.
 
 For managed `llama-server`, thinking levels map to server-side reasoning:
 
@@ -176,7 +303,7 @@ localpi --stop
 
 ## Options
 
-- `--runtime <auto|llama-server|lmstudio|vllm|openai-compatible>`: runtime backend. Default: `auto`
+- `--runtime <auto|llama-server|llama-cpp|lmstudio|vllm|openai-compatible>`: runtime backend. Default: `auto`, which prefers llama.cpp
 - `--provider <id>`: catalog provider id to use, for example `lmstudio` or `vllm`
 - `--model <alias|id|path|auto>`: model alias, model id, or GGUF path
 - `--ctx <n>` / `--context-window <n>`: model context window
@@ -203,11 +330,31 @@ localpi --stop
 - `--demo-followup-prompt <text>`: repeated demo prompt after the first run
 - `--demo-initial-prompt-file <path>`: UTF-8 file for the first demo prompt
 - `--demo-followup-prompt-file <path>`: UTF-8 file for repeated demo prompts
-- `--no-approval`: disable the tool approval gate
-- `--no-token-status`: disable the token status extension
+- `--no-approval`: start with the tool approval gate off for the session
+- `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
+- `--no-token-status`: disable the token status extension. Alias for `--stats off`
 - `--status`: print runtime, model, and Pi config status
 - `--stop`: stop the managed `llama-server` process
 - `--list`: list configured model aliases
+
+## Pi Helper Tools
+
+Pi manages two helper binaries, `fd` and `rg`, and downloads them into its own bin directory when
+they are missing from `PATH`. Localpi starts Pi in offline mode, so Pi skips that download. A start
+that shows
+
+```
+Warning: fd not found. Offline mode enabled, skipping download.
+```
+
+means `fd` is not installed, and Pi falls back to a slower file search. Fix it in either way:
+
+- Install `fd`, for example with `brew install fd`. Pi uses the `fd` that is in `PATH`.
+- Run `PI_OFFLINE=0 localpi` once, and let Pi download `fd` into its own bin directory.
+
+Localpi keeps offline mode on by default, because a local-model session should not make network
+calls without a reason. `PI_OFFLINE` is pi-factory's default and passes straight through, so an
+explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 
 ## Environment
 
@@ -232,6 +379,7 @@ localpi --stop
 - `LOCALPI_CHAT_TEMPLATE`
 - `LOCALPI_TOOLS`
 - `LOCALPI_THINKING`
+- `LOCALPI_STATS`
 - `LOCALPI_DEMO`
 - `LOCALPI_DEMO_INITIAL_PROMPT`
 - `LOCALPI_DEMO_FOLLOWUP_PROMPT`

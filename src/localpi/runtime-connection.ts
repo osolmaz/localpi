@@ -1,3 +1,5 @@
+import { paint } from "../common/catppuccin.js";
+
 import {
   formatCatalogWarning,
   managedCapabilityConfig,
@@ -10,13 +12,13 @@ import type { RuntimeConnection } from "./runtime-types.js";
 export function connectionStatus(connection: RuntimeConnection): string {
   return (
     [
-      `runtime: ${connection.runtime}`,
-      `provider: ${connection.providerId}`,
-      `base url: ${connection.baseUrl}`,
-      `model: ${connection.model}`,
-      `available models: ${connection.availableModels.join(", ")}`,
-      `context window: ${String(connection.contextWindow ?? "unspecified")}`,
-      ...connection.warnings.map((warning) => `warning: ${warning}`)
+      `${paint("runtime:", "overlay1")} ${connection.runtime}`,
+      `${paint("provider:", "overlay1")} ${connection.providerId}`,
+      `${paint("base url:", "overlay1")} ${connection.baseUrl}`,
+      `${paint("model:", "overlay1")} ${connection.model}`,
+      `${paint("available models:", "overlay1")} ${connection.availableModels.join(", ")}`,
+      `${paint("context window:", "overlay1")} ${String(connection.contextWindow ?? "unspecified")}`,
+      ...connection.warnings.map((warning) => `${paint("warning:", "peach")} ${warning}`)
     ].join("\n") + "\n"
   );
 }
@@ -126,7 +128,9 @@ function connectionRuntimeName(selected: CatalogModel): string {
   if (selected.runtime === "managed-llama-server") {
     return "llama-server";
   }
-  return selected.providerId === "lmstudio" || selected.providerId === "vllm"
+  return selected.providerId === "lmstudio" ||
+    selected.providerId === "vllm" ||
+    selected.providerId === "llama-cpp"
     ? selected.providerId
     : selected.runtime;
 }

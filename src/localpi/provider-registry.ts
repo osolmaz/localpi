@@ -7,10 +7,12 @@ import { normalizeBaseUrl } from "../llm/openai.js";
 import { llamaBaseUrl } from "./llama-server.js";
 import type { LocalpiOptions } from "./options.js";
 
+export type ProviderType = "openai-compatible" | "managed-llama-server" | "llama-cpp";
+
 export type ProviderConfig = {
   readonly id: string;
   readonly name: string;
-  readonly type: "openai-compatible" | "managed-llama-server";
+  readonly type: ProviderType;
   readonly baseUrl?: string;
   readonly discover: boolean;
 };
@@ -23,6 +25,8 @@ export async function providerConfigs(options: LocalpiOptions): Promise<readonly
       return [lmStudioProvider(options.baseUrl)];
     case "vllm":
       return [vllmProvider(options.baseUrl)];
+    case "llama-cpp":
+      return [llamaCppProvider(options.baseUrl)];
     case "openai-compatible": {
       const providerId = options.provider ?? options.customProviderId;
       return [
@@ -46,6 +50,7 @@ function autoProviderConfigs(
 ): readonly ProviderConfig[] {
   const managedBaseUrl = llamaBaseUrl(options);
   return dedupeProviderConfigs([
+    llamaCppProvider(),
     lmStudioProvider(),
     vllmProvider(),
     ...configured,
@@ -81,6 +86,22 @@ function vllmProvider(baseUrl = "http://127.0.0.1:8000/v1"): ProviderConfig {
   };
 }
 
+function llamaCppProvider(baseUrl = defaultLlamaCppBaseUrl()): ProviderConfig {
+  return {
+    id: "llama-cpp",
+    name: "llama.cpp",
+    type: "llama-cpp",
+    baseUrl: normalizeBaseUrl(baseUrl),
+    discover: true
+  };
+}
+
+// llama.cpp is localpi's default engine. Its endpoint is probed first so a loaded
+// llama.cpp model wins the automatic selection ahead of other local engines.
+export function defaultLlamaCppBaseUrl(): string {
+  return "http://127.0.0.1:8080/v1";
+}
+
 function managedLlamaProvider(): ProviderConfig {
   return {
     id: "llama-server",
@@ -111,10 +132,12 @@ async function configuredProviderConfigs(
 function configuredProvider(id: string, value: unknown): ProviderConfig {
   const entry = asObject(value, `provider ${id}`);
   const type = optionalString(entry["type"]);
-  if (type !== "openai-compatible") {
-    throw new Error(`provider ${id} type must be openai-compatible`);
+  if (type !== "openai-compatible" && type !== "llama-cpp") {
+    throw new Error(`provider ${id} type must be openai-compatible or llama-cpp`);
   }
-  const baseUrl = optionalString(entry["baseUrl"]);
+  const baseUrl =
+    optionalString(entry["baseUrl"]) ??
+    (type === "llama-cpp" ? defaultLlamaCppBaseUrl() : undefined);
   if (baseUrl === undefined) {
     throw new Error(`provider ${id} must define baseUrl`);
   }

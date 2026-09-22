@@ -7,7 +7,10 @@ import { resolveDemoPrompts } from "./demo.js";
 import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
-import { tokenStatusExtensionSource } from "./extension-sources/token-status.js";
+import {
+  tokenStatusExtensionSource,
+  type TokenStatusConfig
+} from "./extension-sources/token-status.js";
 import { approvalExtensionSource } from "./extension-sources/tool-approval.js";
 
 export type ExtensionBundle = {
@@ -17,6 +20,13 @@ export type ExtensionBundle = {
 
 export type ExtensionOptions = {
   readonly startupModelSelector?: StartupModelSelectorOptions;
+  readonly runtime?: RuntimeStatsTarget;
+};
+
+export type RuntimeStatsTarget = {
+  readonly providerId: string;
+  readonly baseUrl: string;
+  readonly model: string;
 };
 
 export type StartupModelSelectorOptions = {
@@ -60,15 +70,25 @@ export async function writeDefaultExtensions(
       thinkingControlExtensionSource(localpiSettingsPath(options))
     )
   );
-  if (options.approval) {
-    paths.push(await writeExtension(extensionDir, "tool-approval.ts", approvalExtensionSource()));
-  }
-  if (options.tokenStatus) {
-    paths.push(await writeExtension(extensionDir, "token-status.ts", tokenStatusExtensionSource()));
+  paths.push(
+    await writeExtension(
+      extensionDir,
+      "tool-approval.ts",
+      approvalExtensionSource({ enabled: options.approval })
+    )
+  );
+  if (options.stats !== "off") {
+    paths.push(
+      await writeExtension(
+        extensionDir,
+        "token-status.ts",
+        tokenStatusExtensionSource(tokenStatusConfig(options, extensionOptions.runtime))
+      )
+    );
   }
   return {
     paths,
-    systemPrompt: localpiSystemPrompt(options.approval)
+    systemPrompt: localpiSystemPrompt()
   };
 }
 
@@ -78,13 +98,39 @@ async function writeExtension(extensionDir: string, name: string, source: string
   return extensionPath;
 }
 
-function localpiSystemPrompt(approval: boolean): string {
+function tokenStatusConfig(
+  options: LocalpiOptions,
+  runtime: RuntimeStatsTarget | undefined
+): TokenStatusConfig {
+  return {
+    settingsPath: localpiSettingsPath(options),
+    mode: options.stats,
+    ...runtimeConfig(runtime)
+  };
+}
+
+// The managed llama-server and the built-in llama.cpp provider are both llama.cpp, and both
+// expose live prefill progress on /slots. Other engines fall back to elapsed-time prefill display.
+function runtimeConfig(
+  runtime: RuntimeStatsTarget | undefined
+): Pick<TokenStatusConfig, "engine" | "baseUrl" | "modelId"> {
+  if (runtime === undefined) {
+    return {};
+  }
+  const llamaCpp = runtime.providerId === "llama-cpp" || runtime.providerId === "llama-server";
+  return {
+    ...(llamaCpp ? { engine: "llama-cpp" as const } : {}),
+    baseUrl: runtime.baseUrl,
+    modelId: runtime.model
+  };
+}
+
+// The tool approval gate appends its own detailed rule. This base prompt keeps the same warning
+// when a user disables localpi extensions, and stays true whether approval is on or off.
+function localpiSystemPrompt(): string {
   return [
     "You are running through localpi, a local Pi launcher for local models.",
-    approval
-      ? "Tool calls require user approval. If a tool result says it was blocked, denied, or requires approval, the tool did not run."
-      : "Tool approval is disabled for this session.",
-    "Do not claim that a blocked tool call ran.",
+    "Tool calls may require user approval. Never claim that a tool call ran when its result says it was blocked or denied.",
     "Prefer answering directly when tools are not needed."
   ].join("\n");
 }

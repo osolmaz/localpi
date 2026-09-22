@@ -23,8 +23,17 @@ describe("generated Pi extension sources", () => {
       fileName: "thinking-control.ts",
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
-    { fileName: "tool-approval.ts", source: approvalExtensionSource() },
-    { fileName: "token-status.ts", source: tokenStatusExtensionSource() }
+    { fileName: "tool-approval.ts", source: approvalExtensionSource({ enabled: true }) },
+    {
+      fileName: "token-status.ts",
+      source: tokenStatusExtensionSource({
+        settingsPath: "/tmp/localpi/settings.json",
+        mode: "full",
+        engine: "llama-cpp",
+        baseUrl: "http://127.0.0.1:8080/v1",
+        modelId: "local-model"
+      })
+    }
   ] as const;
 
   for (const { fileName, source } of sources) {

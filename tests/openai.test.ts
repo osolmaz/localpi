@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { listModels, normalizeBaseUrl, resolveLocalModel } from "../src/llm/openai.js";
+import {
+  fetchServerProps,
+  listModels,
+  normalizeBaseUrl,
+  resolveLocalModel
+} from "../src/llm/openai.js";
 // Type-only module; loaded so coverage sees the file as exercised.
 import "../src/llm/types.js";
 
@@ -24,6 +29,50 @@ describe("OpenAI-compatible model discovery", () => {
       Promise.resolve(jsonResponse({ data: [{ id: "gemma-4-e4b-it", context_length: 120000 }] }))
     );
     expect(resolved.contextWindow).toBe(120000);
+  });
+
+  it("reads llama.cpp model status and nested meta context", async () => {
+    const models = await listModels("http://local.test/v1", 1000, () =>
+      Promise.resolve(
+        jsonResponse({
+          data: [
+            { id: "qwen3-27b", status: { value: "unloaded" } },
+            { id: "bonsai-27b", status: { value: "loaded" }, meta: { n_ctx: 32768 } }
+          ]
+        })
+      )
+    );
+    expect(models).toEqual([
+      { id: "qwen3-27b", status: "unloaded" },
+      { id: "bonsai-27b", status: "loaded", contextWindow: 32768 }
+    ]);
+  });
+
+  it("ignores unknown llama.cpp status values", async () => {
+    const models = await listModels("http://local.test/v1", 1000, () =>
+      Promise.resolve(jsonResponse({ data: [{ id: "kept", status: { value: "loading" } }] }))
+    );
+    expect(models).toEqual([{ id: "kept" }]);
+  });
+
+  it("reads llama.cpp server props from the server root", async () => {
+    const requested: string[] = [];
+    const props = await fetchServerProps("http://local.test/v1", 1000, (input) => {
+      requested.push(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url
+      );
+      return Promise.resolve(jsonResponse({ role: "router", models_autoload: true }));
+    });
+    expect(requested).toEqual(["http://local.test/props"]);
+    expect(props).toEqual({ role: "router", modelsAutoload: true });
+  });
+
+  it("rejects HTTP errors from the server props endpoint", async () => {
+    await expect(
+      fetchServerProps("http://local.test/v1", 1000, () =>
+        Promise.resolve(new Response("nope", { status: 404 }))
+      )
+    ).rejects.toThrow("server props failed with HTTP 404");
   });
 
   it("strips trailing slashes from base URLs", () => {

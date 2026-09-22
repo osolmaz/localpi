@@ -2,9 +2,17 @@ import { asArray, asObject, optionalString } from "../common/json.js";
 
 type Fetcher = typeof fetch;
 
+export type ModelStatus = "loaded" | "unloaded";
+
 export type ModelInfo = {
   readonly id: string;
   readonly contextWindow?: number;
+  readonly status?: ModelStatus;
+};
+
+export type ServerProps = {
+  readonly role?: string;
+  readonly modelsAutoload?: boolean;
 };
 
 export function normalizeBaseUrl(value: string): string {
@@ -28,6 +36,27 @@ export async function listModels(
   return data
     .map((entry) => modelInfo(asObject(entry, "model entry")))
     .filter((model): model is ModelInfo => model !== undefined);
+}
+
+export async function fetchServerProps(
+  baseUrl: string,
+  timeoutMs = 3000,
+  fetcher: Fetcher = fetch
+): Promise<ServerProps> {
+  const response = await fetcher(`${serverRootUrl(baseUrl)}/props`, {
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) {
+    throw new Error(`server props failed with HTTP ${String(response.status)}`);
+  }
+  const payload: unknown = await response.json();
+  const root = asObject(payload, "server props response");
+  const role = optionalString(root["role"]);
+  const modelsAutoload = optionalBoolean(root["models_autoload"]);
+  return {
+    ...(role === undefined ? {} : { role }),
+    ...(modelsAutoload === undefined ? {} : { modelsAutoload })
+  };
 }
 
 export async function resolveLocalModel(
@@ -65,7 +94,35 @@ function modelInfo(entry: Record<string, unknown>): ModelInfo | undefined {
   if (id === undefined) {
     return undefined;
   }
-  return withOptionalContextWindow({ id }, findContextWindow(entry));
+  const contextWindow = findContextWindow(entry);
+  return {
+    id,
+    ...optionalModelStatus(modelStatus(entry["status"])),
+    ...(contextWindow === undefined ? {} : { contextWindow })
+  };
+}
+
+function optionalModelStatus(status: ModelStatus | undefined): { readonly status?: ModelStatus } {
+  return status === undefined ? {} : { status };
+}
+
+function modelStatus(value: unknown): ModelStatus | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const status = optionalString((value as Record<string, unknown>)["value"]);
+  return status === "loaded" || status === "unloaded" ? status : undefined;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
+}
+
+// llama.cpp serves /props at the server root, while the OpenAI-compatible API
+// lives under /v1. Strip that one trailing segment when building the props URL.
+function serverRootUrl(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(baseUrl);
+  return normalized.endsWith("/v1") ? normalized.slice(0, -3) : normalized;
 }
 
 function withOptionalContextWindow<T extends Record<string, unknown>>(
@@ -95,9 +152,14 @@ function findContextWindow(entry: Record<string, unknown>): number | undefined {
       return value;
     }
   }
-  const metadata = entry["metadata"];
-  if (metadata !== null && typeof metadata === "object" && !Array.isArray(metadata)) {
-    return findContextWindow(metadata as Record<string, unknown>);
+  for (const key of ["metadata", "meta"]) {
+    const nested = entry[key];
+    if (nested !== null && typeof nested === "object" && !Array.isArray(nested)) {
+      const found = findContextWindow(nested as Record<string, unknown>);
+      if (found !== undefined) {
+        return found;
+      }
+    }
   }
   return undefined;
 }

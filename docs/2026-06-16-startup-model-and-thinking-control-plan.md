@@ -93,11 +93,12 @@ Startup defaults:
 
 In-session control:
 
-- Localpi provides a Pi extension command named `/thinking`.
-- `/thinking` opens Pi's selector UI.
-- `/thinking high` sets the level directly.
-- The extension calls Pi's thinking API, so Pi owns runtime mutation.
-- The extension saves the actual Pi thinking level to localpi state for the next launch.
+- Pi provides the `/thinking` command. Pi owns runtime mutation of the thinking level.
+- The localpi extension saves the actual Pi thinking level to localpi state for the next launch.
+
+Superseded: localpi first registered its own `/thinking` extension command. Pi already owns that
+name, so Pi skipped the localpi command in autocomplete. Localpi now keeps only the persistence
+hooks (`thinking_level_select` and `session_shutdown`) and leaves the command to Pi.
 
 Managed `llama-server` caveat:
 
@@ -112,7 +113,7 @@ Managed `llama-server` caveat:
 - [x] Pass the launch-time catalog into generated Pi model config.
 - [x] Keep `/model` owned by Pi.
 - [x] Add reasoning and thinking-format metadata for known local reasoning models.
-- [x] Add `/thinking` as a Pi extension command.
+- [x] Add `/thinking` as a Pi extension command. Superseded: Pi owns the name, so the extension now only remembers the level.
 - [x] Keep startup thinking non-interactive.
 - [x] Keep `--thinking` and `LOCALPI_THINKING` as automation-safe startup controls.
 - [x] Remember the last Pi thinking level for future localpi launches.
