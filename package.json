@@ -57,7 +57,7 @@
     "vitest": "^3.0.0"
   },
   "dependencies": {
-    "@osolmaz/pi-factory": "^0.6.1",
+    "@osolmaz/pi-factory": "^0.7.0",
     "pi-demo-mode": "github:osolmaz/pi-demo-mode#v0.1.0"
   }
 }
