@@ -186,6 +186,18 @@ Point at a llama.cpp server on another port with a provider registry entry:
 
 When a llama.cpp model takes images, Localpi says so in the Pi model config, so the `read` tool and `@file` attachments can send a picture to that model. Localpi reads the fact from the server: an entry in `/v1/models` that lists `image` in `architecture.input_modalities` gets `input: ["text", "image"]`. Every other model stays text-only. No model name is used to guess this.
 
+An engine that reports nothing can be described with a model profile:
+
+```json
+{
+  "id": "qwen3-vl-8b",
+  "model": "qwen3-vl-8b",
+  "capabilities": { "image": true }
+}
+```
+
+The profile wins over the server in both directions, so `"image": false` also turns image input off for a model that reports it.
+
 The server must load a multimodal projector for the model, which a llama.cpp router does on its own from the model directory. Check it with one real image request before you rely on it.
 
 ## Status Display

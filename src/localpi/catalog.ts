@@ -140,7 +140,7 @@ function openAiCatalogModel(
     displayName: `${config.name} / ${model.id}`,
     maxTokens: profileConfig.maxTokens ?? options.maxTokens,
     ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
-    capabilities: modelCapabilities(model),
+    capabilities: modelCapabilities(model, profileConfig),
     availability,
     ...(contextWindow === undefined ? {} : { contextWindow })
   };
@@ -189,9 +189,14 @@ async function discoverLlamaCppProvider(
 }
 
 // Pi passes image input to a model only when the model catalog says the model takes images. A
-// llama.cpp server reports that in the model architecture, so read it there and never guess.
-function modelCapabilities(model: ModelInfo): readonly ModelCapability[] {
-  return model.inputModalities?.includes("image") === true ? ["text", "image"] : ["text"];
+// llama.cpp server reports that in the model architecture, and a model profile can state it for a
+// server that reports nothing. No model name is used to guess it.
+function modelCapabilities(
+  model: ModelInfo,
+  profileConfig: ProfileCapabilityConfig
+): readonly ModelCapability[] {
+  const image = profileConfig.image ?? model.inputModalities?.includes("image") === true;
+  return image ? ["text", "image"] : ["text"];
 }
 
 async function llamaCppAutoload(
@@ -514,25 +519,35 @@ function isQwenThinkingModel(normalizedModelId: string): boolean {
 
 type ProfileCapabilityConfig = {
   readonly reasoning?: boolean;
+  readonly image?: boolean;
   readonly thinkingFormat?: CatalogThinkingFormat;
   readonly contextWindow?: number;
   readonly maxTokens?: number;
 };
+
+function profileApplies(
+  profile: LocalModelProfile | undefined,
+  baseUrl: string,
+  modelId: string
+): profile is LocalModelProfile {
+  return (
+    profile !== undefined &&
+    profileMatchesBaseUrl(profile, baseUrl) &&
+    profileMatchesModel(profile, modelId)
+  );
+}
 
 function profileCapabilityConfig(
   profile: LocalModelProfile | undefined,
   baseUrl: string,
   modelId: string
 ): ProfileCapabilityConfig {
-  if (
-    profile === undefined ||
-    !profileMatchesBaseUrl(profile, baseUrl) ||
-    !profileMatchesModel(profile, modelId)
-  ) {
+  if (!profileApplies(profile, baseUrl, modelId)) {
     return {};
   }
   return withoutUndefined({
     reasoning: profile.capabilities?.reasoning,
+    image: profile.capabilities?.image,
     thinkingFormat: profile.capabilities?.thinkingFormat,
     contextWindow: profile.client?.contextWindow,
     maxTokens: profile.client?.maxTokens

@@ -473,11 +473,56 @@ describe("runtime resolution", () => {
     });
   });
 
+  it("lets a model profile decide image input against the server", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer([
+      { id: "vision-model", architecture: { input_modalities: ["text", "image"] } },
+      { id: "plain-model" }
+    ]);
+    const disabledPath = path.join(stateDir, "no-image-profile.json");
+    const enabledPath = path.join(stateDir, "image-profile.json");
+    await writeFile(
+      disabledPath,
+      JSON.stringify({
+        id: "vision-model",
+        model: "vision-model",
+        capabilities: { image: false }
+      })
+    );
+    await writeFile(
+      enabledPath,
+      JSON.stringify({
+        id: "plain-model",
+        model: "plain-model",
+        capabilities: { image: true }
+      })
+    );
+
+    const disabled = await resolveRuntime({
+      ...options(),
+      runtime: "openai-compatible",
+      baseUrl,
+      model: "vision-model",
+      modelProfileFile: disabledPath
+    });
+    expect(disabled.catalogModels[0]?.capabilities).toEqual(["text"]);
+
+    const enabled = await resolveRuntime({
+      ...options(),
+      runtime: "openai-compatible",
+      baseUrl,
+      model: "plain-model",
+      modelProfileFile: enabledPath
+    });
+    expect(enabled.catalogModels[0]?.capabilities).toEqual(["text", "image"]);
+  });
+
   it("rejects malformed optional string fields in local model profiles", async () => {
     const { stateDir } = await tempRuntimeState();
     const baseUrl = await startModelServer("nvidia/Gemma-4-26B-A4B-NVFP4", 32768);
     const badBaseUrlProfile = path.join(stateDir, "bad-base-url-profile.json");
     const badThinkingFormatProfile = path.join(stateDir, "bad-thinking-format-profile.json");
+    const badImageProfile = path.join(stateDir, "bad-image-profile.json");
     const baseProfile = {
       id: "gemma4-26b-a4b-nvfp4",
       model: "nvidia/Gemma-4-26B-A4B-NVFP4"
@@ -495,6 +540,15 @@ describe("runtime resolution", () => {
         ...baseProfile,
         capabilities: {
           thinking_format: { name: "qwen-chat-template" }
+        }
+      })
+    );
+    await writeFile(
+      badImageProfile,
+      JSON.stringify({
+        ...baseProfile,
+        capabilities: {
+          image: "yes"
         }
       })
     );
@@ -517,6 +571,15 @@ describe("runtime resolution", () => {
         modelProfileFile: badThinkingFormatProfile
       })
     ).rejects.toThrow("model profile");
+    await expect(
+      resolveRuntime({
+        ...options(),
+        runtime: "vllm",
+        baseUrl,
+        model: "nvidia/Gemma-4-26B-A4B-NVFP4",
+        modelProfileFile: badImageProfile
+      })
+    ).rejects.toThrow("capabilities.image");
   });
 
   it("does not mark older Qwen and DeepSeek coder model ids as reasoning models", async () => {

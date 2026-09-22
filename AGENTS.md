@@ -37,7 +37,7 @@ llama.cpp is localpi's default and preferred local engine.
 - It reads llama.cpp `/v1/models` entries. A model with `status.value` `loaded`, or with no status at all, is usable. A model with `status.value` `unloaded` is offered as startable only when `/props` reports `models_autoload`.
 - External llama.cpp servers are never started, stopped, or unloaded by localpi. Only the localpi-owned managed `llama-server` process is managed.
 - Keep llama.cpp-specific parsing in the shared model-discovery layer instead of duplicating it in callers.
-- Read image input from the server, never from the model name. A llama.cpp entry that lists `image` in `architecture.input_modalities` makes the Pi model config say `input: ["text", "image"]`; every other model stays `input: ["text"]`. A model that takes images needs a multimodal projector on the server (`--mmproj`), and localpi does not start or configure that server.
+- Read image input from the server, never from the model name. A llama.cpp entry that lists `image` in `architecture.input_modalities` makes the Pi model config say `input: ["text", "image"]`; every other model stays `input: ["text"]`. A model profile may state `capabilities.image` for a server that reports nothing, and the profile wins in both directions. A model that takes images needs a multimodal projector on the server (`--mmproj`), and localpi does not start or configure that server.
 
 ## Status Display
 

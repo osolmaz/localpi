@@ -155,6 +155,8 @@ Name-based capability detection remains fallback behavior. Built-in vLLM Gemma 4
 
 A llama.cpp server reports model architecture in `/v1/models`. Localpi reads `architecture.input_modalities` and writes `input: ["text", "image"]` into the Pi model config when the entry lists `image`, so Pi passes image attachments to that model. Every other model is written as `input: ["text"]`.
 
+A model profile states the same fact for a server that reports nothing: add `"image": true` to `capabilities`. The profile wins over the server, so `"image": false` also disables image input for a model that reports it.
+
 The server side must hold up its end: the model needs a multimodal projector, and the server must run with `--mmproj <file>.gguf`. A llama.cpp router passes the projector of a model directory to the child server on its own. Test a model with one real image request before you trust it, because a text-only server answers an image request with text about the prompt, not the picture.
 
 ## Model Selection

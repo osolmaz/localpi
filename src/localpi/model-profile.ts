@@ -17,6 +17,7 @@ export type LocalModelProfile = {
   };
   readonly capabilities?: {
     readonly reasoning?: boolean;
+    readonly image?: boolean;
     readonly thinkingFormat?: CatalogThinkingFormat;
   };
 };
@@ -73,6 +74,10 @@ function parseLocalModelProfile(value: unknown, source: string): LocalModelProfi
           ),
           `model profile ${source} capabilities.thinking_format`
         );
+  const image =
+    capabilities === undefined
+      ? undefined
+      : optionalBoolean(capabilities["image"], `model profile ${source} capabilities.image`);
   return withoutUndefined({
     id: requiredString(root["id"], `model profile ${source} id`),
     model: requiredString(root["model"], `model profile ${source} model`),
@@ -89,6 +94,7 @@ function parseLocalModelProfile(value: unknown, source: string): LocalModelProfi
         ? undefined
         : (withoutUndefined({
             reasoning,
+            image,
             thinkingFormat
           }) as LocalModelProfile["capabilities"])
   }) as LocalModelProfile;
