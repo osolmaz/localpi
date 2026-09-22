@@ -1,4 +1,5 @@
 import type { StatsMode } from "../../localpi/options.js";
+import { settingsFileSource } from "./settings-file.js";
 
 export type TokenStatusConfig = {
   readonly settingsPath: string;
@@ -9,7 +10,6 @@ export type TokenStatusConfig = {
 };
 
 export function tokenStatusExtensionSource(config: TokenStatusConfig): string {
-  const settingsPathSource = JSON.stringify(config.settingsPath);
   const initialModeSource = JSON.stringify(config.mode);
   const slotsUrlSource = JSON.stringify(slotsUrl(config));
   return `import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -81,7 +81,7 @@ type StatsContext = {
 // Stats mode is remembered per localpi launch. /stats updates both this session and the setting.
 // Pi owns the footer and already shows context usage there, so localpi shows stats in the working
 // line and in one transcript entry per turn only.
-const settingsPath = ${settingsPathSource};
+${settingsFileSource(config.settingsPath)}
 const initialMode: StatsMode = ${initialModeSource};
 // llama.cpp exposes live prefill progress on /slots. Other engines have no equivalent endpoint.
 const slotsUrl: string | undefined = ${slotsUrlSource};
@@ -525,17 +525,7 @@ async function promptMode(current: StatsMode, ctx: StatsContext): Promise<StatsM
 async function persistMode(mode: StatsMode): Promise<void> {
   const settings = await readSettings();
   settings["stats"] = mode;
-  await mkdir(dirname(settingsPath), { recursive: true });
-  await writeFile(settingsPath, JSON.stringify(settings, null, 2), "utf8");
-}
-
-async function readSettings(): Promise<Record<string, unknown>> {
-  try {
-    const value: unknown = JSON.parse(await readFile(settingsPath, "utf8"));
-    return isRecord(value) ? { ...value } : {};
-  } catch {
-    return {};
-  }
+  await writeSettings(settings);
 }
 
 function formatElapsed(seconds: number): string {

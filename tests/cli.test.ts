@@ -349,6 +349,38 @@ describe("localpi cli", () => {
     expect(source).toContain('const initialMode: StatsMode = "line";');
   });
 
+  it("uses the remembered permission setting unless a localpi approval override is set", async () => {
+    const stateDir = await tempStateDir();
+    const baseUrl = await startModelServer("served-model", 4096);
+    await writeFile(path.join(stateDir, "settings.json"), JSON.stringify({ permission: "allow" }));
+    const baseArgs = [
+      "--runtime",
+      "lmstudio",
+      "--base-url",
+      baseUrl,
+      "--state-dir",
+      stateDir,
+      "--session-dir",
+      path.join(stateDir, "sessions"),
+      "--pi-command",
+      "true"
+    ];
+
+    const remembered = await run(baseArgs);
+    expect(remembered).toEqual({ code: 0, stdout: "", stderr: "" });
+    const source = await readFile(path.join(stateDir, "pi-extensions", "tool-approval.ts"), "utf8");
+    expect(source).toContain("const initialEnabled: boolean = false;");
+
+    await writeFile(path.join(stateDir, "settings.json"), JSON.stringify({ permission: "ask" }));
+    const overridden = await run([...baseArgs, "--no-approval"]);
+    expect(overridden).toEqual({ code: 0, stdout: "", stderr: "" });
+    const overriddenSource = await readFile(
+      path.join(stateDir, "pi-extensions", "tool-approval.ts"),
+      "utf8"
+    );
+    expect(overriddenSource).toContain("const initialEnabled: boolean = false;");
+  });
+
   it("uses remembered thinking unless a localpi thinking override is set", async () => {
     const stateDir = await tempStateDir();
     const baseUrl = await startModelServer("served-model", 4096);

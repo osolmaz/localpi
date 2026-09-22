@@ -19,7 +19,10 @@ describe("generated Pi extension sources", () => {
       fileName: "thinking-control.ts",
       source: thinkingControlExtensionSource("/tmp/localpi/settings.json")
     },
-    { fileName: "tool-approval.ts", source: approvalExtensionSource({ enabled: true }) },
+    {
+      fileName: "tool-approval.ts",
+      source: approvalExtensionSource({ enabled: true, settingsPath: "/tmp/localpi/settings.json" })
+    },
     {
       fileName: "token-status.ts",
       source: tokenStatusExtensionSource({

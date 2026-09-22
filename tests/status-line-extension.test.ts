@@ -296,12 +296,12 @@ describe("generated localpi status line", () => {
       { fg: (_color, text) => text },
       {
         getGitBranch: () => undefined,
-        getExtensionStatuses: () => new Map([["localpi-approval", "approval: off"]]),
+        getExtensionStatuses: () => new Map([["localpi-approval", "permission: allow"]]),
         onBranchChange: () => () => undefined
       }
     );
 
-    expect(component?.render(150)[0]).toContain("approval: off");
+    expect(component?.render(150)[0]).toContain("permission: allow");
   });
 
   it("shows the thinking level for a reasoning model", async () => {

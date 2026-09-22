@@ -3,15 +3,18 @@ import path from "node:path";
 
 import { asObject, optionalString } from "../common/json.js";
 import {
+  parsePermissionMode,
   parseStatsMode,
   parseThinkingLevel,
   type LocalpiOptions,
+  type PermissionMode,
   type StatsMode
 } from "./options.js";
 
 export type LocalpiSettings = {
   readonly thinking?: LocalpiOptions["thinking"];
   readonly stats?: StatsMode;
+  readonly permission?: PermissionMode;
 };
 
 export function localpiSettingsPath(options: Pick<LocalpiOptions, "stateDir">): string {
@@ -20,14 +23,18 @@ export function localpiSettingsPath(options: Pick<LocalpiOptions, "stateDir">): 
 
 export async function applyRememberedSettings(
   options: LocalpiOptions,
-  explicit: { readonly thinking: boolean; readonly stats: boolean }
+  explicit: { readonly thinking: boolean; readonly stats: boolean; readonly permission: boolean }
 ): Promise<LocalpiOptions> {
   const settings = await readLocalpiSettings(options);
   return {
     ...options,
     thinking:
       explicit.thinking || settings.thinking === undefined ? options.thinking : settings.thinking,
-    stats: explicit.stats || settings.stats === undefined ? options.stats : settings.stats
+    stats: explicit.stats || settings.stats === undefined ? options.stats : settings.stats,
+    approval:
+      explicit.permission || settings.permission === undefined
+        ? options.approval
+        : settings.permission === "ask"
   };
 }
 
@@ -47,9 +54,11 @@ async function readLocalpiSettings(
     const root = asObject(JSON.parse(raw) as unknown, "localpi settings");
     const thinking = optionalString(root["thinking"]);
     const stats = optionalString(root["stats"]);
+    const permission = optionalString(root["permission"]);
     return {
       ...(thinking === undefined ? {} : { thinking: parseThinkingLevel(thinking) }),
-      ...(stats === undefined ? {} : { stats: parseStatsMode(stats) })
+      ...(stats === undefined ? {} : { stats: parseStatsMode(stats) }),
+      ...(permission === undefined ? {} : { permission: parsePermissionMode(permission) })
     };
   } catch {
     return {};

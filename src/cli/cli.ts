@@ -30,7 +30,8 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
     }
     options = await applyRememberedSettings(options, {
       thinking: hasExplicitThinkingOverride(args),
-      stats: hasExplicitStatsOverride(args)
+      stats: hasExplicitStatsOverride(args),
+      permission: hasExplicitPermissionOverride(args)
     });
 
     const connection = await resolveRuntime(options);
@@ -351,6 +352,21 @@ function hasExplicitStatsOverride(args: readonly string[]): boolean {
       return false;
     }
     if (arg === "--stats" || arg === "--no-token-status") {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasExplicitPermissionOverride(args: readonly string[]): boolean {
+  if (process.env["LOCALPI_APPROVAL"] !== undefined) {
+    return true;
+  }
+  for (const arg of args) {
+    if (arg === "--") {
+      return false;
+    }
+    if (arg === "--no-approval") {
       return true;
     }
   }

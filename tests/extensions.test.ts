@@ -26,10 +26,13 @@ describe("Pi extensions", () => {
       expect(thinking).toContain("thinking_level_select");
       expect(thinking).not.toContain("registerCommand");
       expect(thinking).not.toContain("setThinkingLevel");
-      expect(approval).toContain("ctx.ui.confirm");
+      expect(approval).toContain("ctx.ui.select");
       expect(approval).toContain('pi.registerCommand("approval"');
       expect(approval).toContain("const initialEnabled: boolean = true;");
       expect(approval).toContain("Tool approval rule:");
+      expect(approval).toContain("Allow all tools for this session");
+      expect(approval).toContain('settings["permission"] = mode');
+      expect(approval).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
       expect(status).toContain("tok/s");
       expect(status).toContain('pi.on("turn_start"');
       expect(status).toContain('pi.on("message_update"');

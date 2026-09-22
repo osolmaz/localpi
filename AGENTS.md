@@ -49,12 +49,13 @@ The status display follows `docs/design-principles.md`: simple, unopinionated, c
 
 Tool approval follows `docs/design-principles.md`: on by default, off on request, never silent.
 
-- Always write the tool approval extension, with `initialEnabled` from `--no-approval`/`LOCALPI_APPROVAL`. Never remove the extension to express a disabled gate, because that removes the `/approval` command too.
-- Keep approval a session setting. Do not persist it to `<state-dir>/settings.json`; every launch starts from the launch flag again.
+- Always write the tool approval extension, with `initialEnabled` from `--no-approval`/`LOCALPI_APPROVAL` or from the saved `permission` setting. Never remove the extension to express a disabled gate, because that removes the `/approval` command too.
+- Offer three choices in the dialogs: allow once, allow every tool call for this session, and deny. Treat a cancelled dialog as deny, and treat a missing terminal as deny.
+- Keep the dialog choice session-scoped. Only `/approval ask|allow` writes the `permission` setting in `<state-dir>/settings.json`, and only as the launch default for new sessions.
 - Keep `/approval` in the gate extension, next to the code that blocks tool calls. Keep the system-prompt rule in the same extension.
 - Keep the gate blocking every tool call when `ctx.hasUI` is false and approval is on. Do not auto-approve, and do not silently turn approval off, in a non-interactive run.
 - Keep a visible status item while approval is off, so a session never runs unguarded without a sign on screen.
-- Do not make approval the default choice for other tools. Keep the confirm dialog as the only approval surface.
+- Do not make approval the default choice for other tools. Keep the dialog as the only approval surface.
 
 ## Theme and Colors
 

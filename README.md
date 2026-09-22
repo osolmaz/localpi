@@ -92,22 +92,33 @@ Pi session via `pi install`.
 
 ## Tool Approval
 
-Approval is on by default. Every tool call opens a confirmation dialog that shows the tool name and
-its input. A denied call does not run, and the model is told that it was denied.
-
-Turn approval off for the rest of the session when you trust the current task:
+Approval is on by default. Every tool call opens a dialog that shows the tool name and its input,
+with three choices:
 
 ```text
-/approval off    # run tool calls without asking until Pi exits
-/approval on     # ask again
-/approval        # pick on or off from a list, with the current value marked
+Allow once                        # run this call and keep asking for the next one
+Allow all tools for this session  # run every tool call in this session without asking
+Deny                              # block the call
 ```
 
-While approval is off, Pi shows `approval: off` in the status area, so the state stays visible.
+A blocked call and a cancelled dialog do not run, and the model is told that the call was blocked.
 
-Approval is a session setting. Localpi never writes it to `<state-dir>/settings.json`, and a new
-launch starts with approval on again. Use `--no-approval`, or `LOCALPI_APPROVAL=0`, to start a
-session with approval off; `/approval on` turns it back on.
+The dialog choice lasts for this session only. Use the permission setting to change what new
+sessions do:
+
+```text
+/approval allow   # do not ask in new sessions either
+/approval ask     # ask before each tool call (the default)
+/approval off     # alias for /approval allow
+/approval on      # alias for /approval ask
+/approval         # pick ask or allow from a list, with the current value marked
+```
+
+The permission setting lives in `<state-dir>/settings.json` as `"permission": "ask" | "allow"`.
+Startup reads, in order: `--no-approval` or `LOCALPI_APPROVAL=0`, the saved setting, then the
+default `ask`. Use `--no-approval` to start one session without changing the setting.
+
+While approval is off, Pi shows `permission: allow` in the status area, so the state stays visible.
 
 In a non-interactive launch, approval stays on and no dialog is possible, so every tool call is
 blocked. That keeps scripted runs from executing tools without a person watching.

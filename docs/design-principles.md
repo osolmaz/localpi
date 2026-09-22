@@ -67,8 +67,10 @@ The status display shows the same principles in a small feature.
 3. **Customizable.** `--stats off|line|full` sets the mode. `LOCALPI_STATS` sets it for a shell.
    `/stats` changes it during a session and saves the result to `<state-dir>/settings.json`.
    `--no-token-status` stays as a short alias for `--stats off`. The tool approval gate works the
-   same way, with `/approval on|off`: on by default, off on request, and session-scoped, because a
-   user who turns approval off does not want that choice to survive a restart.
+   same way, with `/approval ask|allow` and `on`/`off` as aliases: on by default, off on request,
+   and saved as the `permission` setting that new sessions start from. The dialog choice to allow
+   every tool call for one session is deliberately not saved, because that choice is about the task
+   at hand, not about the user's default.
 4. **Pi-native.** The display is a generated Pi extension. It uses `setFooter` for one status line,
    `setWorkingMessage` for the live line, `appendEntry` for the transcript summary, and
    `registerCommand` for `/stats`. It writes complete lines, so Pi keeps ownership of layout and

@@ -80,7 +80,10 @@ export async function writeDefaultExtensions(
     await writeExtension(
       extensionDir,
       "tool-approval.ts",
-      approvalExtensionSource({ enabled: options.approval })
+      approvalExtensionSource({
+        enabled: options.approval,
+        settingsPath: localpiSettingsPath(options)
+      })
     )
   );
   if (options.stats !== "off") {

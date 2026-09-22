@@ -12,8 +12,11 @@ export type RuntimeKind =
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 export type ModelThinkingFormat = "deepseek" | "qwen-chat-template";
 export type StatsMode = "off" | "line" | "full";
+export type PermissionMode = "ask" | "allow";
 
 export const statsModes: readonly StatsMode[] = ["off", "line", "full"];
+
+export const permissionModes: readonly PermissionMode[] = ["ask", "allow"];
 
 export const thinkingLevels: readonly ThinkingLevel[] = [
   "off",
@@ -375,6 +378,15 @@ export function parseStatsMode(value: string): StatsMode {
     }
   }
   throw new Error(`unknown stats mode ${value}; expected off, line, or full`);
+}
+
+export function parsePermissionMode(value: string): PermissionMode {
+  for (const mode of permissionModes) {
+    if (value === mode) {
+      return mode;
+    }
+  }
+  throw new Error(`unknown permission mode ${value}; expected ask or allow`);
 }
 
 function defaultStatsMode(): StatsMode {

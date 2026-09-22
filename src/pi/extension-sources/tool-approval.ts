@@ -1,12 +1,17 @@
+import { settingsFileSource } from "./settings-file.js";
+
 export type ToolApprovalConfig = {
   readonly enabled: boolean;
+  readonly settingsPath: string;
 };
 
 export function approvalExtensionSource(config: ToolApprovalConfig): string {
   const initialEnabledSource = JSON.stringify(config.enabled);
-  return `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+  return `import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-type ApprovalState = "on" | "off";
+type PermissionMode = "ask" | "allow";
 
 type CommandContext = {
   readonly hasUI: boolean;
@@ -19,10 +24,17 @@ type CommandContext = {
 
 const approvalRule =
   "\\n\\nTool approval rule: if any tool result says the tool was blocked, denied, or requires approval, the tool did not run. Do not claim blocked tools ran.";
-const states: readonly ApprovalState[] = ["on", "off"];
+const modes: readonly PermissionMode[] = ["ask", "allow"];
+const aliases: readonly string[] = ["on", "off"];
 const statusKey = "localpi-approval";
-// Approval is a session setting. The /approval command changes it for the current session only,
-// so nothing here writes to the localpi settings file.
+const allowOnce = "Allow once";
+const allowSession = "Allow all tools for this session";
+const deny = "Deny";
+const blockedReason = "Tool call was blocked by the user and did not run.";
+const noUiReason = " was blocked and did not run because interactive approval is required.";
+// The permission setting is the launch default for new sessions. The /approval command writes it;
+// the session-only choice in the tool call dialog never writes it.
+${settingsFileSource(config.settingsPath)}
 const initialEnabled: boolean = ${initialEnabledSource};
 
 export default function localpiToolApproval(pi: ExtensionAPI): void {
@@ -33,33 +45,35 @@ export default function localpiToolApproval(pi: ExtensionAPI): void {
   }));
 
   pi.on("session_start", (_event, ctx) => {
-    if (!enabled && ctx.hasUI) {
-      ctx.ui.setStatus(statusKey, "approval: off");
-    }
+    showStatus(ctx);
   });
 
   pi.registerCommand("approval", {
-    description: "Turn the tool approval gate on or off for this session",
+    description: "Choose whether tool calls ask for approval",
     getArgumentCompletions: (prefix: string) => {
       const trimmed = prefix.trim().toLowerCase();
-      const matches = states.filter((state) => state.startsWith(trimmed));
-      return matches.length === 0 ? null : matches.map((state) => ({ value: state, label: state }));
+      const names = [...modes, ...aliases];
+      const matches = names.filter((name) => name.startsWith(trimmed));
+      return matches.length === 0 ? null : matches.map((name) => ({ value: name, label: name }));
     },
     handler: async (args: string, ctx: CommandContext) => {
-      const requested = parseState(args);
+      const requested = parseMode(args);
       if (requested !== undefined) {
-        apply(requested, ctx);
+        await apply(requested, ctx, true);
         return;
       }
       if (!ctx.hasUI) {
-        ctx.ui.notify("approval: " + label(enabled) + "; run localpi in a terminal to change it", "info");
+        ctx.ui.notify(
+          "permission: " + label(enabled) + "; run localpi in a terminal to change it",
+          "info"
+        );
         return;
       }
-      const selected = await promptState(enabled, ctx);
+      const selected = await promptMode(enabled, ctx);
       if (selected === undefined) {
         return;
       }
-      apply(selected, ctx);
+      await apply(selected, ctx, true);
     }
   });
 
@@ -68,70 +82,92 @@ export default function localpiToolApproval(pi: ExtensionAPI): void {
       return undefined;
     }
 
-    const input = formatInput(event.input);
-
     if (!ctx.hasUI) {
-      return {
-        block: true,
-        reason:
-          'Tool call "' +
-          event.toolName +
-          '" was blocked and did not run because interactive approval is required.'
-      };
+      return { block: true, reason: 'Tool call "' + event.toolName + '"' + noUiReason };
     }
 
-    const ok = await ctx.ui.confirm("Allow tool call: " + event.toolName + "?", input);
-    if (!ok) {
-      return { block: true, reason: "Tool call was blocked by the user and did not run." };
+    const choice = await ctx.ui.select(
+      "Allow tool call: " + event.toolName + "?\\n" + previewInput(event.input),
+      [allowOnce, allowSession, deny]
+    );
+
+    if (choice === allowSession) {
+      await apply("allow", ctx, false);
+      return undefined;
+    }
+
+    if (choice !== allowOnce) {
+      return { block: true, reason: blockedReason };
     }
 
     return undefined;
   });
 
-  function apply(state: ApprovalState, ctx: CommandContext): void {
-    enabled = state === "on";
+  function showStatus(ctx: CommandContext): void {
     if (ctx.hasUI) {
-      ctx.ui.setStatus(statusKey, enabled ? undefined : "approval: off");
+      ctx.ui.setStatus(statusKey, enabled ? undefined : "permission: allow");
     }
-    ctx.ui.notify(
-      enabled
-        ? "approval: on; tool calls ask before they run"
-        : "approval: off for this session; tool calls run without asking",
-      enabled ? "info" : "warning"
-    );
+  }
+
+  async function apply(mode: PermissionMode, ctx: CommandContext, save: boolean): Promise<void> {
+    enabled = mode === "ask";
+    showStatus(ctx);
+    ctx.ui.notify(notification(mode, save), enabled ? "info" : "warning");
+    if (save) {
+      await persist(mode);
+    }
   }
 }
 
-function label(enabled: boolean): ApprovalState {
-  return enabled ? "on" : "off";
+function notification(mode: PermissionMode, save: boolean): string {
+  const scope = save ? ", saved for new sessions" : " for this session";
+  return mode === "ask"
+    ? "permission: ask" + scope + "; tool calls ask before they run"
+    : "permission: allow" + scope + "; tool calls run without asking";
 }
 
-function parseState(value: string): ApprovalState | undefined {
+async function persist(mode: PermissionMode): Promise<void> {
+  const settings = await readSettings();
+  settings["permission"] = mode;
+  await writeSettings(settings);
+}
+
+function label(enabled: boolean): PermissionMode {
+  return enabled ? "ask" : "allow";
+}
+
+function parseMode(value: string): PermissionMode | undefined {
   const normalized = value.trim().split(/\\s+/u)[0]?.toLowerCase();
-  return states.find((state) => state === normalized);
+  if (normalized === "on") {
+    return "ask";
+  }
+  if (normalized === "off") {
+    return "allow";
+  }
+  return modes.find((mode) => mode === normalized);
 }
 
-async function promptState(
+async function promptMode(
   current: boolean,
   ctx: CommandContext
-): Promise<ApprovalState | undefined> {
-  const currentState = label(current);
+): Promise<PermissionMode | undefined> {
+  const currentMode = label(current);
   const selected = await ctx.ui.select(
     "Tool approval",
-    states.map((state) => (state === currentState ? state + " (current)" : state))
+    modes.map((mode) => (mode === currentMode ? mode + " (current)" : mode))
   );
-  return selected === undefined ? undefined : parseState(selected);
+  return selected === undefined ? undefined : parseMode(selected);
 }
 
-function formatInput(input: unknown): string {
+function previewInput(input: unknown): string {
   let text: string;
   try {
-    text = JSON.stringify(input, null, 2);
+    text = JSON.stringify(input, null, 2) ?? String(input);
   } catch {
     text = String(input);
   }
 
-  const maxLength = 4000;
+  const maxLength = 1200;
   if (text.length <= maxLength) {
     return text;
   }
