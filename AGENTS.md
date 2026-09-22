@@ -33,7 +33,7 @@ llama.cpp is localpi's default and preferred local engine.
 
 The status display follows `docs/design-principles.md`: simple, unopinionated, customizable.
 
-- Keep three surfaces only: one live line, one transcript entry per turn, and one footer item. Do not add more status surfaces for the same information.
+- Keep two surfaces only: one live line and one transcript entry per turn. Pi owns the footer and already shows context usage there, so localpi must not add a footer item. Do not add more status surfaces for the same information.
 - Keep the mode order `off`, `line`, `full`, with `full` as the default.
 - Keep the precedence order: `--stats`, `LOCALPI_STATS`, the saved `/stats` value in `<state-dir>/settings.json`, then the default. Keep `--no-token-status` as an alias for `--stats off`.
 - Keep the live line in Pi's native working row through `ctx.ui.setWorkingMessage`, and keep the word `Working` in that line.

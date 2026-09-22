@@ -101,7 +101,7 @@ describe("generated localpi stats extension", () => {
     expect(message).toContain("Working");
     expect(message).toContain("100 out");
     expect(message).toContain("55.6 tok/s");
-    expect(message).toContain("ctx 26%");
+    expect(message).toContain("ctx 34k/131k (26%)");
     expect(themeColor(ctx, "accent", "55.6 tok/s")).toBe(true);
     expect(await exists(settingsPath)).toBe(false);
   });
@@ -146,7 +146,7 @@ describe("generated localpi stats extension", () => {
     );
     expect(message).toContain("prefill 25%");
     expect(message).toContain("5k/20k tok");
-    expect(message).toContain("ctx 61%");
+    expect(message).toContain("ctx 20k/33k (61%)");
   });
 
   it("falls back to elapsed prefill time when the slots endpoint fails", async () => {
@@ -176,7 +176,7 @@ describe("generated localpi stats extension", () => {
     expect(message).not.toContain("prefill 0%");
   });
 
-  it("appends a transcript summary and footer after the turn", async () => {
+  it("appends a transcript summary after the turn without a footer item", async () => {
     setupClock();
     const { extension } = await loadExtension({ mode: "full" });
     const pi = fakePi();
@@ -200,7 +200,7 @@ describe("generated localpi stats extension", () => {
     expect(data.contextTokens).toBe(34_000);
     expect(data.contextWindow).toBe(131_000);
     expect(data.contextPercent).toBeCloseTo(25.954, 3);
-    expect(ctx.ui.statuses.at(-1)).toContain("tok/s");
+    expect(ctx.ui.statuses).toHaveLength(0);
     expect(ctx.ui.messages.at(-1)).toBeUndefined();
   });
 

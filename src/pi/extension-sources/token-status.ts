@@ -72,7 +72,6 @@ type StatsContext = {
   readonly hasUI: boolean;
   readonly ui: {
     setWorkingMessage(message?: string): void;
-    setStatus(key: string, text: string | undefined): void;
     notify(message: string, type?: "info" | "warning" | "error"): void;
     theme: ThemeLike;
   };
@@ -80,6 +79,8 @@ type StatsContext = {
 };
 
 // Stats mode is remembered per localpi launch. /stats updates both this session and the setting.
+// Pi owns the footer and already shows context usage there, so localpi shows stats in the working
+// line and in one transcript entry per turn only.
 const settingsPath = ${settingsPathSource};
 const initialMode: StatsMode = ${initialModeSource};
 // llama.cpp exposes live prefill progress on /slots. Other engines have no equivalent endpoint.
@@ -124,9 +125,6 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
       await persistMode(next);
       if (ctx.hasUI) {
         ctx.ui.setWorkingMessage();
-        if (next === "off") {
-          ctx.ui.setStatus(entryType, undefined);
-        }
       }
       ctx.ui.notify("stats: " + next, "info");
     }
@@ -187,7 +185,6 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
       return;
     }
     pi.appendEntry(entryType, data);
-    ctx.ui.setStatus(entryType, footerLine(data, ctx.ui.theme));
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
@@ -196,7 +193,6 @@ export default function localpiTokenStatus(pi: ExtensionAPI): void {
     if (!ctx.hasUI) {
       return;
     }
-    ctx.ui.setStatus(entryType, undefined);
     ctx.ui.setWorkingMessage();
   });
 
@@ -291,7 +287,7 @@ function workingParts(state: TurnState, now: number, usage: ContextUsage | undef
       { text: formatRate(state.estimatedOutputTokens / seconds) + " tok/s", color: "accent" }
     ]);
   }
-  parts.push(...contextParts(usage, false));
+  parts.push(...contextParts(usage));
   return parts;
 }
 
@@ -349,17 +345,8 @@ function entryParts(data: StatsEntry): Segment[][] {
   if (data.prefillSeconds !== undefined) {
     parts.push([{ text: "prefill " + formatElapsed(data.prefillSeconds), color: "dim" }]);
   }
-  parts.push(...contextParts(entryContext(data), true));
+  parts.push(...contextParts(entryContext(data)));
   return parts;
-}
-
-function footerLine(data: StatsEntry, theme: ThemeLike): string {
-  const parts: Segment[][] = [];
-  if (data.rate !== undefined) {
-    parts.push([{ text: formatRate(data.rate) + " tok/s", color: "accent" }]);
-  }
-  parts.push(...contextParts(entryContext(data), false));
-  return parts.length === 0 ? "" : renderParts(parts, theme);
 }
 
 function entryContext(data: StatsEntry): ContextUsage | undefined {
@@ -373,32 +360,24 @@ function entryContext(data: StatsEntry): ContextUsage | undefined {
   };
 }
 
-function contextParts(usage: ContextUsage | undefined, detailed: boolean): Segment[][] {
+function contextParts(usage: ContextUsage | undefined): Segment[][] {
   if (usage === undefined || usage.percent === null) {
     return [];
   }
   const color = contextColor(usage.percent);
-  if (detailed && usage.tokens !== null && usage.contextWindow > 0) {
-    return [
-      [
-        { text: "ctx ", color: "dim" },
-        {
-          text:
-            formatTokenCount(usage.tokens) +
-            "/" +
-            formatTokenCount(usage.contextWindow) +
-            " (" +
-            Math.round(usage.percent) +
-            "%)",
-          color
-        }
-      ]
-    ];
-  }
+  const measured = usage.tokens !== null && usage.contextWindow > 0;
+  const text = measured
+    ? formatTokenCount(usage.tokens as number) +
+      "/" +
+      formatTokenCount(usage.contextWindow) +
+      " (" +
+      Math.round(usage.percent) +
+      "%)"
+    : Math.round(usage.percent) + "%";
   return [
     [
       { text: "ctx ", color: "dim" },
-      { text: Math.round(usage.percent) + "%", color }
+      { text, color }
     ]
   ];
 }

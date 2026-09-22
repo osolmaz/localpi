@@ -134,36 +134,40 @@ Point at a llama.cpp server on another port with a provider registry entry:
 The status display answers one question: is this machine keeping up? It shows elapsed time, output
 tokens, token rate, and context use. Pick a mode with `--stats`:
 
-| Mode             | Live line | Transcript entry | Footer |
-| ---------------- | --------- | ---------------- | ------ |
-| `off`            | no        | no               | no     |
-| `line`           | yes       | no               | no     |
-| `full` (default) | yes       | yes              | yes    |
+| Mode             | Live line | Transcript entry |
+| ---------------- | --------- | ---------------- |
+| `off`            | no        | no               |
+| `line`           | yes       | no               |
+| `full` (default) | yes       | yes              |
+
+Pi already shows context usage in its own footer, so localpi adds no footer item of its own. The
+same numbers never appear twice on screen at the same time.
 
 The live line replaces Pi's plain `Working` text while the model runs:
 
 ```text
-Working (1.8s · 100 out · 55.6 tok/s · ctx 26%)
+Working (1.8s · 100 out · 55.6 tok/s · ctx 34k/131k (26%))
 ```
 
 During prefill, the same line reports progress through the prompt:
 
 ```text
-Working (prefill 25% · 5k/20k tok · 3.2s · ctx 61%)
+Working (prefill 25% · 5k/20k tok · 3.2s · ctx 20k/33k (61%))
 ```
 
 Prefill progress needs a llama.cpp server, because it reads the server's `/slots` endpoint. Localpi
 polls that endpoint only for llama.cpp runtimes. When the endpoint is missing or slow, localpi stops
 polling and shows elapsed prefill time instead.
 
-In `full` mode, each finished turn also adds one dim transcript line and one footer item:
+In `full` mode, each finished turn also adds one dim transcript line:
 
 ```text
 10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
 ```
 
 Context colors use the active theme: normal below 80 percent, warning from 80 percent, error from
-95 percent. The transcript line shows counts; the footer and the live line show percentages.
+95 percent. The live line and the transcript line both show used tokens and the context window. When
+Pi reports no token counts, the live line falls back to the context percentage alone.
 
 Change the mode during a session with `/stats`:
 

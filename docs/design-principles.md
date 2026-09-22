@@ -70,18 +70,20 @@ The status display shows the same principles in a small feature.
    same way, with `/approval on|off`: on by default, off on request, and session-scoped, because a
    user who turns approval off does not want that choice to survive a restart.
 4. **Pi-native.** The display is a generated Pi extension. It uses `setWorkingMessage` for the live
-   line, `appendEntry` for the transcript summary, `setStatus` for the footer, and `registerCommand`
-   for `/stats`. It writes complete lines, so Pi keeps ownership of layout and wrapping.
+   line, `appendEntry` for the transcript summary, and `registerCommand` for `/stats`. It writes
+   complete lines, so Pi keeps ownership of layout and wrapping. Pi owns the footer and already
+   shows context usage there, so localpi adds no footer item and never prints the same numbers
+   twice at the same time.
 5. **Explicit.** Prefill progress comes from the llama.cpp `/slots` endpoint. When that endpoint is
    missing or slow, localpi stops polling and shows elapsed time instead of inventing a percentage.
 
 The three modes exist because users want different amounts of information:
 
-| Mode   | Live line | Transcript entry | Footer |
-| ------ | --------- | ---------------- | ------ |
-| `off`  | no        | no               | no     |
-| `line` | yes       | no               | no     |
-| `full` | yes       | yes              | yes    |
+| Mode   | Live line | Transcript entry |
+| ------ | --------- | ---------------- |
+| `off`  | no        | no               |
+| `line` | yes       | no               |
+| `full` | yes       | yes              |
 
 ## Worked example: the default look
 
