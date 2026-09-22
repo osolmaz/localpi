@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { demoModeExtensionSource } from "../src/pi/extension-sources/demo-mode.js";
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
+import { statusLineExtensionSource } from "../src/pi/extension-sources/status-line.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
 import { tokenStatusExtensionSource } from "../src/pi/extension-sources/token-status.js";
 import { approvalExtensionSource } from "../src/pi/extension-sources/tool-approval.js";
@@ -32,6 +33,12 @@ describe("generated Pi extension sources", () => {
         engine: "llama-cpp",
         baseUrl: "http://127.0.0.1:8080/v1",
         modelId: "local-model"
+      })
+    },
+    {
+      fileName: "status-line.ts",
+      source: statusLineExtensionSource({
+        engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
       })
     }
   ] as const;

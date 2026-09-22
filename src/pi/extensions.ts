@@ -7,6 +7,7 @@ import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
 import { demoModeExtensionSource } from "./extension-sources/demo-mode.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
+import { statusLineExtensionSource } from "./extension-sources/status-line.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import {
   tokenStatusExtensionSource,
@@ -84,9 +85,14 @@ export async function writeDefaultExtensions(
       await writeExtension(
         extensionDir,
         "token-status.ts",
-        tokenStatusExtensionSource(
-          tokenStatusConfig(options, extensionOptions.runtime, extensionOptions.engines)
-        )
+        tokenStatusExtensionSource(tokenStatusConfig(options, extensionOptions.runtime))
+      )
+    );
+    paths.push(
+      await writeExtension(
+        extensionDir,
+        "status-line.ts",
+        statusLineExtensionSource({ engines: extensionOptions.engines ?? [] })
       )
     );
   }
@@ -104,13 +110,11 @@ async function writeExtension(extensionDir: string, name: string, source: string
 
 function tokenStatusConfig(
   options: LocalpiOptions,
-  runtime: RuntimeStatsTarget | undefined,
-  engines: readonly EngineEntry[] | undefined
+  runtime: RuntimeStatsTarget | undefined
 ): TokenStatusConfig {
   return {
     settingsPath: localpiSettingsPath(options),
     mode: options.stats,
-    ...(engines === undefined ? {} : { engines }),
     ...runtimeConfig(runtime)
   };
 }

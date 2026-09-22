@@ -69,21 +69,21 @@ The status display shows the same principles in a small feature.
    `--no-token-status` stays as a short alias for `--stats off`. The tool approval gate works the
    same way, with `/approval on|off`: on by default, off on request, and session-scoped, because a
    user who turns approval off does not want that choice to survive a restart.
-4. **Pi-native.** The display is a generated Pi extension. It uses `setWorkingMessage` for the live
-   line, `appendEntry` for the transcript summary, and `registerCommand` for `/stats`. It writes
-   complete lines, so Pi keeps ownership of layout and wrapping. Pi owns the footer and already
-   shows context usage there, so localpi adds no footer status line and never costs an extra row.
-   The engine label rides along in the live line and in the transcript entry.
+4. **Pi-native.** The display is a generated Pi extension. It uses `setFooter` for one status line,
+   `setWorkingMessage` for the live line, `appendEntry` for the transcript summary, and
+   `registerCommand` for `/stats`. It writes complete lines, so Pi keeps ownership of layout and
+   wrapping. It renders the same facts Pi showed, plus the engine next to the model, and it adds no
+   row of its own.
 5. **Explicit.** Prefill progress comes from the llama.cpp `/slots` endpoint. When that endpoint is
    missing or slow, localpi stops polling and shows elapsed time instead of inventing a percentage.
 
 The three modes exist because users want different amounts of information:
 
-| Mode   | Live line | Transcript entry |
-| ------ | --------- | ---------------- |
-| `off`  | no        | no               |
-| `line` | yes       | no               |
-| `full` | yes       | yes              |
+| Mode   | Status line | Live line | Transcript entry |
+| ------ | ----------- | --------- | ---------------- |
+| `off`  | Pi's own    | no        | no               |
+| `line` | localpi     | yes       | no               |
+| `full` | localpi     | yes       | yes              |
 
 ## Worked example: the default look
 

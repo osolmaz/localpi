@@ -134,44 +134,62 @@ Point at a llama.cpp server on another port with a provider registry entry:
 The status display answers one question: is this machine keeping up? It shows elapsed time, output
 tokens, token rate, and context use. Pick a mode with `--stats`:
 
-| Mode             | Live line | Transcript entry |
-| ---------------- | --------- | ---------------- |
-| `off`            | no        | no               |
-| `line`           | yes       | no               |
-| `full` (default) | yes       | yes              |
+| Mode             | Status line | Live line | Transcript entry |
+| ---------------- | ----------- | --------- | ---------------- |
+| `off`            | Pi's own    | no        | no               |
+| `line`           | localpi     | yes       | no               |
+| `full` (default) | localpi     | yes       | yes              |
 
-Pi owns the footer. Localpi adds no footer status line, so the status display never costs an extra
-row on screen.
+The status line is one row. Localpi replaces Pi's two-row footer with one line that carries the same
+facts plus the engine label next to the model:
+
+```text
+~/repos/localpi (main) · ↑3.2k ↓100 R3.2k CH99.5% · 9.8%/33k      (llama.cpp) ternary-bonsai-2-27b-pq2_0
+```
+
+The line holds, from left to right:
+
+- the working directory and the git branch,
+- the token totals, the cache read, and the cache hit rate of the session,
+- the context use as a percentage of the window,
+- the engine that serves the model, then the model itself.
+
+The engine label comes from the provider localpi built the catalog with, so it is read, not guessed. A
+model from a provider with no known engine shows no label. When the model reports reasoning, the line
+also shows the thinking level, the same way Pi does.
+
+One number never appears twice at the same time. While the model runs, the context moves to the live
+line, and the status line shows the rest. When the session is idle, the context returns to the status
+line.
 
 The live line replaces Pi's plain `Working` text while the model runs:
 
 ```text
-Working (llama.cpp · 1.8s · 100 out · 55.6 tok/s · ctx 34k/131k (26%))
+Working (1.8s · 100 out · 55.6 tok/s · ctx 34k/131k (26%))
 ```
 
 During prefill, the same line reports progress through the prompt:
 
 ```text
-Working (llama.cpp · prefill 25% · 5k/20k tok · 3.2s · ctx 20k/33k (61%))
+Working (prefill 25% · 5k/20k tok · 3.2s · ctx 20k/33k (61%))
 ```
 
 Prefill progress needs a llama.cpp server, because it reads the server's `/slots` endpoint. Localpi
 polls that endpoint only for llama.cpp runtimes. When the endpoint is missing or slow, localpi stops
 polling and shows elapsed prefill time instead.
 
-The first segment is the inference engine that serves the current model. Localpi knows the engine of
-the providers it built the catalog with, so the label is read, not guessed. A model from an unknown
-provider shows no engine segment.
-
 In `full` mode, each finished turn also adds one dim transcript line:
 
 ```text
-llama.cpp · 10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
+10s · 438 out · 43.8 tok/s · 8.4k in · prefill 0.4s · ctx 34k/131k (26%)
 ```
 
 Context colors use the active theme: normal below 80 percent, warning from 80 percent, error from
-95 percent. The live line and the transcript line both show used tokens and the context window. When
-Pi reports no token counts, the live line falls back to the context percentage alone.
+95 percent. When Pi reports no token counts, the live line falls back to the context percentage
+alone.
+
+Localpi shows the engine label in `line` and `full` mode. In `off` mode localpi leaves the footer and
+the working line to Pi.
 
 Change the mode during a session with `/stats`:
 

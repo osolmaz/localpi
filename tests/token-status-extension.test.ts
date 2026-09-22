@@ -49,7 +49,6 @@ type FakePi = {
 
 type FakeContext = {
   readonly hasUI: boolean;
-  readonly model: { readonly provider: string };
   readonly ui: {
     readonly theme: Theme;
     readonly themeCalls: ThemeCall[];
@@ -65,7 +64,6 @@ type FakeContext = {
 };
 
 type StatsEntryData = {
-  readonly engine?: string;
   readonly rate?: number;
   readonly output?: number;
   readonly input?: number;
@@ -85,9 +83,9 @@ afterEach(async () => {
 });
 
 describe("generated localpi stats extension", () => {
-  it("shows decode speed, engine, and context usage next to Working", async () => {
+  it("shows decode speed and context usage next to Working", async () => {
     setupClock();
-    const { extension, settingsPath } = await loadExtension({ mode: "full", engines: engines() });
+    const { extension, settingsPath } = await loadExtension({ mode: "full" });
     const pi = fakePi();
     extension(pi);
     const ctx = fakeContext({ usage: contextUsage(34_000, 131_000) });
@@ -101,28 +99,12 @@ describe("generated localpi stats extension", () => {
 
     const message = ctx.ui.messages.at(-1) ?? "";
     expect(message).toContain("Working");
-    expect(message).toContain("llama.cpp");
     expect(message).toContain("100 out");
     expect(message).toContain("55.6 tok/s");
     expect(message).toContain("ctx 34k/131k (26%)");
+    expect(message).not.toContain("llama.cpp");
     expect(themeColor(ctx, "accent", "55.6 tok/s")).toBe(true);
-    expect(themeColor(ctx, "muted", "llama.cpp")).toBe(true);
     expect(await exists(settingsPath)).toBe(false);
-  });
-
-  it("leaves the engine out for a provider whose engine is unknown", async () => {
-    setupClock();
-    const { extension } = await loadExtension({ mode: "full", engines: engines() });
-    const pi = fakePi();
-    extension(pi);
-    const ctx = fakeContext({ provider: "my-endpoint" });
-
-    vi.setSystemTime(1_000);
-    pi.handlers.get("turn_start")?.({}, ctx);
-    vi.setSystemTime(2_000);
-    pi.handlers.get("message_update")?.(update("hi"), ctx);
-
-    expect(ctx.ui.messages.at(-1)).not.toContain("llama.cpp");
   });
 
   it("shows llama.cpp prefill progress from the slots endpoint", async () => {
@@ -195,9 +177,9 @@ describe("generated localpi stats extension", () => {
     expect(message).not.toContain("prefill 0%");
   });
 
-  it("appends a transcript summary with the engine after the turn without a footer item", async () => {
+  it("appends a transcript summary after the turn without a footer item", async () => {
     setupClock();
-    const { extension } = await loadExtension({ mode: "full", engines: engines() });
+    const { extension } = await loadExtension({ mode: "full" });
     const pi = fakePi();
     extension(pi);
     const ctx = fakeContext({ usage: contextUsage(34_000, 131_000) });
@@ -213,7 +195,6 @@ describe("generated localpi stats extension", () => {
     );
 
     const data = statsEntry(pi);
-    expect(data.engine).toBe("llama.cpp");
     expect(data.output).toBe(438);
     expect(data.input).toBe(8_400);
     expect(data.elapsedSeconds).toBeCloseTo(10.4, 1);
@@ -226,7 +207,7 @@ describe("generated localpi stats extension", () => {
 
   it("renders the transcript summary as one plain line", async () => {
     setupClock();
-    const { extension } = await loadExtension({ mode: "full", engines: engines() });
+    const { extension } = await loadExtension({ mode: "full" });
     const pi = fakePi();
     extension(pi);
     const ctx = fakeContext({ usage: contextUsage(34_000, 131_000) });
@@ -247,7 +228,6 @@ describe("generated localpi stats extension", () => {
     const rendered = renderer?.({ data }, { expanded: false }, ctx.ui.theme).render(200) ?? [];
     expect(rendered).toHaveLength(1);
     const line = rendered.join("");
-    expect(line).toContain("llama.cpp");
     expect(line).toContain("438 out");
     expect(line).toContain("8.4k in");
     expect(line).toContain("ctx 34k/131k (26%)");
@@ -293,10 +273,6 @@ describe("generated localpi stats extension", () => {
 
 function setupClock(): void {
   vi.useFakeTimers();
-}
-
-function engines(): readonly { readonly provider: string; readonly engine: string }[] {
-  return [{ provider: "llama-cpp", engine: "llama.cpp" }];
 }
 
 function themeColor(ctx: FakeContext, color: string, text: string): boolean {
@@ -346,19 +322,13 @@ function fakePi(): FakePi {
   };
 }
 
-function fakeContext(
-  options: {
-    readonly usage?: ContextUsage;
-    readonly provider?: string;
-  } = {}
-): FakeContext {
+function fakeContext(options: { readonly usage?: ContextUsage } = {}): FakeContext {
   const messages: (string | undefined)[] = [];
   const statuses: (string | undefined)[] = [];
   const notifications: string[] = [];
   const themeCalls: ThemeCall[] = [];
   return {
     hasUI: true,
-    model: { provider: options.provider ?? "llama-cpp" },
     ui: {
       theme: {
         fg: (color, text) => {
@@ -388,7 +358,6 @@ function fakeContext(
 
 async function loadExtension(config: {
   readonly mode: "off" | "line" | "full";
-  readonly engines?: readonly { readonly provider: string; readonly engine: string }[];
   readonly engine?: "llama-cpp";
   readonly baseUrl?: string;
   readonly modelId?: string;
