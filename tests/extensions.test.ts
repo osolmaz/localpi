@@ -237,6 +237,7 @@ function options(stateDir: string): LocalpiOptions {
     piCommand: ["pi"],
     thinking: "off",
     thinkingBudget: undefined,
+    thinkingBudgetMessage: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,

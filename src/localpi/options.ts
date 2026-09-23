@@ -48,6 +48,7 @@ export type LocalpiOptions = {
   readonly piCommand: readonly string[];
   readonly thinking: ThinkingLevel;
   readonly thinkingBudget: number | undefined;
+  readonly thinkingBudgetMessage: string | undefined;
   readonly contextWindow: number | undefined;
   readonly maxTokens: number;
   readonly timeoutMs: number;
@@ -96,6 +97,7 @@ export function defaultOptions(): LocalpiOptions {
     piCommand: parsePiCommand(envString("LOCALPI_PI_CMD", defaultPiCommand)),
     thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "medium")),
     thinkingBudget: envOptionalThinkingBudget("LOCALPI_THINKING_BUDGET"),
+    thinkingBudgetMessage: process.env["LOCALPI_THINKING_BUDGET_MESSAGE"],
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
     timeoutMs: envPositiveInteger("LOCALPI_TIMEOUT_MS", "3000"),
@@ -201,6 +203,8 @@ export function usage(): string {
     "  --pi-command <command>  Pi launch command, split on whitespace and quotes",
     "  --thinking <level>      thinking level: off, minimal, low, medium, high, xhigh",
     "  --thinking-budget <n>   managed llama-server thinking cap in tokens, -1 for unrestricted",
+    "  --thinking-budget-message <text>",
+    "                          text before the end-of-thinking tag; empty text passes none",
     "  --timeout-ms <n>        backend probe timeout",
     "  -h, --help              show this help",
     "",
@@ -285,6 +289,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--thinking-budget": (options, value) => ({
     ...options,
     thinkingBudget: parseThinkingBudget(value)
+  }),
+  "--thinking-budget-message": (options, value) => ({
+    ...options,
+    thinkingBudgetMessage: value
   }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--skills": (options, value) => ({ ...options, skills: parseSkillsMode(value) }),
