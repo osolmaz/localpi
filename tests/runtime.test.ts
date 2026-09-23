@@ -9,7 +9,11 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { LocalpiOptions } from "../src/localpi/options.js";
-import { ensureLlamaServer, stopManagedLlamaServer } from "../src/localpi/llama-server.js";
+import {
+  ensureLlamaServer,
+  reasoningBudgetMessage,
+  stopManagedLlamaServer
+} from "../src/localpi/llama-server.js";
 import { effectiveBaseUrl, resolveRuntime, statusOutput } from "../src/localpi/runtime.js";
 
 describe("runtime resolution", () => {
@@ -196,33 +200,49 @@ describe("runtime resolution", () => {
   });
 
   it("maps low thinking to a bounded llama-server reasoning budget", async () => {
-    const { stateDir, modelPath } = await tempRuntimeState();
-    const baseUrl = await unusedBaseUrl();
-    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
-    await ensureLlamaServer(
-      {
-        ...options(),
-        stateDir,
-        baseUrl,
-        thinking: "low",
-        serverCommand
-      },
-      { id: "custom-model", modelPath }
-    );
-
-    const args = JSON.parse(
-      await readFile(path.join(stateDir, "fake-openai-server.args.json"), "utf8")
-    ) as string[];
+    const { stateDir, args } = await startServerWithReasoning("low");
     expect(args).toContain("--reasoning");
     expect(args[args.indexOf("--reasoning") + 1]).toBe("on");
     expect(args).toContain("--reasoning-budget");
     expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("128");
+    expect(args[args.indexOf("--reasoning-budget-message") + 1]).toBe(reasoningBudgetMessage);
 
-    const metadata = JSON.parse(
-      await readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
-    ) as { readonly reasoningMode?: string; readonly reasoningBudget?: number };
+    const metadata = await readFakeServerMetadata(stateDir);
     expect(metadata.reasoningMode).toBe("on");
     expect(metadata.reasoningBudget).toBe(128);
+    expect(metadata.reasoningMessage).toBe(reasoningBudgetMessage);
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("caps thinking with the budget override", async () => {
+    const { stateDir, args } = await startServerWithReasoning("medium", 4096);
+    expect(args[args.indexOf("--reasoning") + 1]).toBe("on");
+    expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("4096");
+    expect(args[args.indexOf("--reasoning-budget-message") + 1]).toBe(reasoningBudgetMessage);
+
+    const metadata = await readFakeServerMetadata(stateDir);
+    expect(metadata.reasoningBudget).toBe(4096);
+    expect(metadata.reasoningMessage).toBe(reasoningBudgetMessage);
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("leaves thinking unrestricted without a message when the budget is -1", async () => {
+    const { stateDir, args } = await startServerWithReasoning("medium", -1);
+    expect(args[args.indexOf("--reasoning") + 1]).toBe("on");
+    expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("-1");
+    expect(args).not.toContain("--reasoning-budget-message");
+
+    const metadata = await readFakeServerMetadata(stateDir);
+    expect(metadata.reasoningBudget).toBe(-1);
+    expect(metadata.reasoningMessage).toBeUndefined();
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("passes no budget and no message when thinking is off", async () => {
+    const { stateDir, args } = await startServerWithReasoning("off", 4096);
+    expect(args[args.indexOf("--reasoning") + 1]).toBe("off");
+    expect(args).not.toContain("--reasoning-budget");
+    expect(args).not.toContain("--reasoning-budget-message");
     await stopManagedLlamaServer({ ...options(), stateDir });
   });
 
@@ -1798,7 +1818,47 @@ describe("runtime resolution", () => {
     }
     expect(isAlive(pid)).toBe(false);
   }
+
+  /** Starts a managed server with a thinking level and an optional budget override. */
+  async function startServerWithReasoning(
+    thinking: LocalpiOptions["thinking"],
+    thinkingBudget?: number
+  ): Promise<{ readonly stateDir: string; readonly args: readonly string[] }> {
+    const { stateDir, modelPath } = await tempRuntimeState();
+    const baseUrl = await unusedBaseUrl();
+    const serverCommand = await fakeOpenAiLlamaServerCommand(stateDir);
+    await ensureLlamaServer(
+      {
+        ...options(),
+        stateDir,
+        baseUrl,
+        thinking,
+        ...(thinkingBudget === undefined ? {} : { thinkingBudget }),
+        serverCommand
+      },
+      { id: "custom-model", modelPath }
+    );
+    return { stateDir, args: await readFakeServerArgs(stateDir) };
+  }
+
+  async function readFakeServerArgs(stateDir: string): Promise<readonly string[]> {
+    return JSON.parse(
+      await readFile(path.join(stateDir, "fake-openai-server.args.json"), "utf8")
+    ) as string[];
+  }
+
+  async function readFakeServerMetadata(stateDir: string): Promise<FakeReasoningMetadata> {
+    return JSON.parse(
+      await readFile(path.join(stateDir, "server", "llama-server.json"), "utf8")
+    ) as FakeReasoningMetadata;
+  }
 });
+
+type FakeReasoningMetadata = {
+  readonly reasoningMode?: string;
+  readonly reasoningBudget?: number;
+  readonly reasoningMessage?: string;
+};
 
 function options(): LocalpiOptions {
   const stateDir = "/tmp/localpi-runtime-test";
@@ -1816,6 +1876,7 @@ function options(): LocalpiOptions {
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: ["pi"],
     thinking: "off",
+    thinkingBudget: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,

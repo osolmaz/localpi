@@ -47,6 +47,7 @@ export type LocalpiOptions = {
   readonly sessionDir: string;
   readonly piCommand: readonly string[];
   readonly thinking: ThinkingLevel;
+  readonly thinkingBudget: number | undefined;
   readonly contextWindow: number | undefined;
   readonly maxTokens: number;
   readonly timeoutMs: number;
@@ -94,6 +95,7 @@ export function defaultOptions(): LocalpiOptions {
     sessionDir: defaultSessionDir(stateDir),
     piCommand: parsePiCommand(envString("LOCALPI_PI_CMD", defaultPiCommand)),
     thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "medium")),
+    thinkingBudget: envOptionalThinkingBudget("LOCALPI_THINKING_BUDGET"),
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
     timeoutMs: envPositiveInteger("LOCALPI_TIMEOUT_MS", "3000"),
@@ -198,6 +200,7 @@ export function usage(): string {
     "  --session-dir <path>    Pi session directory",
     "  --pi-command <command>  Pi launch command, split on whitespace and quotes",
     "  --thinking <level>      thinking level: off, minimal, low, medium, high, xhigh",
+    "  --thinking-budget <n>   managed llama-server thinking cap in tokens, -1 for unrestricted",
     "  --timeout-ms <n>        backend probe timeout",
     "  -h, --help              show this help",
     "",
@@ -279,6 +282,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: parsePiCommand(value) }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),
+  "--thinking-budget": (options, value) => ({
+    ...options,
+    thinkingBudget: parseThinkingBudget(value)
+  }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--skills": (options, value) => ({ ...options, skills: parseSkillsMode(value) }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
@@ -387,6 +394,20 @@ export function parseThinkingLevel(value: string): ThinkingLevel {
   );
 }
 
+/**
+ * A thinking budget is -1 for unrestricted thinking, or a positive token count. Zero is rejected,
+ * because the managed server reads it as an immediate end of thinking.
+ */
+export function parseThinkingBudget(value: string): number {
+  if (/^[1-9]\d*$/u.test(value)) {
+    return Number.parseInt(value, 10);
+  }
+  if (value === "-1") {
+    return -1;
+  }
+  throw new Error(`unknown thinking budget ${value}; expected -1 or a positive integer`);
+}
+
 export function parseStatsMode(value: string): StatsMode {
   for (const mode of statsModes) {
     if (value === mode) {
@@ -469,6 +490,11 @@ function envNonNegativeInteger(name: string, fallback: string): number {
 function envOptionalPositiveInteger(name: string): number | undefined {
   const value = process.env[name];
   return value === undefined ? undefined : parsePositiveInteger(value);
+}
+
+function envOptionalThinkingBudget(name: string): number | undefined {
+  const value = process.env[name];
+  return value === undefined ? undefined : parseThinkingBudget(value);
 }
 
 function envOptionalBoolean(primaryName: string, fallbackName: string): boolean | undefined {

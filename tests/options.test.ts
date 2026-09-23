@@ -75,6 +75,31 @@ describe("localpi option parsing", () => {
     );
   });
 
+  it("parses and validates thinking budgets", () => {
+    expect(parseLocalpiArgs(["--thinking-budget", "4096"]).thinkingBudget).toBe(4096);
+    expect(parseLocalpiArgs(["--thinking-budget", "-1"]).thinkingBudget).toBe(-1);
+    expect(parseLocalpiArgs([]).thinkingBudget).toBeUndefined();
+    expect(() => parseLocalpiArgs(["--thinking-budget", "0"])).toThrow(
+      "unknown thinking budget 0; expected -1 or a positive integer"
+    );
+    expect(() => parseLocalpiArgs(["--thinking-budget", "half"])).toThrow(
+      "unknown thinking budget half; expected -1 or a positive integer"
+    );
+    expect(usage()).toContain("--thinking-budget <n>");
+  });
+
+  it("reads the thinking budget from the environment", () => {
+    process.env["LOCALPI_THINKING_BUDGET"] = "2048";
+    expect(parseLocalpiArgs([]).thinkingBudget).toBe(2048);
+
+    delete process.env["LOCALPI_THINKING_BUDGET"];
+    expect(parseLocalpiArgs([]).thinkingBudget).toBeUndefined();
+
+    process.env["LOCALPI_THINKING_BUDGET"] = "-1";
+    expect(parseLocalpiArgs([]).thinkingBudget).toBe(-1);
+    delete process.env["LOCALPI_THINKING_BUDGET"];
+  });
+
   it("rejects removed final schema flags", () => {
     expect(() => parseLocalpiArgs(["--final-schema", "schema.json"])).toThrow(
       "was removed from localpi"

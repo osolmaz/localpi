@@ -329,7 +329,7 @@ function serverArgs(options: LocalpiOptions, model: LlamaServerModel): readonly 
     "--gpu-layers",
     String(options.gpuLayers),
     ...chatTemplateArgs(model.chatTemplate),
-    ...reasoningArgs(options.thinking),
+    ...reasoningArgs(reasoningFor(options)),
     "--reasoning-format",
     "deepseek",
     "--metrics"
@@ -340,11 +340,15 @@ function chatTemplateArgs(chatTemplate: string | undefined): readonly string[] {
   return chatTemplate === undefined ? [] : ["--chat-template-file", chatTemplate];
 }
 
-function reasoningArgs(thinking: ThinkingLevel): readonly string[] {
-  const config = reasoningConfig(thinking);
-  return config.budget === undefined
-    ? ["--reasoning", config.mode]
-    : ["--reasoning", config.mode, "--reasoning-budget", String(config.budget)];
+function reasoningArgs(config: ReasoningConfig): readonly string[] {
+  const args = ["--reasoning", config.mode];
+  if (config.budget !== undefined) {
+    args.push("--reasoning-budget", String(config.budget));
+  }
+  if (config.message) {
+    args.push("--reasoning-budget-message", config.message);
+  }
+  return args;
 }
 
 async function waitForModels(
@@ -404,7 +408,7 @@ function metadata(options: LocalpiOptions, model: LlamaServerModel, pid: number)
     port: endpoint.port,
     gpuLayers: options.gpuLayers,
     parallel: options.parallel,
-    ...reasoningMetadata(options.thinking),
+    ...reasoningMetadata(reasoningFor(options)),
     ...optionalChatTemplate(model.chatTemplate)
   };
 }
@@ -423,6 +427,7 @@ export type ManagedLlamaServerMetadata = {
   readonly parallel: number;
   readonly reasoningMode: "off" | "on";
   readonly reasoningBudget?: number;
+  readonly reasoningMessage?: string;
 };
 
 type ServerMetadata = ManagedLlamaServerMetadata;
@@ -542,14 +547,18 @@ export function managedLlamaServerNeedsRestart(
     info.port !== endpoint.port,
     info.gpuLayers !== options.gpuLayers,
     info.parallel !== options.parallel,
-    reasoningChanged(options.thinking, info)
+    reasoningChanged(options, info)
   ].some(Boolean);
   return fieldsChanged || chatTemplateChanged(options, info) || modelChanged(options, info, model);
 }
 
-function reasoningChanged(thinking: ThinkingLevel, info: ManagedLlamaServerMetadata): boolean {
-  const expected = reasoningConfig(thinking);
-  return info.reasoningMode !== expected.mode || info.reasoningBudget !== expected.budget;
+function reasoningChanged(options: LocalpiOptions, info: ManagedLlamaServerMetadata): boolean {
+  const expected = reasoningFor(options);
+  return (
+    info.reasoningMode !== expected.mode ||
+    info.reasoningBudget !== expected.budget ||
+    info.reasoningMessage !== expected.message
+  );
 }
 
 function chatTemplateChanged(options: LocalpiOptions, info: ManagedLlamaServerMetadata): boolean {
@@ -684,44 +693,73 @@ function commandMatchesMetadata(command: string, info: ServerMetadata): boolean 
   );
 }
 
-function reasoningConfig(thinking: ThinkingLevel): {
+export type ReasoningConfig = {
   readonly mode: "off" | "on";
   readonly budget?: number;
-} {
-  switch (thinking) {
-    case "off":
-      return { mode: "off" };
-    case "minimal":
-      return { mode: "on", budget: 32 };
-    case "low":
-      return { mode: "on", budget: 128 };
-    case "medium":
-      return { mode: "on", budget: 512 };
-    case "high":
-      return { mode: "on", budget: 2048 };
-    case "xhigh":
-      return { mode: "on", budget: 8192 };
+  readonly message?: string;
+};
+
+/** Thinking token budgets per level, in tokens. */
+const thinkingBudgets: Readonly<Record<Exclude<ThinkingLevel, "off">, number>> = {
+  minimal: 32,
+  low: 128,
+  medium: 512,
+  high: 2048,
+  xhigh: 16384
+};
+
+/**
+ * Injected before the end-of-thinking tag when the budget runs out. Without it the model is cut off
+ * mid-thought, and a model that loops in its thinking never reaches an answer.
+ */
+export const reasoningBudgetMessage = "Reasoning budget reached. Stop thinking and answer now.";
+
+/**
+ * The reasoning flags of one thinking level. A budget override replaces the budget of the level,
+ * where -1 leaves thinking unrestricted. Thinking stays off when the level is off, and the message
+ * is set only for a finite budget, because an unrestricted budget has nothing to cut short.
+ */
+export function reasoningConfig(thinking: ThinkingLevel, budgetOverride?: number): ReasoningConfig {
+  if (thinking === "off") {
+    return { mode: "off" };
   }
+  const budget = budgetOverride ?? thinkingBudgets[thinking];
+  return budget < 0
+    ? { mode: "on", budget }
+    : { mode: "on", budget, message: reasoningBudgetMessage };
 }
 
-function reasoningMetadata(thinking: ThinkingLevel): {
+function reasoningFor(options: LocalpiOptions): ReasoningConfig {
+  return reasoningConfig(options.thinking, options.thinkingBudget);
+}
+
+function reasoningMetadata(config: ReasoningConfig): {
   readonly reasoningMode: "off" | "on";
   readonly reasoningBudget?: number;
+  readonly reasoningMessage?: string;
 } {
-  const config = reasoningConfig(thinking);
-  return config.budget === undefined
-    ? { reasoningMode: config.mode }
-    : { reasoningMode: config.mode, reasoningBudget: config.budget };
+  return {
+    reasoningMode: config.mode,
+    ...(config.budget === undefined ? {} : { reasoningBudget: config.budget }),
+    ...(config.message ? { reasoningMessage: config.message } : {})
+  };
 }
 
 function parseReasoningMetadata(value: Partial<ServerMetadata>): {
   readonly reasoningMode: "off" | "on";
   readonly reasoningBudget?: number;
+  readonly reasoningMessage?: string;
 } {
   const mode = value.reasoningMode === "on" ? "on" : "off";
-  return value.reasoningBudget === undefined
-    ? { reasoningMode: mode }
-    : { reasoningMode: mode, reasoningBudget: metadataNumber(value.reasoningBudget) };
+  return {
+    reasoningMode: mode,
+    ...(value.reasoningBudget === undefined
+      ? {}
+      : { reasoningBudget: metadataNumber(value.reasoningBudget) }),
+    ...(value.reasoningMessage === undefined || value.reasoningMessage === ""
+      ? {}
+      : { reasoningMessage: value.reasoningMessage })
+  };
 }
 
 function reasoningSummary(info: ServerMetadata): string {

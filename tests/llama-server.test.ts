@@ -15,6 +15,8 @@ import {
   llamaBaseUrl,
   llamaServerStatus,
   managedLlamaServerNeedsRestart,
+  reasoningBudgetMessage,
+  reasoningConfig,
   stopManagedLlamaServer
 } from "../src/localpi/llama-server.js";
 
@@ -56,13 +58,96 @@ describe("llama-server state", () => {
       ["low", 128],
       ["medium", 512],
       ["high", 2048],
-      ["xhigh", 8192]
+      ["xhigh", 16384]
     ];
     for (const [thinking, budget] of cases) {
-      const info = { ...metadata(), reasoningMode: "on" as const, reasoningBudget: budget };
+      const info = {
+        ...metadata(),
+        reasoningMode: "on" as const,
+        reasoningBudget: budget,
+        reasoningMessage: reasoningBudgetMessage
+      };
       expect(managedLlamaServerNeedsRestart({ ...options(), thinking }, info)).toBe(false);
       expect(managedLlamaServerNeedsRestart({ ...options(), thinking }, metadata())).toBe(true);
     }
+  });
+
+  it("restarts when the thinking budget override changes", () => {
+    const info = {
+      ...metadata(),
+      reasoningMode: "on" as const,
+      reasoningBudget: 4096,
+      reasoningMessage: reasoningBudgetMessage
+    };
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "medium", thinkingBudget: 4096 },
+        info
+      )
+    ).toBe(false);
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "medium", thinkingBudget: 8192 },
+        info
+      )
+    ).toBe(true);
+    expect(managedLlamaServerNeedsRestart({ ...options(), thinking: "medium" }, info)).toBe(true);
+  });
+
+  it("records no message for an unrestricted thinking budget", () => {
+    const info = { ...metadata(), reasoningMode: "on" as const, reasoningBudget: -1 };
+    expect(
+      managedLlamaServerNeedsRestart({ ...options(), thinking: "medium", thinkingBudget: -1 }, info)
+    ).toBe(false);
+    expect(managedLlamaServerNeedsRestart({ ...options(), thinking: "medium" }, info)).toBe(true);
+  });
+
+  it("maps every thinking level to a budget and a message", () => {
+    expect(reasoningConfig("off")).toEqual({ mode: "off" });
+    expect(reasoningConfig("minimal")).toEqual({
+      mode: "on",
+      budget: 32,
+      message: reasoningBudgetMessage
+    });
+    expect(reasoningConfig("low")).toEqual({
+      mode: "on",
+      budget: 128,
+      message: reasoningBudgetMessage
+    });
+    expect(reasoningConfig("medium")).toEqual({
+      mode: "on",
+      budget: 512,
+      message: reasoningBudgetMessage
+    });
+    expect(reasoningConfig("high")).toEqual({
+      mode: "on",
+      budget: 2048,
+      message: reasoningBudgetMessage
+    });
+    expect(reasoningConfig("xhigh")).toEqual({
+      mode: "on",
+      budget: 16384,
+      message: reasoningBudgetMessage
+    });
+  });
+
+  it("replaces the level budget with the override and drops the message when unrestricted", () => {
+    expect(reasoningConfig("medium", 4096)).toEqual({
+      mode: "on",
+      budget: 4096,
+      message: reasoningBudgetMessage
+    });
+    expect(reasoningConfig("xhigh", -1)).toEqual({ mode: "on", budget: -1 });
+    expect(reasoningConfig("off", 4096)).toEqual({ mode: "off" });
+  });
+
+  it("keeps thinking off even with a budget override", () => {
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "off", thinkingBudget: 4096 },
+        metadata()
+      )
+    ).toBe(false);
   });
 
   it("restarts when the chat template or model changes", () => {
@@ -241,6 +326,7 @@ function options(): LocalpiOptions {
     sessionDir: path.join(stateDir, "sessions"),
     piCommand: ["pi"],
     thinking: "off",
+    thinkingBudget: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,
