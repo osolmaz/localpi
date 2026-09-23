@@ -136,10 +136,10 @@ produces an answer.
 - [x] Keep startup thinking non-interactive.
 - [x] Keep `--thinking` and `LOCALPI_THINKING` as automation-safe startup controls.
 - [x] Remember the last Pi thinking level for future localpi launches.
-- [ ] Add `--thinking-budget` and `LOCALPI_THINKING_BUDGET` for the managed `llama-server`.
-- [ ] Inject a default message before the end-of-thinking tag when the budget is finite.
-- [ ] Record the reasoning mode, the budget, and the message in the managed server metadata.
-- [ ] Test the level table, the budget override, an invalid value, and the restart trigger.
+- [x] Add `--thinking-budget` and `LOCALPI_THINKING_BUDGET` for the managed `llama-server`.
+- [x] Inject a default message before the end-of-thinking tag when the budget is finite.
+- [x] Record the reasoning mode, the budget, and the message in the managed server metadata.
+- [x] Test the level table, the budget override, an invalid value, and the restart trigger.
 - [ ] Manually verify model picker behavior in an interactive terminal with multiple loaded providers.
 - [ ] Manually verify Pi `/model` can switch among generated catalog entries.
 - [ ] Manually verify Pi `/thinking` picker and direct `/thinking <level>` command.
