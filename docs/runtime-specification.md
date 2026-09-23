@@ -63,6 +63,17 @@ Localpi:
 - writes Pi config that points at that endpoint
 - stops the old localpi-owned server before starting a different managed model
 - reports any detected LM Studio loaded models before starting a large managed model
+- passes the reasoning flags of the selected thinking level: `--reasoning off` and no budget when
+  thinking is off, and `--reasoning on` with a token budget otherwise
+- caps thinking with `--thinking-budget <n>` or `LOCALPI_THINKING_BUDGET` when set, where `-1` means
+  unrestricted and a positive value replaces the budget of the thinking level
+- injects a default message before the end-of-thinking tag when the budget is finite, so a model
+  that loops in its thinking still answers
+- records the reasoning mode, the budget, and the message in the managed server metadata, and
+  restarts the owned server when a recorded value changes
+
+The engine reads the thinking tags from the model template, so localpi passes no tag of its own. A
+budget of `-1` leaves thinking unrestricted.
 
 ### LM Studio
 
