@@ -12,7 +12,7 @@ Localpi is meant to be the practical bridge from Pi to local inference stacks su
 
 Localpi is intentionally generic. It does not contain classifier prompts, dataset workflows, GitHub routing logic, or final-schema output machinery. Structured classifier runs belong in caller tools such as `localpager-agent`.
 
-A Localpi session keeps its context light. Localpi appends three sentences to Pi's own system prompt and adds no datasets, prompt packs, or memory files, so a session starts with about 2.9k tokens of baseline context on the default tool set and a small context window still has room for real work.
+A Localpi session keeps its context light. Localpi appends three sentences to Pi's own system prompt, adds no datasets, prompt packs, or memory files, and loads only its own skills directory, so a session starts with about 2.9k tokens of baseline context on the default tool set and a small context window still has room for real work.
 
 See:
 
@@ -104,11 +104,34 @@ Localpi launches Pi with:
 - an approval gate before every tool call, which you can turn off for the session with `/approval`
 - token speed, prefill progress, and context usage while responses stream
 - a Catppuccin Mocha theme for the Pi session, written into `<state-dir>/pi-themes/`
+- skills from `<state-dir>/pi-skills/` only, so shared skill directories stay out of the session
 - bounded Gemma/llama-server reasoning controlled by `--thinking`
 - in-session `/thinking` (Pi's own command) and `/approval` (localpi's) for changing session settings
 - local state under `~/.local/state/localpi`
 
 The approval gate makes failed or denied tool calls explicit to the model so the model does not claim that a blocked command ran.
+
+## Skills
+
+Pi discovers skills from shared directories such as `~/.agents/skills` and `~/.pi/agent/skills`. A
+localpi session does not use those. It launches Pi with `--no-skills` and loads only
+`<state-dir>/pi-skills/`, so a small local model does not carry skill lists it cannot use.
+
+Put your own localpi skills there, one directory with a `SKILL.md` per skill:
+
+```bash
+mkdir -p ~/.local/state/localpi/pi-skills/my-skill
+$EDITOR ~/.local/state/localpi/pi-skills/my-skill/SKILL.md
+```
+
+Pick the source with `--skills` or `LOCALPI_SKILLS`:
+
+- `own` (default): `--no-skills` plus `<state-dir>/pi-skills/`
+- `ambient`: Pi's normal discovery, including `~/.agents/skills` and project `.agents/skills`
+- `off`: `--no-skills` and nothing else
+
+An explicit `--skill <path>` still works in every mode, because Pi loads explicit paths even with
+`--no-skills`.
 
 ## Diffusion Canvas Visualizer
 
@@ -452,6 +475,8 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--no-approval`: start with the tool approval gate off for the session
 - `--approve-read-tools`: also ask before read-only tools (`read`, `grep`, `find`, `ls`)
 - `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
+- `--skills <own|ambient|off>`: skill sources. Default: `own`, which loads only `<state-dir>/pi-skills/` and turns off shared discovery such as `~/.agents/skills`. `ambient` keeps Pi's own discovery, and `off` loads no skills
+- `--no-skills`: load no skills. Alias for `--skills off`
 - `--no-token-status`: disable the token status extension. Alias for `--stats off`
 - `--status`: print runtime, model, and Pi config status
 - `--stop`: stop the managed `llama-server` process
@@ -500,6 +525,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_TOOLS`
 - `LOCALPI_THINKING`
 - `LOCALPI_STATS`
+- `LOCALPI_SKILLS`
 - `LOCALPI_APPROVE_READ_TOOLS`
 - `LOCALPI_DEMO`
 - `LOCALPI_DEMO_INITIAL_PROMPT`

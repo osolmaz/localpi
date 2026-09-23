@@ -13,8 +13,11 @@ export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhi
 export type ModelThinkingFormat = "deepseek" | "qwen-chat-template";
 export type StatsMode = "off" | "line" | "full";
 export type PermissionMode = "ask" | "allow";
+export type SkillsMode = "own" | "ambient" | "off";
 
 export const statsModes: readonly StatsMode[] = ["off", "line", "full"];
+
+export const skillsModes: readonly SkillsMode[] = ["own", "ambient", "off"];
 
 export const permissionModes: readonly PermissionMode[] = ["ask", "allow"];
 
@@ -57,6 +60,7 @@ export type LocalpiOptions = {
   readonly approval: boolean;
   readonly approveReadTools: boolean;
   readonly stats: StatsMode;
+  readonly skills: SkillsMode;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -103,6 +107,7 @@ export function defaultOptions(): LocalpiOptions {
     approval: envBoolean("LOCALPI_APPROVAL", true),
     approveReadTools: envBoolean("LOCALPI_APPROVE_READ_TOOLS", false),
     stats: defaultStatsMode(),
+    skills: parseSkillsMode(envString("LOCALPI_SKILLS", "own")),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -168,6 +173,7 @@ export function usage(): string {
     "  --chat-template <path>   llama.cpp chat template file",
     "  --tools <list>           Pi tools allow list",
     "  --stats <mode>           stats: off, line, or full (default: full)",
+    "  --skills <mode>          skills: own, ambient, or off (default: own)",
     "  --providers-file <path>  localpi provider registry JSON",
     "  --model-profile <path>   local model capability profile JSON",
     "  --model-reasoning <bool> override generated Pi reasoning capability",
@@ -249,6 +255,8 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--no-approval": (options) => ({ ...options, approval: false }),
   "--approve-read-tools": (options) => ({ ...options, approveReadTools: true }),
   "--no-token-status": (options) => ({ ...options, stats: "off" }),
+  "--no-skills": (options) => ({ ...options, skills: "off" }),
+  "-ns": (options) => ({ ...options, skills: "off" }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
@@ -272,6 +280,7 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--pi-command": (options, value) => ({ ...options, piCommand: parsePiCommand(value) }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
+  "--skills": (options, value) => ({ ...options, skills: parseSkillsMode(value) }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
   "--context-window": (options, value) => ({
     ...options,
@@ -385,6 +394,15 @@ export function parseStatsMode(value: string): StatsMode {
     }
   }
   throw new Error(`unknown stats mode ${value}; expected off, line, or full`);
+}
+
+export function parseSkillsMode(value: string): SkillsMode {
+  for (const mode of skillsModes) {
+    if (value === mode) {
+      return mode;
+    }
+  }
+  throw new Error(`unknown skills mode ${value}; expected own, ambient, or off`);
 }
 
 export function parsePermissionMode(value: string): PermissionMode {

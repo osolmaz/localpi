@@ -5,6 +5,7 @@ import type { LocalpiOptions } from "../localpi/options.js";
 import type { RuntimeConnection } from "../localpi/runtime.js";
 import type { ExtensionBundle } from "./extensions.js";
 import { localpiThemeArgs } from "./theme.js";
+import { localpiSkillsArgs } from "./skills.js";
 import { localpiVersion } from "./version.js";
 
 type LocalpiAppIdentity = Pick<PiAppDefinition, "id" | "name" | "version">;
@@ -65,6 +66,7 @@ function piCommand(options: LocalpiOptions, themePath: string | undefined): Loca
   return {
     piCommand: options.piCommand,
     forwardedArgs: [
+      ...localpiSkillsArgs(options.skills, options.stateDir),
       ...localpiThemeArgs(themePath, options.forwardedArgs),
       ...(options.demo ? demoForwardedArgs(options.forwardedArgs) : options.forwardedArgs)
     ]

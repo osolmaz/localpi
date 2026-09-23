@@ -15,6 +15,7 @@ import { applyRememberedSettings } from "../localpi/settings-state.js";
 import { createLocalpiAppDefinition } from "../pi/app.js";
 import { writeLocalpiTheme } from "../pi/theme.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
+import { ensureLocalpiSkillsDir } from "../pi/skills.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
@@ -45,6 +46,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       },
       engines: engineEntries(await providerConfigs(options))
     });
+    await ensureLocalpiSkillsDir(options);
     const app = createLocalpiAppDefinition(
       options,
       connection,

@@ -28,6 +28,7 @@ Rules:
 - Keep the default Pi launch command at `npx -y @earendil-works/pi-coding-agent@latest`, so a normal launch runs the newest Pi release. Keep `--pi-command` and `LOCALPI_PI_CMD` as the escape hatches.
 - Keep the Pi launch command a program plus arguments. pi-factory spawns it without a shell, so do not pass shell syntax, quoting, or environment prefixes through `--pi-command`.
 - Split a typed Pi launch command with `parsePiCommand`, and keep quoted words together so a path with spaces survives.
+- Keep the default skills mode at `own`. Localpi launches Pi with `--no-skills` and loads only `<state-dir>/pi-skills/`, so shared skill directories such as `~/.agents/skills` stay out of a local session. `--skills ambient` restores Pi's own discovery, and `--skills off` loads nothing.
 
 ## llama.cpp
 

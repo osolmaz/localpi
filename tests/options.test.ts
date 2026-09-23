@@ -53,6 +53,16 @@ describe("localpi option parsing", () => {
     );
   });
 
+  it("parses and validates skills modes", () => {
+    expect(parseLocalpiArgs([]).skills).toBe("own");
+    expect(parseLocalpiArgs(["--skills", "ambient"]).skills).toBe("ambient");
+    expect(parseLocalpiArgs(["--skills", "off"]).skills).toBe("off");
+    expect(parseLocalpiArgs(["--no-skills"]).skills).toBe("off");
+    expect(() => parseLocalpiArgs(["--skills", "banana"])).toThrow(
+      "unknown skills mode banana; expected own, ambient, or off"
+    );
+  });
+
   it("parses and validates thinking levels", () => {
     expect(parseLocalpiArgs(["--thinking", "low"])).toMatchObject({
       thinking: "low"
@@ -178,6 +188,7 @@ describe("localpi option parsing", () => {
     expect(text).toContain("localpi [localpi options] [pi options/messages]");
     expect(text).toContain("--runtime <kind>");
     expect(text).toContain("--thinking <level>");
+    expect(text).toContain("--skills <mode>");
     expect(text).toContain("--demo");
   });
 });
@@ -189,6 +200,7 @@ describe("localpi environment defaults", () => {
     "LOCALPI_APPROVAL",
     "LOCALPI_TOKEN_STATUS",
     "LOCALPI_STATS",
+    "LOCALPI_SKILLS",
     "LOCALPI_MODEL",
     "LOCALPI_PROVIDER",
     "LOCALPI_PROVIDERS_FILE",
@@ -280,6 +292,15 @@ describe("localpi environment defaults", () => {
     process.env["LOCALPI_TOKEN_STATUS"] = "0";
     expect(parseLocalpiArgs([]).stats).toBe("off");
     expect(parseLocalpiArgs(["--stats", "full"]).stats).toBe("full");
+  });
+
+  it("reads the skills mode from the environment", () => {
+    process.env["LOCALPI_SKILLS"] = "ambient";
+    expect(parseLocalpiArgs([]).skills).toBe("ambient");
+
+    delete process.env["LOCALPI_SKILLS"];
+    expect(parseLocalpiArgs([]).skills).toBe("own");
+    expect(parseLocalpiArgs(["--skills", "off"]).skills).toBe("off");
   });
 
   it("defaults thinking to medium when LOCALPI_THINKING is not set", () => {

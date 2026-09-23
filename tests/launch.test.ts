@@ -33,6 +33,9 @@ describe("Pi launch plan", () => {
       "localpi prompt",
       "--tools",
       "read,bash,edit,write,grep,find,ls",
+      "--no-skills",
+      "--skill",
+      path.join(stateDir, "pi-skills"),
       "-p",
       "say ok"
     ]);
@@ -52,6 +55,36 @@ describe("Pi launch plan", () => {
     expect(plan.args).toContain("--tools");
     expect(plan.args.filter((arg) => arg === "--tools")).toHaveLength(1);
     expect(plan.args).toContain("bash");
+  });
+
+  it("keeps ambient skills when the skills mode is ambient", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        { ...options(stateDir), skills: "ambient" },
+        connection("gemma-4-e4b-it"),
+        { paths: [], env: {}, systemPrompt: "localpi prompt" }
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args).not.toContain("--no-skills");
+    expect(plan.args).not.toContain("--skill");
+  });
+
+  it("loads no skills when the skills mode is off", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        { ...options(stateDir), skills: "off" },
+        connection("gemma-4-e4b-it"),
+        { paths: [], env: {}, systemPrompt: "localpi prompt" }
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args.filter((arg) => arg === "--no-skills")).toHaveLength(1);
+    expect(plan.args).not.toContain("--skill");
   });
 
   it("forces demo launches to disable tools and skip project trust prompts", async () => {
@@ -221,6 +254,7 @@ function options(stateDir: string): LocalpiOptions {
     approval: true,
     approveReadTools: false,
     stats: "full",
+    skills: "own",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

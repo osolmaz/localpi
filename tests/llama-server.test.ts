@@ -254,6 +254,7 @@ function options(): LocalpiOptions {
     approval: true,
     approveReadTools: false,
     stats: "full",
+    skills: "own",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,
