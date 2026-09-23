@@ -114,8 +114,11 @@ produces an answer.
   unrestricted, and a positive value replaces the budget of the level table. Any other value fails
   with a clear message.
 - When the budget is finite, localpi passes a default message that the server injects before the
-  end-of-thinking tag, so the model knows why the thinking stopped. An empty message passes no
-  message flag.
+  end-of-thinking tag, so the model knows why the thinking stopped. `--thinking-budget-message
+<text>` and `LOCALPI_THINKING_BUDGET_MESSAGE` reword that default, and an empty value passes no
+  message flag at all.
+- The message override is optional text with no validation, so the default still has its escape
+  hatch and a model that needs different wording can get it.
 - The engine detects the thinking tags from the model template. Localpi does not hardcode a tag, and
   it does not pass reasoning effort levels that the template rejects.
 - The managed server metadata records the reasoning mode, the budget, and the message. A changed
@@ -138,6 +141,7 @@ produces an answer.
 - [x] Remember the last Pi thinking level for future localpi launches.
 - [x] Add `--thinking-budget` and `LOCALPI_THINKING_BUDGET` for the managed `llama-server`.
 - [x] Inject a default message before the end-of-thinking tag when the budget is finite.
+- [x] Add `--thinking-budget-message` and `LOCALPI_THINKING_BUDGET_MESSAGE` to reword the message, or to pass none.
 - [x] Record the reasoning mode, the budget, and the message in the managed server metadata.
 - [x] Test the level table, the budget override, an invalid value, and the restart trigger.
 - [ ] Manually verify model picker behavior in an interactive terminal with multiple loaded providers.

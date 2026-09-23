@@ -246,6 +246,26 @@ describe("runtime resolution", () => {
     await stopManagedLlamaServer({ ...options(), stateDir });
   });
 
+  it("rewords the reasoning stop message with the override", async () => {
+    const { stateDir, args } = await startServerWithReasoning("low", undefined, "Stop now.");
+    expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("128");
+    expect(args[args.indexOf("--reasoning-budget-message") + 1]).toBe("Stop now.");
+
+    const metadata = await readFakeServerMetadata(stateDir);
+    expect(metadata.reasoningMessage).toBe("Stop now.");
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
+  it("passes no message when the message override is empty", async () => {
+    const { stateDir, args } = await startServerWithReasoning("low", undefined, "");
+    expect(args[args.indexOf("--reasoning-budget") + 1]).toBe("128");
+    expect(args).not.toContain("--reasoning-budget-message");
+
+    const metadata = await readFakeServerMetadata(stateDir);
+    expect(metadata.reasoningMessage).toBeUndefined();
+    await stopManagedLlamaServer({ ...options(), stateDir });
+  });
+
   it("does not fast-reuse managed alias runs after startup options change", async () => {
     const { stateDir, modelPath } = await tempRuntimeState();
     const baseUrl = await startModelServer("custom-model", 32768);
@@ -1819,10 +1839,11 @@ describe("runtime resolution", () => {
     expect(isAlive(pid)).toBe(false);
   }
 
-  /** Starts a managed server with a thinking level and an optional budget override. */
+  /** Starts a managed server with a thinking level and optional budget and message overrides. */
   async function startServerWithReasoning(
     thinking: LocalpiOptions["thinking"],
-    thinkingBudget?: number
+    thinkingBudget?: number,
+    thinkingBudgetMessage?: string
   ): Promise<{ readonly stateDir: string; readonly args: readonly string[] }> {
     const { stateDir, modelPath } = await tempRuntimeState();
     const baseUrl = await unusedBaseUrl();
@@ -1834,6 +1855,7 @@ describe("runtime resolution", () => {
         baseUrl,
         thinking,
         ...(thinkingBudget === undefined ? {} : { thinkingBudget }),
+        ...(thinkingBudgetMessage === undefined ? {} : { thinkingBudgetMessage }),
         serverCommand
       },
       { id: "custom-model", modelPath }
@@ -1877,6 +1899,7 @@ function options(): LocalpiOptions {
     piCommand: ["pi"],
     thinking: "off",
     thinkingBudget: undefined,
+    thinkingBudgetMessage: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,

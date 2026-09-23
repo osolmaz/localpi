@@ -69,6 +69,8 @@ Localpi:
   unrestricted and a positive value replaces the budget of the thinking level
 - injects a default message before the end-of-thinking tag when the budget is finite, so a model
   that loops in its thinking still answers
+- rewords that message with `--thinking-budget-message <text>` or `LOCALPI_THINKING_BUDGET_MESSAGE`,
+  and passes no message flag when the value is empty
 - records the reasoning mode, the budget, and the message in the managed server metadata, and
   restarts the owned server when a recorded value changes
 

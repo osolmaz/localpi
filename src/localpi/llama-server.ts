@@ -710,27 +710,36 @@ const thinkingBudgets: Readonly<Record<Exclude<ThinkingLevel, "off">, number>> =
 
 /**
  * Injected before the end-of-thinking tag when the budget runs out. Without it the model is cut off
- * mid-thought, and a model that loops in its thinking never reaches an answer.
+ * mid-thought, and a model that loops in its thinking never reaches an answer. Set
+ * `--thinking-budget-message` or `LOCALPI_THINKING_BUDGET_MESSAGE` to reword it, or to an empty
+ * string to pass no message at all.
  */
 export const reasoningBudgetMessage = "Reasoning budget reached. Stop thinking and answer now.";
 
 /**
  * The reasoning flags of one thinking level. A budget override replaces the budget of the level,
  * where -1 leaves thinking unrestricted. Thinking stays off when the level is off, and the message
- * is set only for a finite budget, because an unrestricted budget has nothing to cut short.
+ * is set only for a finite budget, because an unrestricted budget has nothing to cut short. A
+ * message override rewords the default, and an empty override passes no message flag.
  */
-export function reasoningConfig(thinking: ThinkingLevel, budgetOverride?: number): ReasoningConfig {
+export function reasoningConfig(
+  thinking: ThinkingLevel,
+  budgetOverride?: number,
+  messageOverride?: string
+): ReasoningConfig {
   if (thinking === "off") {
     return { mode: "off" };
   }
   const budget = budgetOverride ?? thinkingBudgets[thinking];
-  return budget < 0
-    ? { mode: "on", budget }
-    : { mode: "on", budget, message: reasoningBudgetMessage };
+  if (budget < 0) {
+    return { mode: "on", budget };
+  }
+  const message = messageOverride ?? reasoningBudgetMessage;
+  return message === "" ? { mode: "on", budget } : { mode: "on", budget, message };
 }
 
 function reasoningFor(options: LocalpiOptions): ReasoningConfig {
-  return reasoningConfig(options.thinking, options.thinkingBudget);
+  return reasoningConfig(options.thinking, options.thinkingBudget, options.thinkingBudgetMessage);
 }
 
 function reasoningMetadata(config: ReasoningConfig): {

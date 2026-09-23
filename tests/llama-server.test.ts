@@ -141,6 +141,44 @@ describe("llama-server state", () => {
     expect(reasoningConfig("off", 4096)).toEqual({ mode: "off" });
   });
 
+  it("rewords the message with the override and passes none for empty text", () => {
+    expect(reasoningConfig("medium", undefined, "Stop now.")).toEqual({
+      mode: "on",
+      budget: 512,
+      message: "Stop now."
+    });
+    expect(reasoningConfig("medium", undefined, "")).toEqual({ mode: "on", budget: 512 });
+    expect(reasoningConfig("xhigh", -1, "Stop now.")).toEqual({ mode: "on", budget: -1 });
+    expect(reasoningConfig("off", undefined, "Stop now.")).toEqual({ mode: "off" });
+  });
+
+  it("restarts when the thinking budget message changes", () => {
+    const info = {
+      ...metadata(),
+      reasoningMode: "on" as const,
+      reasoningBudget: 512,
+      reasoningMessage: "Stop now."
+    };
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "medium", thinkingBudgetMessage: "Stop now." },
+        info
+      )
+    ).toBe(false);
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "medium", thinkingBudgetMessage: "Stop." },
+        info
+      )
+    ).toBe(true);
+    expect(
+      managedLlamaServerNeedsRestart(
+        { ...options(), thinking: "medium", thinkingBudgetMessage: "" },
+        info
+      )
+    ).toBe(true);
+  });
+
   it("keeps thinking off even with a budget override", () => {
     expect(
       managedLlamaServerNeedsRestart(
@@ -327,6 +365,7 @@ function options(): LocalpiOptions {
     piCommand: ["pi"],
     thinking: "off",
     thinkingBudget: undefined,
+    thinkingBudgetMessage: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     timeoutMs: 1000,

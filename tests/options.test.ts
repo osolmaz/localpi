@@ -100,6 +100,26 @@ describe("localpi option parsing", () => {
     delete process.env["LOCALPI_THINKING_BUDGET"];
   });
 
+  it("parses the thinking budget message and lets an empty value through", () => {
+    expect(parseLocalpiArgs(["--thinking-budget-message", "Stop now."]).thinkingBudgetMessage).toBe(
+      "Stop now."
+    );
+    expect(parseLocalpiArgs(["--thinking-budget-message", ""]).thinkingBudgetMessage).toBe("");
+    expect(parseLocalpiArgs([]).thinkingBudgetMessage).toBeUndefined();
+    expect(usage()).toContain("--thinking-budget-message <text>");
+  });
+
+  it("reads the thinking budget message from the environment", () => {
+    process.env["LOCALPI_THINKING_BUDGET_MESSAGE"] = "Answer now.";
+    expect(parseLocalpiArgs([]).thinkingBudgetMessage).toBe("Answer now.");
+
+    process.env["LOCALPI_THINKING_BUDGET_MESSAGE"] = "";
+    expect(parseLocalpiArgs([]).thinkingBudgetMessage).toBe("");
+
+    delete process.env["LOCALPI_THINKING_BUDGET_MESSAGE"];
+    expect(parseLocalpiArgs([]).thinkingBudgetMessage).toBeUndefined();
+  });
+
   it("rejects removed final schema flags", () => {
     expect(() => parseLocalpiArgs(["--final-schema", "schema.json"])).toThrow(
       "was removed from localpi"
