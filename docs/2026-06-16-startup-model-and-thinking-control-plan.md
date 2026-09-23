@@ -100,10 +100,29 @@ Superseded: localpi first registered its own `/thinking` extension command. Pi a
 name, so Pi skipped the localpi command in autocomplete. Localpi now keeps only the persistence
 hooks (`thinking_level_select` and `session_shutdown`) and leaves the command to Pi.
 
-Managed `llama-server` caveat:
+Managed `llama-server` thinking budget:
 
-- Server-side reasoning budget is still chosen at startup.
-- Changing the server-side budget later would require restarting the local server process.
+A reasoning model can loop in its thinking and never answer. The managed server bounds that by
+cutting the thinking at a token budget and forcing the end-of-thinking tag, so the turn still
+produces an answer.
+
+- Server-side reasoning budget is still chosen at startup. Changing it later restarts the
+  localpi-owned server process.
+- Thinking levels map to token budgets: `off` passes `--reasoning off` and no budget, `minimal` 32,
+  `low` 128, `medium` 512, `high` 2048, and `xhigh` 16384.
+- `--thinking-budget <n>` and `LOCALPI_THINKING_BUDGET` set the budget directly. `-1` means
+  unrestricted, and a positive value replaces the budget of the level table. Any other value fails
+  with a clear message.
+- When the budget is finite, localpi passes a default message that the server injects before the
+  end-of-thinking tag, so the model knows why the thinking stopped. An empty message passes no
+  message flag.
+- The engine detects the thinking tags from the model template. Localpi does not hardcode a tag, and
+  it does not pass reasoning effort levels that the template rejects.
+- The managed server metadata records the reasoning mode, the budget, and the message. A changed
+  value restarts the owned server, as the budget check already does.
+- The reasoning translation stays in the `llama-server` adapter. There is no engine-agnostic
+  reasoning layer, because localpi starts only the managed `llama-server`; LM Studio and vLLM are
+  external servers that localpi only connects to.
 
 ## Implementation Checklist
 
@@ -117,6 +136,10 @@ Managed `llama-server` caveat:
 - [x] Keep startup thinking non-interactive.
 - [x] Keep `--thinking` and `LOCALPI_THINKING` as automation-safe startup controls.
 - [x] Remember the last Pi thinking level for future localpi launches.
+- [ ] Add `--thinking-budget` and `LOCALPI_THINKING_BUDGET` for the managed `llama-server`.
+- [ ] Inject a default message before the end-of-thinking tag when the budget is finite.
+- [ ] Record the reasoning mode, the budget, and the message in the managed server metadata.
+- [ ] Test the level table, the budget override, an invalid value, and the restart trigger.
 - [ ] Manually verify model picker behavior in an interactive terminal with multiple loaded providers.
 - [ ] Manually verify Pi `/model` can switch among generated catalog entries.
 - [ ] Manually verify Pi `/thinking` picker and direct `/thinking <level>` command.
