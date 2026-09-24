@@ -156,7 +156,7 @@ describe("ACP mode", () => {
     const nested = createLocalpiAppDefinition(
       {
         ...options(stateDir),
-        piCommand: parsePiCommand("node /home/onur/repos/localpi/dist/src/cli/main.js")
+        piCommand: parsePiCommand("node /opt/localpi/dist/src/cli/main.js")
       },
       connection("gemma-4-e4b-it")
     );
