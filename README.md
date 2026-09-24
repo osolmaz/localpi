@@ -4,7 +4,7 @@
   <img src="assets/cover.svg" alt="localpi: an unopinionated Pi distribution that makes it easy to test and work with small local models on constrained systems" width="880">
 </p>
 
-Localpi is an unopinionated Pi distribution that makes it easy to test and work with small local models on constrained systems.
+Localpi is an unopinionated [Pi](https://pi.dev) distribution that makes it easy to test and work with small local models on constrained systems.
 
 By default, Localpi discovers available local providers, lets you choose when more than one model is loaded, points Pi at the selected model, and writes Pi config for the other discovered models so `/model` can switch among them during the session.
 
@@ -216,9 +216,10 @@ Approval still works: the adapter forwards Pi's extension dialogs to the ACP cli
 asks before a tool call runs. The adapter does not pass `--no-extensions`, so Pi extension discovery
 stays on.
 
-Pi has no ACP mode of its own. ACP support comes from `pi-acp` (MIT), which `package.json` pins to
-an exact version, and localpi never vendors its source. Set `LOCALPI_ACP_ADAPTER` to a path to run a
-different adapter build.
+Pi has no ACP mode of its own. ACP support comes from
+[`pi-acp`](https://github.com/svkozak/pi-acp) (MIT), which `package.json` pins to an exact version,
+and localpi never vendors its source. Set `LOCALPI_ACP_ADAPTER` to a path to run a different adapter
+build.
 
 ## Continue On Truncation
 
@@ -668,6 +669,20 @@ Model capability profiles can fill in metadata that OpenAI-compatible servers do
 ```
 
 `LOCALPAGER_AGENT_PROFILE`, `LOCALPAGER_AGENT_REASONING`, and `LOCALPAGER_AGENT_THINKING_FORMAT` are accepted as aliases so LocalPager Agent can pass the same profile metadata through to localpi.
+
+## Related Projects
+
+- [Pi](https://pi.dev) is the coding agent this distribution launches. Pi owns model detection, the
+  tool loop, streaming, slash commands, and the session. Its source is
+  [earendil-works/pi](https://github.com/earendil-works/pi).
+- [pi-factory](https://github.com/osolmaz/pi-factory) builds the Pi launch plan, the launch
+  environment, and the runtime config a session uses.
+- [pi-demo-mode](https://github.com/osolmaz/pi-demo-mode) is the shared extension behind demo mode.
+- [pi-acp](https://github.com/svkozak/pi-acp) is the adapter that ACP mode pins, for the
+  [Agent Client Protocol](https://agentclientprotocol.com). Localpi keeps no copy of its source.
+- Inference stacks: [llama.cpp](https://github.com/ggml-org/llama.cpp) and its `llama-server`,
+  [LM Studio](https://lmstudio.ai), [vLLM](https://github.com/vllm-project/vllm),
+  [SGLang](https://github.com/sgl-project/sglang), and [Ollama](https://ollama.com).
 
 ## Development
 
