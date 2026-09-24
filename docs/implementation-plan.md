@@ -73,3 +73,17 @@ Older workspace wrappers outside this repository still mention `localagent --fin
   - approval denial in an interactive tool call
   - token status display in an interactive session
 - Run `npm run check` before merging implementation changes.
+
+## 8. ACP Mode
+
+- [ ] Add `--acp` and `LOCALPI_ACP=1`, and keep a normal launch as the default.
+- [ ] Pin `pi-acp` in `package.json` and the lockfile. Do not vendor its source.
+- [ ] Keep the ACP start in its own module next to the existing launcher.
+- [ ] Resolve the model and write the Pi configuration a normal launch writes, then start the adapter with inherited stdio.
+- [ ] Set `PI_ACP_PI_COMMAND` to the resolved Pi executable, and pass the environment a normal launch uses.
+- [ ] Require an explicit model from the flag, environment, or model profile, and fail with one clear message instead of printing a picker.
+- [ ] Keep stdout for protocol bytes only, and send diagnostics, warnings, and startup notes to stderr.
+- [ ] Never point the adapter command at localpi itself, so a spawned child cannot re-enter ACP mode.
+- [ ] Unit-test the command and environment, stdout purity, the missing-model failure, exit-code propagation, and the absence of ACP re-entry, with a fake adapter child.
+- [ ] Document ACP mode in the README and in `docs/runtime-specification.md`.
+- [ ] Keep `npm run check` green, and leave the thinking budget and model profile semantics unchanged.

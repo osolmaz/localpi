@@ -212,6 +212,26 @@ Localpi appends a short system prompt that tells the model:
 
 The prompt should be generic and should not mention localpager, OpenClaw, datasets, or classifier labels.
 
+## ACP Mode
+
+`localpi --acp` and `LOCALPI_ACP=1` start localpi as an ACP agent, so an ACP client such as an editor can drive the same Pi that a normal launch runs.
+
+Localpi:
+
+- follows the usual precedence, command-line flag, environment variable, saved setting, then default, and keeps a normal launch as the default
+- resolves the model and writes the same Pi configuration a normal launch writes before it starts the adapter
+- starts the pinned `pi-acp` adapter on stdio as a child process with inherited stdio, and does not vendor its source
+- sets `PI_ACP_PI_COMMAND` to the Pi executable it resolved, so the adapter runs the same Pi
+- passes the environment a normal launch uses: the Pi config directory, the provider base URL, the API key name, the thinking level, and the session directory
+- requires an explicit model from the flag, the environment, or a model profile, because there is no TTY, and fails with one clear message instead of printing a picker
+- keeps stdout for protocol bytes only, and writes diagnostics, warnings, and startup notes to stderr
+- never sets the adapter command to localpi itself, so a spawned child cannot re-enter ACP mode
+- leaves the thinking budget and the model profile limits unchanged, and never invents a smaller reply cap than the declared one
+
+The adapter spawns Pi as `pi --mode rpc --no-themes`, adds `--session <path>` when a session path exists, and does not pass `--no-extensions`, so Pi extension discovery stays enabled.
+
+Pi has no ACP mode of its own. ACP support always comes from the adapter, and localpi only configures it and launches it.
+
 ## Out Of Scope
 
 - `--final-schema`
@@ -221,3 +241,6 @@ The prompt should be generic and should not mention localpager, OpenClaw, datase
 - GitHub issue or pull request fetching
 - reposhell-specific behavior
 - dataset generation
+- an ACP server implemented inside localpi, because the adapter is a pinned dependency
+- ACP file system or terminal delegation, because Pi reads, writes, and runs commands in its own process
+- interactive model selection in ACP mode, because ACP has no terminal
