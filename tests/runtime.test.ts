@@ -1920,6 +1920,7 @@ function options(): LocalpiOptions {
     demoInitialPromptFile: undefined,
     demoFollowupPrompt: undefined,
     demoFollowupPromptFile: undefined,
+    acp: false,
     status: false,
     stop: false,
     list: false,

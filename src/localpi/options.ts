@@ -69,6 +69,7 @@ export type LocalpiOptions = {
   readonly demoInitialPromptFile: string | undefined;
   readonly demoFollowupPrompt: string | undefined;
   readonly demoFollowupPromptFile: string | undefined;
+  readonly acp: boolean;
   readonly status: boolean;
   readonly stop: boolean;
   readonly list: boolean;
@@ -118,6 +119,7 @@ export function defaultOptions(): LocalpiOptions {
     demoInitialPromptFile: process.env["LOCALPI_DEMO_INITIAL_PROMPT_FILE"],
     demoFollowupPrompt: process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT"],
     demoFollowupPromptFile: process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE"],
+    acp: envBoolean("LOCALPI_ACP", false),
     status: false,
     stop: false,
     list: false,
@@ -186,6 +188,8 @@ export function usage(): string {
     "  --no-approval           start with tool approval off for this session",
     "  --approve-read-tools    also ask before read-only tools (read, grep, find, ls)",
     "  --no-token-status       alias for --stats off",
+    "  --acp                   serve ACP on stdio through the pinned pi-acp adapter",
+    "                          (LOCALPI_ACP=1); requires an explicit --model",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -264,6 +268,7 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--no-token-status": (options) => ({ ...options, stats: "off" }),
   "--no-skills": (options) => ({ ...options, skills: "off" }),
   "-ns": (options) => ({ ...options, skills: "off" }),
+  "--acp": (options) => ({ ...options, acp: true }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
