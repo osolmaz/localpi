@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -10,8 +11,13 @@ import { cleanupTemporaryDirs, makeTemporaryDir } from "./support/extension-harn
 
 // Pi's own types are a devDependency, so these checks catch drift between the extension API that
 // Pi ships today and the shapes localpi generates. The check directory must stay inside the
-// repository, because the generated extensions import Pi's package by name.
-const checkDirectory = path.join("node_modules", ".cache", "localpi-extension-types");
+// repository, because the generated extensions import Pi's package by name. Each run owns its own
+// directory, so two runs at the same time cannot remove each other's generated sources.
+const checkDirectory = path.join(
+  "node_modules",
+  ".cache",
+  `localpi-extension-types-${String(process.pid)}-${randomUUID()}`
+);
 
 afterAll(async () => {
   await cleanupTemporaryDirs();
