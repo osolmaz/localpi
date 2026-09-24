@@ -221,11 +221,12 @@ Localpi:
 - follows the usual precedence, command-line flag, environment variable, then default, and keeps a normal launch as the default
 - resolves the model and writes the same Pi configuration a normal launch writes before it starts the adapter
 - starts the pinned `pi-acp` adapter from `node_modules` on stdio as a child process with inherited stdio, and does not vendor its source
-- writes a launcher script into `<state-dir>/acp/`, and sets `PI_ACP_PI_COMMAND` to that script, because the adapter starts Pi itself and passes only its own arguments. The script execs Pi with the complete launch line of a normal launch, so the models file, the settings file, the extensions, the system prompt, the theme, and the tool flags stay the same
+- writes a launcher script into `<state-dir>/acp/`, and sets `PI_ACP_PI_COMMAND` to that script, because the adapter starts Pi itself and passes only its own arguments. The script quotes the Pi program and every argument, so a program path with a space survives, and it execs Pi with the complete launch line of a normal launch, so the models file, the settings file, the extensions, the system prompt, the theme, and the tool flags stay the same
 - passes the environment a normal launch uses: the Pi config directory, the provider base URL, the API key name, the thinking level, and the session directory
 - requires an explicit model from the flag, the environment, or a model profile, because there is no TTY, and fails with one clear message instead of printing a picker
 - keeps stdout for protocol bytes only, and writes diagnostics, warnings, and startup notes to stderr
-- refuses `--demo`, the immediate commands, a forwarded Pi `--mode`, forwarded Pi session flags, and forwarded prompts, because the adapter owns the session
+- refuses `--demo`, a forwarded Pi `--mode`, forwarded Pi session flags, and forwarded prompts, because the adapter owns the session
+- refuses the immediate commands together with a command-line `--acp`, and lets a command-line immediate command win over an environment-set `LOCALPI_ACP=1`, the way `LOCALPI_DEMO` behaves
 - refuses a Pi command that is localpi itself, and sets `LOCALPI_ACP=0` for the child, so a spawned child cannot re-enter ACP mode
 - runs a different adapter build only when `LOCALPI_ACP_ADAPTER` names its entrypoint
 - leaves the thinking budget and the model profile limits unchanged, and never invents a smaller reply cap than the declared one

@@ -387,6 +387,7 @@ function options(): LocalpiOptions {
     demoFollowupPrompt: undefined,
     demoFollowupPromptFile: undefined,
     acp: false,
+    acpFromCli: false,
     status: false,
     stop: false,
     list: false,

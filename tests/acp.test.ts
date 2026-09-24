@@ -90,6 +90,28 @@ describe("ACP mode", () => {
     expect(launcher.endsWith('"$@"\n')).toBe(true);
   });
 
+  it("writes a sh launcher that quotes the Pi program and its arguments", () => {
+    const contents = launcherContents(
+      {
+        appId: "localpi",
+        appName: "localpi",
+        command: "/opt/pi bin/pi",
+        args: ["--model", "a b", "--append-system-prompt", "it's here"],
+        env: {},
+        runtimeConfig: {
+          configDir: "/tmp/config",
+          modelsPath: "/tmp/config/models.json",
+          settingsPath: "/tmp/config/settings.json"
+        },
+        warnings: []
+      },
+      "linux"
+    );
+    expect(contents.startsWith("#!/bin/sh\nexec '/opt/pi bin/pi' '--model' 'a b'")).toBe(true);
+    expect(contents).toContain("'--append-system-prompt' 'it'\\''s here'");
+    expect(contents.endsWith('"$@"\n')).toBe(true);
+  });
+
   it("writes a cmd launcher that forwards adapter arguments on Windows", () => {
     const contents = launcherContents(
       {
@@ -242,7 +264,7 @@ describe("ACP mode", () => {
       expect(recorded.env.PI_ACP_PI_COMMAND).toBe(path.join(stateDir, "acp", "pi-launcher.sh"));
       expect(recorded.env.LOCALPI_ACP).toBe("0");
       const launcher = await readFile(recorded.env.PI_ACP_PI_COMMAND ?? "", "utf8");
-      expect(launcher).toContain("exec true");
+      expect(launcher).toContain("exec 'true'");
     } finally {
       if (previousAdapter === undefined) {
         delete process.env["LOCALPI_ACP_ADAPTER"];
@@ -317,6 +339,7 @@ function options(stateDir: string): LocalpiOptions {
     demoFollowupPrompt: undefined,
     demoFollowupPromptFile: undefined,
     acp: false,
+    acpFromCli: false,
     status: false,
     stop: false,
     list: false,

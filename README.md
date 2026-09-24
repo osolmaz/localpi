@@ -198,15 +198,18 @@ ACP mode:
   `<state-dir>/pi-config-runtime/models.json` and `settings.json`
 - starts the pinned `pi-acp` adapter from `node_modules` as a child process with inherited stdio
 - writes a launcher script to `<state-dir>/acp/pi-launcher.sh` and points `PI_ACP_PI_COMMAND` at it,
-  because the adapter starts Pi itself and passes only its own arguments. The script execs Pi with
-  the full launch line a normal launch uses, so the extensions, the system prompt, the theme, and
-  the tool flags stay the same
+  because the adapter starts Pi itself and passes only its own arguments. The script quotes the Pi
+  program and every argument, so a path with a space survives, and execs Pi with the full launch line
+  a normal launch uses, so the extensions, the system prompt, the theme, and the tool flags stay the
+  same
 - passes the environment a normal launch uses, and sets `LOCALPI_ACP=0` for the child
 - requires an explicit `--model` or `LOCALPI_MODEL`, because there is no terminal for the startup
   model picker
 - keeps stdout for protocol bytes only, and writes diagnostics and warnings to stderr
-- refuses `--demo`, `--status`, `--stop`, `--list`, a forwarded Pi `--mode`, Pi session flags, and
-  forwarded prompts, because the adapter owns the session
+- refuses `--demo`, a forwarded Pi `--mode`, Pi session flags, and forwarded prompts, because the
+  adapter owns the session
+- refuses `--status`, `--stop`, and `--list` together with `--acp` on the command line, and lets a
+  command-line immediate command win over an environment-set `LOCALPI_ACP=1`, as `LOCALPI_DEMO` does
 - refuses to start localpi as the adapter's Pi command, so a child cannot re-enter ACP mode
 
 Approval still works: the adapter forwards Pi's extension dialogs to the ACP client, so the client

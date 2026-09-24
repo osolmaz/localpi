@@ -3,7 +3,7 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 
-import { createPiLaunchPlan, shellCommand, writePiRuntimeConfig } from "@osolmaz/pi-factory";
+import { createPiLaunchPlan, writePiRuntimeConfig } from "@osolmaz/pi-factory";
 import type { PiAppDefinition, PiLaunchPlan } from "@osolmaz/pi-factory";
 
 /**
@@ -141,13 +141,21 @@ function launcherFileName(platform: NodeJS.Platform): string {
   return platform === "win32" ? "pi-launcher.cmd" : "pi-launcher.sh";
 }
 
-/** The launcher forwards the adapter's own Pi arguments after localpi's launch line. */
+/**
+ * The launcher forwards the adapter's own Pi arguments after localpi's launch line. Both branches
+ * quote every token, so a Pi program or argument that contains a space survives the shell.
+ */
 export function launcherContents(plan: PiLaunchPlan, platform: NodeJS.Platform): string {
   if (platform === "win32") {
     const command = [plan.command, ...plan.args].map(quoteWindowsToken).join(" ");
     return `@echo off\r\n${command} %*\r\n`;
   }
-  return `#!/bin/sh\nexec ${shellCommand(plan.command, plan.args)} "$@"\n`;
+  const command = [plan.command, ...plan.args].map(quotePosixToken).join(" ");
+  return `#!/bin/sh\nexec ${command} "$@"\n`;
+}
+
+function quotePosixToken(token: string): string {
+  return `'${token.replaceAll("'", "'\\''")}'`;
 }
 
 function quoteWindowsToken(token: string): string {

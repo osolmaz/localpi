@@ -131,6 +131,11 @@ function validateAcpOptions(options: ParsedOptions): void {
   if (!options.acp) {
     return;
   }
+  // A command-line immediate command wins over an environment-set LOCALPI_ACP, as it does for demo
+  // mode, so an exported mode switch does not take the status, stop, and list commands away.
+  if (!options.acpFromCli && hasImmediateCommand(options)) {
+    return;
+  }
   if (options.demo) {
     throw new Error("--acp cannot be used with --demo; ACP mode owns the terminal");
   }
