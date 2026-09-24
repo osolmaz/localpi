@@ -100,6 +100,30 @@ describe("Pi extensions", () => {
     }
   });
 
+  it("adds the continuation guard only when a limit is set", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const off = await writeDefaultExtensions(options(stateDir));
+      expect(off.paths).toHaveLength(4);
+      expect(off.paths.map((entry) => path.basename(entry))).not.toContain(
+        "continue-on-truncation.ts"
+      );
+
+      const on = await writeDefaultExtensions({ ...options(stateDir), continueOnTruncation: 2 });
+      expect(on.paths).toHaveLength(5);
+      const guard = await readFile(
+        on.paths.find((entry) => path.basename(entry) === "continue-on-truncation.ts") ?? "",
+        "utf8"
+      );
+      expect(guard).toContain("const limit = 2;");
+      expect(guard).toContain('pi.on("turn_end"');
+      expect(guard).toContain('pi.sendUserMessage(nudge, { deliverAs: "followUp" })');
+      expect(guard).not.toContain("process.env");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("adds llama.cpp prefill polling only for llama.cpp runtimes", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
@@ -240,6 +264,7 @@ function options(stateDir: string): LocalpiOptions {
     thinkingBudgetMessage: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
+    continueOnTruncation: 0,
     timeoutMs: 1000,
     serverCommand: "llama-server",
     host: "127.0.0.1",

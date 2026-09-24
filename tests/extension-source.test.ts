@@ -1,6 +1,7 @@
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
+import { continueOnTruncationExtensionSource } from "../src/pi/extension-sources/continue-on-truncation.js";
 import { startupModelSelectorExtensionSource } from "../src/pi/extension-sources/startup-model-selector.js";
 import { statusLineExtensionSource } from "../src/pi/extension-sources/status-line.js";
 import { thinkingControlExtensionSource } from "../src/pi/extension-sources/thinking-control.js";
@@ -14,6 +15,10 @@ describe("generated Pi extension sources", () => {
       source: startupModelSelectorExtensionSource({
         models: [{ provider: "lmstudio", id: "gemma" }]
       })
+    },
+    {
+      fileName: "continue-on-truncation.ts",
+      source: continueOnTruncationExtensionSource(2)
     },
     {
       fileName: "thinking-control.ts",

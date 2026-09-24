@@ -22,7 +22,7 @@ describe("generated Pi extensions", () => {
   it("typecheck against the installed Pi extension API", { timeout: 120_000 }, async () => {
     const files = await writeGeneratedExtensions();
 
-    expect(files).toHaveLength(4);
+    expect(files).toHaveLength(5);
     expect(typeCheck(files)).toEqual([]);
   });
 
@@ -54,7 +54,9 @@ async function writeGeneratedExtensions(): Promise<readonly string[]> {
       "--state-dir",
       stateDir,
       "--session-dir",
-      path.join(stateDir, "sessions")
+      path.join(stateDir, "sessions"),
+      "--continue-on-truncation",
+      "2"
     ]),
     stats: "full" as const
   };

@@ -245,6 +245,7 @@ Pi has no ACP mode of its own. ACP support always comes from the adapter, and lo
 - treats `0` from the environment as off, so an inherited value can be disabled without dropping the variable
 - fails an invalid value with one clear message and exit code 2
 - detects the length stop on the turn-end hook, and continues only for that reason
+- leaves a truncated turn that already asked for a tool alone, because Pi runs the tool and keeps going on its own
 - sends exactly one follow-up user message that tells the model to continue where it stopped and not to repeat earlier text
 - counts continuations per session, and stops after the limit, so the feature cannot loop forever
 - never continues a turn that ended for another reason, including a normal stop, a tool-only turn, an error stop, and a user cancellation

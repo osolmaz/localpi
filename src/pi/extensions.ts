@@ -6,6 +6,7 @@ import type { LocalpiOptions } from "../localpi/options.js";
 import type { EngineEntry } from "../localpi/provider-registry.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
+import { continueOnTruncationExtensionSource } from "./extension-sources/continue-on-truncation.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { statusLineExtensionSource } from "./extension-sources/status-line.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
@@ -87,6 +88,15 @@ export async function writeDefaultExtensions(
       })
     )
   );
+  if (options.continueOnTruncation > 0) {
+    paths.push(
+      await writeExtension(
+        extensionDir,
+        "continue-on-truncation.ts",
+        continueOnTruncationExtensionSource(options.continueOnTruncation)
+      )
+    );
+  }
   if (options.stats !== "off") {
     paths.push(
       await writeExtension(

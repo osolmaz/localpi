@@ -245,6 +245,7 @@ function options(stateDir: string): LocalpiOptions {
     thinkingBudgetMessage: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
+    continueOnTruncation: 0,
     timeoutMs: 1000,
     serverCommand: "llama-server",
     host: "127.0.0.1",
