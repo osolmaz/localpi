@@ -13,6 +13,7 @@ describe("localpi cli", () => {
   const tempDirs: string[] = [];
   const previousModelsFile = process.env["LOCALPI_MODELS_FILE"];
   const previousDemo = process.env["LOCALPI_DEMO"];
+  const previousAcp = process.env["LOCALPI_ACP"];
   const previousThinking = process.env["LOCALPI_THINKING"];
   const previousStdinIsTty = process.stdin.isTTY;
   const previousStdoutIsTty = process.stdout.isTTY;
@@ -29,6 +30,11 @@ describe("localpi cli", () => {
       delete process.env["LOCALPI_DEMO"];
     } else {
       process.env["LOCALPI_DEMO"] = previousDemo;
+    }
+    if (previousAcp === undefined) {
+      delete process.env["LOCALPI_ACP"];
+    } else {
+      process.env["LOCALPI_ACP"] = previousAcp;
     }
     if (previousThinking === undefined) {
       delete process.env["LOCALPI_THINKING"];
@@ -162,6 +168,18 @@ describe("localpi cli", () => {
     expect(result.code).toBe(0);
     expect(result.stdout).toBe("runtime lmstudio is externally managed; nothing stopped\n");
     expect(result.stderr).toBe("");
+  });
+
+  it("lets immediate localpi commands override ACP mode from the environment", async () => {
+    process.env["LOCALPI_ACP"] = "1";
+    const stop = await run(["--stop", "--runtime", "lmstudio"]);
+    expect(stop.code).toBe(0);
+    expect(stop.stdout).toBe("runtime lmstudio is externally managed; nothing stopped\n");
+    expect(stop.stderr).toBe("");
+
+    const list = await run(["--list"]);
+    expect(list.code).toBe(0);
+    expect(list.stderr).toBe("");
   });
 
   it("requires an explicit model in demo mode", async () => {

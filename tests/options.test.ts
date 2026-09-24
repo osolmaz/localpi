@@ -138,6 +138,27 @@ describe("localpi option parsing", () => {
     expect(parseLocalpiArgs(["--list"]).list).toBe(true);
     expect(parseLocalpiArgs(["--demo"]).demo).toBe(true);
     expect(parseLocalpiArgs(["--demo"]).demoFromCli).toBe(true);
+    expect(parseLocalpiArgs(["--acp"]).acp).toBe(true);
+    expect(parseLocalpiArgs(["--acp"]).acpFromCli).toBe(true);
+  });
+
+  it("tells an environment-set ACP mode apart from the flag", () => {
+    const previous = process.env["LOCALPI_ACP"];
+    process.env["LOCALPI_ACP"] = "1";
+    try {
+      const fromEnvironment = parseLocalpiArgs([]);
+      expect(fromEnvironment.acp).toBe(true);
+      expect(fromEnvironment.acpFromCli).toBe(false);
+      const fromCli = parseLocalpiArgs(["--acp"]);
+      expect(fromCli.acp).toBe(true);
+      expect(fromCli.acpFromCli).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["LOCALPI_ACP"];
+      } else {
+        process.env["LOCALPI_ACP"] = previous;
+      }
+    }
   });
 
   it("parses every value flag", () => {

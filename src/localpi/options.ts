@@ -70,6 +70,7 @@ export type LocalpiOptions = {
   readonly demoFollowupPrompt: string | undefined;
   readonly demoFollowupPromptFile: string | undefined;
   readonly acp: boolean;
+  readonly acpFromCli: boolean;
   readonly status: boolean;
   readonly stop: boolean;
   readonly list: boolean;
@@ -120,6 +121,7 @@ export function defaultOptions(): LocalpiOptions {
     demoFollowupPrompt: process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT"],
     demoFollowupPromptFile: process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE"],
     acp: envBoolean("LOCALPI_ACP", false),
+    acpFromCli: false,
     status: false,
     stop: false,
     list: false,
@@ -268,7 +270,7 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--no-token-status": (options) => ({ ...options, stats: "off" }),
   "--no-skills": (options) => ({ ...options, skills: "off" }),
   "-ns": (options) => ({ ...options, skills: "off" }),
-  "--acp": (options) => ({ ...options, acp: true }),
+  "--acp": (options) => ({ ...options, acp: true, acpFromCli: true }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
