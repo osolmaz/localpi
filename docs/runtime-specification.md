@@ -218,17 +218,19 @@ The prompt should be generic and should not mention localpager, OpenClaw, datase
 
 Localpi:
 
-- follows the usual precedence, command-line flag, environment variable, saved setting, then default, and keeps a normal launch as the default
+- follows the usual precedence, command-line flag, environment variable, then default, and keeps a normal launch as the default
 - resolves the model and writes the same Pi configuration a normal launch writes before it starts the adapter
-- starts the pinned `pi-acp` adapter on stdio as a child process with inherited stdio, and does not vendor its source
-- sets `PI_ACP_PI_COMMAND` to the Pi executable it resolved, so the adapter runs the same Pi
+- starts the pinned `pi-acp` adapter from `node_modules` on stdio as a child process with inherited stdio, and does not vendor its source
+- writes a launcher script into `<state-dir>/acp/`, and sets `PI_ACP_PI_COMMAND` to that script, because the adapter starts Pi itself and passes only its own arguments. The script execs Pi with the complete launch line of a normal launch, so the models file, the settings file, the extensions, the system prompt, the theme, and the tool flags stay the same
 - passes the environment a normal launch uses: the Pi config directory, the provider base URL, the API key name, the thinking level, and the session directory
 - requires an explicit model from the flag, the environment, or a model profile, because there is no TTY, and fails with one clear message instead of printing a picker
 - keeps stdout for protocol bytes only, and writes diagnostics, warnings, and startup notes to stderr
-- never sets the adapter command to localpi itself, so a spawned child cannot re-enter ACP mode
+- refuses `--demo`, the immediate commands, a forwarded Pi `--mode`, forwarded Pi session flags, and forwarded prompts, because the adapter owns the session
+- refuses a Pi command that is localpi itself, and sets `LOCALPI_ACP=0` for the child, so a spawned child cannot re-enter ACP mode
+- runs a different adapter build only when `LOCALPI_ACP_ADAPTER` names its entrypoint
 - leaves the thinking budget and the model profile limits unchanged, and never invents a smaller reply cap than the declared one
 
-The adapter spawns Pi as `pi --mode rpc --no-themes`, adds `--session <path>` when a session path exists, and does not pass `--no-extensions`, so Pi extension discovery stays enabled.
+The adapter spawns Pi as `pi --mode rpc --no-themes`, adds `--session <path>` when a session path exists, and does not pass `--no-extensions`, so Pi extension discovery stays enabled. Approval dialogs reach the ACP client, because the adapter forwards Pi extension UI requests as ACP permission requests.
 
 Pi has no ACP mode of its own. ACP support always comes from the adapter, and localpi only configures it and launches it.
 

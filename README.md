@@ -182,6 +182,41 @@ While approval is off, Pi shows `permission: allow` in the status area, so the s
 In a non-interactive launch, approval stays on and no dialog is possible, so every tool call is
 blocked. That keeps scripted runs from executing tools without a person watching.
 
+## ACP Mode
+
+`--acp` and `LOCALPI_ACP=1` serve the Agent Client Protocol on stdio, so an ACP client such as an
+editor can drive the same Pi session that a normal launch runs.
+
+```bash
+localpi --acp --model gemma-e4b
+LOCALPI_ACP=1 localpi --model gemma-e4b
+```
+
+ACP mode:
+
+- resolves the runtime and writes the same Pi configuration a normal launch writes, including
+  `<state-dir>/pi-config-runtime/models.json` and `settings.json`
+- starts the pinned `pi-acp` adapter from `node_modules` as a child process with inherited stdio
+- writes a launcher script to `<state-dir>/acp/pi-launcher.sh` and points `PI_ACP_PI_COMMAND` at it,
+  because the adapter starts Pi itself and passes only its own arguments. The script execs Pi with
+  the full launch line a normal launch uses, so the extensions, the system prompt, the theme, and
+  the tool flags stay the same
+- passes the environment a normal launch uses, and sets `LOCALPI_ACP=0` for the child
+- requires an explicit `--model` or `LOCALPI_MODEL`, because there is no terminal for the startup
+  model picker
+- keeps stdout for protocol bytes only, and writes diagnostics and warnings to stderr
+- refuses `--demo`, `--status`, `--stop`, `--list`, a forwarded Pi `--mode`, Pi session flags, and
+  forwarded prompts, because the adapter owns the session
+- refuses to start localpi as the adapter's Pi command, so a child cannot re-enter ACP mode
+
+Approval still works: the adapter forwards Pi's extension dialogs to the ACP client, so the client
+asks before a tool call runs. The adapter does not pass `--no-extensions`, so Pi extension discovery
+stays on.
+
+Pi has no ACP mode of its own. ACP support comes from `pi-acp` (MIT), which `package.json` pins to
+an exact version, and localpi never vendors its source. Set `LOCALPI_ACP_ADAPTER` to a path to run a
+different adapter build.
+
 ## llama.cpp (Default Engine)
 
 llama.cpp is Localpi's default local engine.
@@ -474,6 +509,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--demo-followup-prompt <text>`: repeated demo prompt after the first run
 - `--demo-initial-prompt-file <path>`: UTF-8 file for the first demo prompt
 - `--demo-followup-prompt-file <path>`: UTF-8 file for repeated demo prompts
+- `--acp`: serve the Agent Client Protocol on stdio through the pinned `pi-acp` adapter; requires an explicit non-`auto` model
 - `--no-approval`: start with the tool approval gate off for the session
 - `--approve-read-tools`: also ask before read-only tools (`read`, `grep`, `find`, `ls`)
 - `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
@@ -531,6 +567,8 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_STATS`
 - `LOCALPI_SKILLS`
 - `LOCALPI_APPROVE_READ_TOOLS`
+- `LOCALPI_ACP`
+- `LOCALPI_ACP_ADAPTER`
 - `LOCALPI_DEMO`
 - `LOCALPI_DEMO_INITIAL_PROMPT`
 - `LOCALPI_DEMO_FOLLOWUP_PROMPT`

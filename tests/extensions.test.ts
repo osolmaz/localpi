@@ -258,6 +258,7 @@ function options(stateDir: string): LocalpiOptions {
     demoInitialPromptFile: undefined,
     demoFollowupPrompt: undefined,
     demoFollowupPromptFile: undefined,
+    acp: false,
     status: false,
     stop: false,
     list: false,

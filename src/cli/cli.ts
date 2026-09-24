@@ -2,6 +2,7 @@ import { runPiApp } from "@osolmaz/pi-factory";
 
 import { paint } from "../localpi/catppuccin.js";
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
+import { runAcpApp } from "../localpi/acp.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
 import { engineEntries, providerConfigs } from "../localpi/provider-registry.js";
 import {
@@ -24,6 +25,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
     if (helpResult !== undefined) {
       return helpResult;
     }
+    validateAcpOptions(options);
     validateDemoOptions(options);
     const commandResult = await immediateCommandResult(options);
     if (commandResult !== undefined) {
@@ -53,7 +55,9 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       extensions,
       await writeLocalpiTheme(options.stateDir, options.forwardedArgs)
     );
-    return await launchResolvedRuntime(app, connection);
+    return options.acp
+      ? await launchAcpRuntime(app, connection)
+      : await launchResolvedRuntime(app, connection);
   } catch (error) {
     return fail(`${paint("localpi:", "red")} ${errorMessage(error)}`);
   }
@@ -119,6 +123,59 @@ function validateDemoTty(): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error(
       "--demo requires an interactive TTY on stdin and stdout; run it directly in a terminal"
+    );
+  }
+}
+
+function validateAcpOptions(options: ParsedOptions): void {
+  if (!options.acp) {
+    return;
+  }
+  if (options.demo) {
+    throw new Error("--acp cannot be used with --demo; ACP mode owns the terminal");
+  }
+  validateAcpImmediateOptions(options);
+  validateAcpModel(options);
+  validateForwardedAcpOptions(options.forwardedArgs);
+}
+
+function validateAcpImmediateOptions(options: ParsedOptions): void {
+  if (options.status) {
+    throw new Error("--acp cannot be used with --status");
+  }
+  if (options.stop) {
+    throw new Error("--acp cannot be used with --stop");
+  }
+  if (options.list) {
+    throw new Error("--acp cannot be used with --list");
+  }
+}
+
+function validateAcpModel(options: ParsedOptions): void {
+  if (options.model === undefined || options.model === "auto") {
+    throw new Error(
+      "--acp requires an explicit --model <alias|id|path> or LOCALPI_MODEL value; ACP mode has no terminal for model selection"
+    );
+  }
+}
+
+function validateForwardedAcpOptions(args: readonly string[]): void {
+  const incompatibleMode = forwardedIncompatibleMode(args);
+  if (incompatibleMode !== undefined) {
+    throw new Error(
+      `--acp cannot be used with forwarded Pi mode ${incompatibleMode}; the ACP adapter starts Pi in rpc mode`
+    );
+  }
+  const sessionFlag = forwardedSessionFlag(args);
+  if (sessionFlag !== undefined) {
+    throw new Error(
+      `--acp cannot be used with forwarded Pi session flag ${sessionFlag}; the ACP client manages sessions`
+    );
+  }
+  const promptInput = forwardedPromptInput(args);
+  if (promptInput !== undefined) {
+    throw new Error(
+      `--acp cannot be used with forwarded Pi prompt input ${promptInput}; ACP clients send prompts over the protocol`
     );
   }
 }
@@ -326,6 +383,20 @@ async function launchResolvedRuntime(
   return ok(connection.warnings.length === 0 ? "" : connectionStatus(connection));
 }
 
+/**
+ * ACP mode keeps stdout for the protocol only, so localpi reports its own diagnostics on stderr and
+ * returns the adapter's exit code unchanged.
+ */
+async function launchAcpRuntime(
+  app: ReturnType<typeof createLocalpiAppDefinition>,
+  connection: Awaited<ReturnType<typeof resolveRuntime>>
+): Promise<CommandResult> {
+  const code = await runAcpApp(app, {
+    diagnostics: connection.warnings.length === 0 ? [] : [connectionStatus(connection)]
+  });
+  return { code, stdout: "", stderr: "" };
+}
+
 async function immediateCommandResult(options: ParsedOptions): Promise<CommandResult | undefined> {
   if (options.list) {
     return ok(`${await aliasListOutput()}\n`);
@@ -394,6 +465,9 @@ function startupModelSelectorOptions(
   options: ParsedOptions,
   connection: Awaited<ReturnType<typeof resolveRuntime>>
 ): { readonly models: readonly { readonly provider: string; readonly id: string }[] } | undefined {
+  if (options.acp) {
+    return undefined;
+  }
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     return undefined;
   }
