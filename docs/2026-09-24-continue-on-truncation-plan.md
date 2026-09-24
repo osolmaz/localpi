@@ -40,11 +40,11 @@ Design rules:
 
 ### Interface
 
-| Interface | Meaning |
-| --- | --- |
-| `--continue-on-truncation <n>` | Continue at most `n` extra times when a turn ends on the output token limit. |
-| `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` | Same meaning from the environment. |
-| absent | Feature off. |
+| Interface                            | Meaning                                                                      |
+| ------------------------------------ | ---------------------------------------------------------------------------- |
+| `--continue-on-truncation <n>`       | Continue at most `n` extra times when a turn ends on the output token limit. |
+| `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` | Same meaning from the environment.                                           |
+| absent                               | Feature off.                                                                 |
 
 `n` must be a positive integer. `0` means off and is allowed only from the environment, so an
 operator can disable an inherited value without dropping the variable. An invalid `n` fails with one
