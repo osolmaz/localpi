@@ -87,3 +87,21 @@ Older workspace wrappers outside this repository still mention `localagent --fin
 - [x] Unit-test the command and environment, stdout purity, the missing-model failure, exit-code propagation, and the absence of ACP re-entry, with a fake adapter child.
 - [x] Document ACP mode in the README and in `docs/runtime-specification.md`.
 - [x] Keep `npm run check` green, and leave the thinking budget and model profile semantics unchanged.
+
+## 9. Continue On Truncation
+
+- [ ] Add `--continue-on-truncation <n>` and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>`, where `n` is a positive integer and is the maximum number of extra continuations.
+- [ ] Keep the feature off by default, so a normal launch, an ACP launch, and demo mode behave exactly as they do today with no flag and no environment variable.
+- [ ] Treat `0` from the environment as off, so an inherited value can be disabled without dropping the variable.
+- [ ] Keep the usual precedence, command-line flag, environment variable, then default, and add the usage line.
+- [ ] Fail an invalid value with one clear message and exit code 2.
+- [ ] Add the generated extension source `src/pi/extension-sources/continue-on-truncation.ts`, and bake the continuation limit into the generated source.
+- [ ] Include the extension in the bundle only when the feature is enabled, and change nothing in the bundle otherwise.
+- [ ] Detect the length stop on the turn-end hook, and continue only for that reason.
+- [ ] Send exactly one follow-up user message that tells the model to continue where it stopped and not to repeat earlier text.
+- [ ] Count continuations per session, and stop after the limit, so the feature cannot loop forever.
+- [ ] Never continue a turn that ended for another reason, including a normal stop, a tool-only turn, an error stop, and a user cancellation.
+- [ ] Write diagnostics to stderr only, and keep stdout free for protocol bytes and batch output.
+- [ ] Unit-test option parsing and validation, the bundle containing the guard only when it is enabled, one continuation message on a truncated turn, the count stopping at the limit, and no continuation on a normal turn.
+- [ ] Document the feature in the README and in `docs/runtime-specification.md`.
+- [ ] Keep `npm run check` green, and leave the thinking budget, the model profile limits, and the ACP contract unchanged.

@@ -235,6 +235,25 @@ The adapter spawns Pi as `pi --mode rpc --no-themes`, adds `--session <path>` wh
 
 Pi has no ACP mode of its own. ACP support always comes from the adapter, and localpi only configures it and launches it.
 
+## Continue On Truncation
+
+`localpi --continue-on-truncation <n>` and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` continue a Pi turn that stopped because it reached the output token limit, so a run finishes its answer instead of ending with a half-written reply.
+
+- `n` is a positive integer and is the maximum number of extra continuations
+- the feature is off by default. With no flag and no environment variable, a normal launch, an ACP launch, and demo mode behave exactly as they do today
+- follows the usual precedence, command-line flag, environment variable, then default
+- treats `0` from the environment as off, so an inherited value can be disabled without dropping the variable
+- fails an invalid value with one clear message and exit code 2
+- detects the length stop on the turn-end hook, and continues only for that reason
+- sends exactly one follow-up user message that tells the model to continue where it stopped and not to repeat earlier text
+- counts continuations per session, and stops after the limit, so the feature cannot loop forever
+- never continues a turn that ended for another reason, including a normal stop, a tool-only turn, an error stop, and a user cancellation
+- writes diagnostics to stderr only, and keeps stdout free for protocol bytes and batch output
+- is not a default extension. Localpi installs the guard extension only when the feature is enabled. When it is enabled, the guard is part of the extensions localpi writes, so an ACP launch uses it too
+- leaves the thinking budget, the model profile limits, and the ACP contract unchanged
+
+The guard changes no served limit. It reacts to the stop reason Pi reports, so a run that reached the declared output cap continues inside the declared limits.
+
 ## Out Of Scope
 
 - `--final-schema`
