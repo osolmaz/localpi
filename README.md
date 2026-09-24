@@ -109,6 +109,10 @@ Localpi launches Pi with:
 - in-session `/thinking` (Pi's own command) and `/approval` (localpi's) for changing session settings
 - local state under `~/.local/state/localpi`
 
+Pi owns stdout. Localpi writes its own diagnostics, including the connection summary and catalog
+warnings, to stderr. A machine-readable Pi mode such as `--mode rpc` or `--mode json` therefore stays
+parseable, and a batch run keeps a clean stdout.
+
 The approval gate makes failed or denied tool calls explicit to the model so the model does not claim that a blocked command ran.
 
 ## Skills

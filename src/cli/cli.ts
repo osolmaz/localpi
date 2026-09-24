@@ -385,7 +385,13 @@ async function launchResolvedRuntime(
   if (code !== 0) {
     return { code, stdout: "", stderr: "" };
   }
-  return ok(connection.warnings.length === 0 ? "" : connectionStatus(connection));
+  // Pi owns stdout. Localpi reports its own diagnostics on stderr, so a machine-readable Pi mode
+  // such as --mode rpc or --mode json stays parseable.
+  return {
+    code: 0,
+    stdout: "",
+    stderr: connection.warnings.length === 0 ? "" : connectionStatus(connection)
+  };
 }
 
 /**

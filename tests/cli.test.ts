@@ -340,6 +340,46 @@ describe("localpi cli", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps stdout free for Pi and reports launch diagnostics on stderr", async () => {
+    const stateDir = await tempStateDir();
+    const providersPath = path.join(stateDir, "providers.json");
+    await writeFile(
+      providersPath,
+      JSON.stringify({
+        providers: {
+          "hf-pinned": {
+            type: "openai-compatible",
+            name: "Pinned route",
+            baseUrl: "http://127.0.0.1:9/v1",
+            discover: false
+          }
+        }
+      })
+    );
+    const result = await run([
+      "--runtime",
+      "auto",
+      "--provider",
+      "hf-pinned",
+      "--providers-file",
+      providersPath,
+      "--model",
+      "example/model:provider",
+      "--state-dir",
+      stateDir,
+      "--session-dir",
+      path.join(stateDir, "sessions"),
+      "--timeout-ms",
+      "200",
+      "--pi-command",
+      "true"
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("model: example/model:provider");
+    expect(result.stderr).toContain("warning:");
+  });
+
   it("uses remembered stats mode unless a localpi stats override is set", async () => {
     const stateDir = await tempStateDir();
     const baseUrl = await startModelServer("served-model", 4096);

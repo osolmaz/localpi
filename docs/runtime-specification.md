@@ -201,6 +201,10 @@ Localpi installs two default extensions:
 - tool approval gate: ask before each tool call, and tell the model clearly when a tool call was blocked
 - token status: show live generation speed while streaming, then final prefill and generation rates when usage data is available
 
+Pi owns stdout. Localpi writes its own diagnostics, including the connection summary
+and catalog warnings, to stderr, so a machine-readable Pi mode such as `--mode rpc`
+or `--mode json` stays parseable and a batch run keeps a clean stdout.
+
 ## System Prompt
 
 Localpi appends a short system prompt that tells the model:
