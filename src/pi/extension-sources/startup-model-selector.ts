@@ -2,7 +2,7 @@ import type { StartupModelSelectorOptions } from "../extensions.js";
 
 export function startupModelSelectorExtensionSource(options: StartupModelSelectorOptions): string {
   const startupModelsSource = JSON.stringify(options.models);
-  return `import type { ExtensionAPI, SettingsManager } from "@earendil-works/pi-coding-agent";
+  return `import type { ExtensionAPI, ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { ModelSelectorComponent } from "@earendil-works/pi-coding-agent";
 
 type SelectedModel = Parameters<ExtensionAPI["setModel"]>[0];
@@ -24,20 +24,16 @@ export default function localpiStartupModelSelector(pi: ExtensionAPI): void {
     const scopedModels = selectableModels.map((model) => ({ model }));
 
     opened = true;
-    const selected = await ctx.ui.custom<SelectedModel | undefined>((tui, _theme, _keybindings, done) => {
-      const settings = {
-        setDefaultModelAndProvider: () => {}
-      } as unknown as SettingsManager;
-      return new ModelSelectorComponent(
+    const selected = await ctx.ui.custom<SelectedModel | undefined>((tui, _theme, _keybindings, done) =>
+      new ModelSelectorComponent(
         tui,
         ctx.model,
-        settings,
-        startupModelRegistry(ctx.modelRegistry) as typeof ctx.modelRegistry,
+        startupModelRuntime(ctx.modelRegistry),
         scopedModels,
-        (model) => done(model),
+        (model: SelectedModel) => done(model),
         () => done(undefined)
-      );
-    });
+      )
+    );
 
     if (selected === undefined) {
       return;
@@ -56,21 +52,20 @@ function startupAvailableModels(registry: {
   return registry.getAvailable().filter((model) => startupModelKeys.has(modelKey(model)));
 }
 
-function startupModelRegistry(registry: {
-  refresh(): void;
-  getError(): string | undefined;
-  getAvailable(): SelectedModel[];
-  find(provider: string, modelId: string): SelectedModel | undefined;
-}): typeof registry {
-  return {
-    refresh: () => registry.refresh(),
-    getError: () => registry.getError(),
-    getAvailable: () => startupAvailableModels(registry),
-    find: (provider, modelId) => {
+// The selector reads a ModelRuntime, which extensions cannot reach. It only calls
+// getAvailableSnapshot, getModel, getError, and refresh, so this view answers
+// those from the registry and hides every model outside the startup list.
+function startupModelRuntime(registry: ModelRegistry): ModelRuntime {
+  const view = {
+    getAvailableSnapshot: () => startupAvailableModels(registry),
+    getModel: (provider: string, modelId: string) => {
       const model = registry.find(provider, modelId);
       return model !== undefined && startupModelKeys.has(modelKey(model)) ? model : undefined;
-    }
+    },
+    getError: () => registry.getError(),
+    refresh: (options?: Parameters<ModelRegistry["refresh"]>[0]) => registry.refresh(options)
   };
+  return view as unknown as ModelRuntime;
 }
 
 function modelKey(model: { readonly provider: string; readonly id: string }): string {
