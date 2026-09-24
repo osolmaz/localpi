@@ -51,6 +51,7 @@ export type LocalpiOptions = {
   readonly thinkingBudgetMessage: string | undefined;
   readonly contextWindow: number | undefined;
   readonly maxTokens: number;
+  readonly continueOnTruncation: number;
   readonly timeoutMs: number;
   readonly serverCommand: string;
   readonly host: string;
@@ -102,6 +103,7 @@ export function defaultOptions(): LocalpiOptions {
     thinkingBudgetMessage: process.env["LOCALPI_THINKING_BUDGET_MESSAGE"],
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
+    continueOnTruncation: envContinuationLimit("LOCALPI_CONTINUE_ON_TRUNCATION"),
     timeoutMs: envPositiveInteger("LOCALPI_TIMEOUT_MS", "3000"),
     serverCommand: envString("LOCALPI_LLAMA_SERVER", "llama-server"),
     host: envString("LOCALPI_HOST", "127.0.0.1"),
@@ -172,6 +174,9 @@ export function usage(): string {
     "  --ctx <n>                model context window",
     "  --context-window <n>     alias for --ctx",
     "  --max-tokens <n>         generated model max output tokens",
+    "  --continue-on-truncation <n>",
+    "                          continue a reply cut off by the output limit, up to n times",
+    "                          (LOCALPI_CONTINUE_ON_TRUNCATION=<n>)",
     "  --server-command <path>  llama-server executable",
     "  --llama-server <path>    alias for --server-command",
     "  --host <host>            managed llama-server host",
@@ -309,6 +314,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
     contextWindow: parsePositiveInteger(value)
   }),
   "--max-tokens": (options, value) => ({ ...options, maxTokens: parsePositiveInteger(value) }),
+  "--continue-on-truncation": (options, value) => ({
+    ...options,
+    continueOnTruncation: parsePositiveInteger(value)
+  }),
   "--timeout-ms": (options, value) => ({ ...options, timeoutMs: parsePositiveInteger(value) }),
   "--server-command": (options, value) => ({ ...options, serverCommand: value }),
   "--llama-server": (options, value) => ({ ...options, serverCommand: value }),
@@ -505,6 +514,21 @@ function envNonNegativeInteger(name: string, fallback: string): number {
 function envOptionalPositiveInteger(name: string): number | undefined {
   const value = process.env[name];
   return value === undefined ? undefined : parsePositiveInteger(value);
+}
+
+/**
+ * The continuation limit allows zero, because zero turns the feature off. An inherited
+ * environment value must be disableable without dropping the variable.
+ */
+function envContinuationLimit(name: string): number {
+  const value = process.env[name];
+  if (value === undefined) {
+    return 0;
+  }
+  if (!/^(0|[1-9]\d*)$/u.test(value)) {
+    throw new Error(`${name} must be a nonnegative integer, got ${value}`);
+  }
+  return Number.parseInt(value, 10);
 }
 
 function envOptionalThinkingBudget(name: string): number | undefined {

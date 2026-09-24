@@ -187,6 +187,8 @@ describe("localpi option parsing", () => {
       "4096",
       "--max-tokens",
       "2048",
+      "--continue-on-truncation",
+      "3",
       "--timeout-ms",
       "1500",
       "--server-command",
@@ -223,6 +225,7 @@ describe("localpi option parsing", () => {
       piCommand: ["my-pi"],
       contextWindow: 4096,
       maxTokens: 2048,
+      continueOnTruncation: 3,
       timeoutMs: 1500,
       serverCommand: "/opt/bin/llama-server",
       host: "0.0.0.0",
@@ -246,6 +249,9 @@ describe("localpi option parsing", () => {
     expect(() => parseLocalpiArgs(["--gpu-layers", "-1"])).toThrow(
       "expected a non-negative integer, got -1"
     );
+    expect(() => parseLocalpiArgs(["--continue-on-truncation", "0"])).toThrow(
+      "expected a positive integer, got 0"
+    );
     expect(() => parseLocalpiArgs(["--runtime", "banana"])).toThrow("unknown runtime banana");
   });
 
@@ -255,6 +261,7 @@ describe("localpi option parsing", () => {
     expect(text).toContain("--runtime <kind>");
     expect(text).toContain("--thinking <level>");
     expect(text).toContain("--skills <mode>");
+    expect(text).toContain("--continue-on-truncation <n>");
     expect(text).toContain("--demo");
   });
 });
@@ -282,7 +289,8 @@ describe("localpi environment defaults", () => {
     "LOCALPI_DEMO_INITIAL_PROMPT",
     "LOCALPI_DEMO_FOLLOWUP_PROMPT",
     "LOCALPI_DEMO_INITIAL_PROMPT_FILE",
-    "LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE"
+    "LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE",
+    "LOCALPI_CONTINUE_ON_TRUNCATION"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
 
@@ -300,6 +308,7 @@ describe("localpi environment defaults", () => {
   it("reads defaults from LOCALPI_* environment variables", () => {
     process.env["LOCALPI_BASE_URL"] = "http://127.0.0.1:9999/v1/";
     process.env["LOCALPI_CONTEXT_WINDOW"] = "16384";
+    process.env["LOCALPI_CONTINUE_ON_TRUNCATION"] = "2";
     process.env["LOCALPI_APPROVAL"] = "no";
     process.env["LOCALPI_TOKEN_STATUS"] = "1";
     process.env["LOCALPI_MODEL"] = "env-model";
@@ -319,6 +328,7 @@ describe("localpi environment defaults", () => {
     expect(parseLocalpiArgs([])).toMatchObject({
       baseUrl: "http://127.0.0.1:9999/v1",
       contextWindow: 16384,
+      continueOnTruncation: 2,
       approval: false,
       stats: "full",
       model: "env-model",
@@ -336,6 +346,19 @@ describe("localpi environment defaults", () => {
       demoInitialPromptFile: "/tmp/env-initial.txt",
       demoFollowupPromptFile: "/tmp/env-followup.txt"
     });
+  });
+
+  it("treats a zero continuation limit as off and rejects a bad one", () => {
+    process.env["LOCALPI_CONTINUE_ON_TRUNCATION"] = "0";
+    expect(parseLocalpiArgs([]).continueOnTruncation).toBe(0);
+
+    process.env["LOCALPI_CONTINUE_ON_TRUNCATION"] = "2";
+    expect(parseLocalpiArgs(["--continue-on-truncation", "5"]).continueOnTruncation).toBe(5);
+
+    process.env["LOCALPI_CONTINUE_ON_TRUNCATION"] = "many";
+    expect(() => parseLocalpiArgs([])).toThrow(
+      "LOCALPI_CONTINUE_ON_TRUNCATION must be a nonnegative integer, got many"
+    );
   });
 
   it("accepts LocalPager agent capability profile environment fallbacks", () => {

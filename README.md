@@ -220,6 +220,39 @@ Pi has no ACP mode of its own. ACP support comes from `pi-acp` (MIT), which `pac
 an exact version, and localpi never vendors its source. Set `LOCALPI_ACP_ADAPTER` to a path to run a
 different adapter build.
 
+## Continue On Truncation
+
+`--continue-on-truncation <n>` and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` continue a reply that the
+model cut off at the declared output limit, so a run finishes its answer instead of ending with a
+half-written one.
+
+```bash
+localpi --model gemma-e4b --max-tokens 4096 --continue-on-truncation 2
+LOCALPI_CONTINUE_ON_TRUNCATION=2 localpi --model gemma-e4b
+```
+
+`n` is the maximum number of extra continuations. Pi reports a turn that reached the output cap as a
+length stop, and localpi sends one follow-up message that asks the model to continue where it
+stopped without repeating earlier text. The guard:
+
+- is off by default. With no flag and no environment variable, a normal launch, an ACP launch, and
+  demo mode behave exactly as they do today
+- takes the flag first, then `LOCALPI_CONTINUE_ON_TRUNCATION`, then off
+- treats `LOCALPI_CONTINUE_ON_TRUNCATION=0` as off, so an inherited value can be disabled without
+  dropping the variable, and rejects any other value that is not a positive integer with exit code 2
+- reacts only to the length stop, never to a normal stop, an error, an abort, or a tool call
+- leaves a truncated turn that already asked for a tool alone, because Pi runs the tool and keeps
+  going on its own
+- counts continuations per session, stops at the limit, and prints one line to stderr when the reply
+  was still cut off
+- writes its notes to stderr only, so stdout stays free for a batch run
+- changes no served limit. `--max-tokens` and `--context-window` keep their meaning, and the guard
+  only reacts to the stop reason Pi reports
+
+The guard installs as the `continue-on-truncation.ts` Pi extension. It is not a default extension,
+so a normal session writes it only when you ask for it. It works in ACP mode too, because both
+launch paths share the same Pi configuration and extension bundle.
+
 ## llama.cpp (Default Engine)
 
 llama.cpp is Localpi's default local engine.
@@ -488,6 +521,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--model <alias|id|path|auto>`: model alias, model id, or GGUF path
 - `--ctx <n>` / `--context-window <n>`: model context window
 - `--max-tokens <n>`: generated model max output tokens
+- `--continue-on-truncation <n>`: continue a reply cut off by the output limit, up to `n` times. Off by default, and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` sets the same limit
 - `--base-url <url>`: OpenAI-compatible endpoint for LM Studio or custom endpoints
 - `--server-command <path>`: `llama-server` executable path
 - `--llama-server <path>`: alias for `--server-command`
@@ -557,6 +591,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_PI_CMD`
 - `LOCALPI_CONTEXT_WINDOW`
 - `LOCALPI_MAX_TOKENS`
+- `LOCALPI_CONTINUE_ON_TRUNCATION`
 - `LOCALPI_LLAMA_SERVER`
 - `LOCALPI_HOST`
 - `LOCALPI_PORT`
