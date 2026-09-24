@@ -215,7 +215,7 @@ describe("Pi extensions", () => {
       expect(selector).toContain("ctx.ui.custom");
       expect(selector).toContain("pi.setModel(selected)");
       expect(selector).toContain('"provider":"lmstudio","id":"gemma"');
-      expect(selector).toContain("startupModelRegistry(ctx.modelRegistry)");
+      expect(selector).toContain("startupModelRuntime(ctx.modelRegistry)");
       expect(selector).not.toContain("readline");
       const thinking = await readFile(bundle.paths[1] ?? "", "utf8");
       expect(thinking).toContain("thinking_level_select");

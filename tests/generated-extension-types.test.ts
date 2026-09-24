@@ -28,7 +28,7 @@ describe("generated Pi extensions", () => {
   it("typecheck against the installed Pi extension API", { timeout: 120_000 }, async () => {
     const files = await writeGeneratedExtensions();
 
-    expect(files).toHaveLength(5);
+    expect(files).toHaveLength(6);
     expect(typeCheck(files)).toEqual([]);
   });
 
@@ -67,7 +67,13 @@ async function writeGeneratedExtensions(): Promise<readonly string[]> {
     stats: "full" as const
   };
   const bundle = await writeDefaultExtensions(options, {
-    engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
+    engines: [{ provider: "llama-cpp", engine: "llama.cpp" }],
+    startupModelSelector: {
+      models: [
+        { provider: "llama-cpp", id: "bonsai-2-27b" },
+        { provider: "lmstudio", id: "qwen3.8-27b" }
+      ]
+    }
   });
 
   const files: string[] = [];
