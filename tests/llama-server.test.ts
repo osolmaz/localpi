@@ -353,6 +353,7 @@ function options(): LocalpiOptions {
   return {
     runtime: "llama-server",
     baseUrl: undefined,
+    apiKey: "local",
     model: "custom-model",
     provider: undefined,
     customProviderId: "local-openai",

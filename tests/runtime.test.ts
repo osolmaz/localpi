@@ -1887,6 +1887,7 @@ function options(): LocalpiOptions {
   return {
     runtime: "llama-server",
     baseUrl: undefined,
+    apiKey: "local",
     model: "gemma-12b",
     provider: undefined,
     customProviderId: "local-openai",

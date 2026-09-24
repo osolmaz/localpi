@@ -230,6 +230,7 @@ function options(stateDir: string): LocalpiOptions {
   return {
     runtime: "lmstudio",
     baseUrl: "http://127.0.0.1:1234/v1",
+    apiKey: "local",
     model: "auto",
     provider: undefined,
     customProviderId: "local-openai",

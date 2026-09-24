@@ -130,7 +130,7 @@ function providersForConnection(
     id: group.providerId,
     baseUrl: group.baseUrl,
     api: "openai-completions",
-    apiKey: "local",
+    apiKey: options.apiKey,
     compat: {
       supportsDeveloperRole: false,
       supportsReasoningEffort: false

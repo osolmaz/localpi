@@ -36,6 +36,7 @@ export const thinkingLevels: readonly ThinkingLevel[] = [
 export type LocalpiOptions = {
   readonly runtime: RuntimeKind;
   readonly baseUrl: string | undefined;
+  readonly apiKey: string;
   readonly model: string | undefined;
   readonly provider: string | undefined;
   readonly customProviderId: string;
@@ -84,6 +85,7 @@ export function defaultOptions(): LocalpiOptions {
   return {
     runtime: parseRuntime(envString("LOCALPI_RUNTIME", "auto")),
     baseUrl: envOptionalBaseUrl("LOCALPI_BASE_URL"),
+    apiKey: envString("LOCALPI_API_KEY", "local"),
     model: process.env["LOCALPI_MODEL"],
     provider: process.env["LOCALPI_PROVIDER"],
     customProviderId: envString("LOCALPI_PROVIDER_ID", "local-openai"),
@@ -171,6 +173,8 @@ export function usage(): string {
     "  --provider <id>          catalog provider id to use",
     "  --model <alias|id|path>  model alias, backend id, or GGUF path",
     "  --base-url <url>         OpenAI-compatible endpoint",
+    "  --api-key <value>        Pi provider API key: a literal, ${NAME}, or !command",
+    "                          (LOCALPI_API_KEY=<value>, default: local)",
     "  --ctx <n>                model context window",
     "  --context-window <n>     alias for --ctx",
     "  --max-tokens <n>         generated model max output tokens",
@@ -284,6 +288,7 @@ type OptionUpdater = (options: LocalpiOptions, value: string) => LocalpiOptions;
 const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--runtime": (options, value) => ({ ...options, runtime: parseRuntime(value) }),
   "--base-url": (options, value) => ({ ...options, baseUrl: normalizeBaseUrl(value) }),
+  "--api-key": (options, value) => ({ ...options, apiKey: value }),
   "--model": (options, value) => ({ ...options, model: value }),
   "--provider": (options, value) => ({ ...options, provider: value }),
   "--provider-id": (options, value) => ({ ...options, customProviderId: value }),

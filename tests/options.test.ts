@@ -88,6 +88,23 @@ describe("localpi option parsing", () => {
     expect(usage()).toContain("--thinking-budget <n>");
   });
 
+  it("defaults the provider API key to local", () => {
+    delete process.env["LOCALPI_API_KEY"];
+    expect(parseLocalpiArgs([]).apiKey).toBe("local");
+  });
+
+  it("takes the provider API key from the flag, then the environment", () => {
+    delete process.env["LOCALPI_API_KEY"];
+    expect(parseLocalpiArgs(["--api-key", "${LOCALPI_TEST_KEY}"]).apiKey).toBe(
+      "${LOCALPI_TEST_KEY}"
+    );
+    process.env["LOCALPI_API_KEY"] = "${LOCALPI_ENV_KEY}";
+    expect(parseLocalpiArgs([]).apiKey).toBe("${LOCALPI_ENV_KEY}");
+    expect(parseLocalpiArgs(["--api-key", "literal-key"]).apiKey).toBe("literal-key");
+    delete process.env["LOCALPI_API_KEY"];
+    expect(usage()).toContain("--api-key <value>");
+  });
+
   it("reads the thinking budget from the environment", () => {
     process.env["LOCALPI_THINKING_BUDGET"] = "2048";
     expect(parseLocalpiArgs([]).thinkingBudget).toBe(2048);

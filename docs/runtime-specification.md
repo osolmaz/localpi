@@ -110,6 +110,7 @@ Localpi:
 - can use `--provider <id>` to name the generated Pi provider
 - uses `/v1/models` for discovery
 - avoids assuming it can start, stop, or unload the backend
+- writes the `--api-key` value as the generated Pi provider key, exactly as given, so an environment reference such as `${HF_TOKEN}` or a `!command` keeps the secret out of the Pi config. The default is `local`, which local engines accept and ignore
 
 ### Configured Providers
 

@@ -31,15 +31,37 @@ describe("Pi runtime config", () => {
         )
       );
       const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
-        providers: Record<string, { baseUrl: string; models: readonly { id: string }[] }>;
+        providers: Record<
+          string,
+          { baseUrl: string; apiKey: string; models: readonly { id: string }[] }
+        >;
       };
       expect(models.providers["lmstudio"]?.baseUrl).toBe("http://127.0.0.1:1234/v1");
+      expect(models.providers["lmstudio"]?.apiKey).toBe("local");
       expect(models.providers["lmstudio"]?.models[0]?.id).toBe("gemma-4-e4b-it");
       expect(models.providers["lmstudio"]?.models[0]).not.toHaveProperty("contextWindow");
       const settings = JSON.parse(await readFile(runtime.settingsPath, "utf8")) as {
         compaction?: { enabled?: boolean };
       };
       expect(settings.compaction?.enabled).toBe(false);
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes a configured provider API key, including an environment reference", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-test-"));
+    try {
+      const runtime = await writePiRuntimeConfig(
+        createLocalpiAppDefinition(
+          { ...options(stateDir), apiKey: "${LOCALPI_TEST_KEY}" },
+          connection("gemma-4-e4b-it", "http://127.0.0.1:1234/v1")
+        )
+      );
+      const models = JSON.parse(await readFile(runtime.modelsPath, "utf8")) as {
+        providers: Record<string, { apiKey: string }>;
+      };
+      expect(models.providers["lmstudio"]?.apiKey).toBe("${LOCALPI_TEST_KEY}");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -199,6 +221,7 @@ function options(stateDir: string): LocalpiOptions {
   return {
     runtime: "lmstudio",
     baseUrl: "http://127.0.0.1:1234/v1",
+    apiKey: "local",
     model: "auto",
     provider: undefined,
     customProviderId: "local-openai",

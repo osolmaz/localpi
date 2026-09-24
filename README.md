@@ -524,6 +524,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--max-tokens <n>`: generated model max output tokens
 - `--continue-on-truncation <n>`: continue a reply cut off by the output limit, up to `n` times. Off by default, and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>` sets the same limit
 - `--base-url <url>`: OpenAI-compatible endpoint for LM Studio or custom endpoints
+- `--api-key <value>`: Pi provider API key for this run. A literal value, an environment reference such as `${NAME}`, or a `!command`. Default: `local`. `LOCALPI_API_KEY` sets the same value
 - `--server-command <path>`: `llama-server` executable path
 - `--llama-server <path>`: alias for `--server-command`
 - `--host <host>`: managed `llama-server` host. Default: `127.0.0.1`
@@ -583,6 +584,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_MODEL`
 - `LOCALPI_PROVIDER`
 - `LOCALPI_BASE_URL`
+- `LOCALPI_API_KEY`
 - `LOCALPI_PROVIDERS_FILE`
 - `LOCALPI_MODEL_PROFILE`
 - `LOCALPI_MODEL_REASONING`
