@@ -3,6 +3,8 @@ import type { EngineEntry } from "../../localpi/provider-registry.js";
 export type StopThinkingConfig = {
   // The key that stops the thinking phase, or undefined when the user turned the key off.
   readonly key: string | undefined;
+  // How long the model must think before the button shows, in milliseconds.
+  readonly buttonDelayMs: number;
   readonly engines: readonly EngineEntry[];
 };
 
@@ -30,6 +32,8 @@ type ShortcutKey = Parameters<ExtensionAPI["registerShortcut"]>[0];
 const shortcut: ShortcutKey | undefined = ${config.key === undefined ? "undefined" : JSON.stringify(config.key)};
 const nativeProviders = new Set<string>(${JSON.stringify(nativeProviders)});
 const templateKwargsProviders = new Set<string>(${JSON.stringify(templateKwargsProviders)});
+// A short thinking phase needs no button, so the button waits this long before it shows.
+const buttonDelayMs: number = ${String(config.buttonDelayMs)};
 
 const customType = "localpi-stop-thinking";
 const widgetKey = "localpi-stop-thinking";
@@ -87,6 +91,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   let thinking: string | undefined;
   let latestContext: StopContext | undefined;
   let buttonVisible = false;
+  let buttonTimer: ReturnType<typeof setTimeout> | undefined;
   // A stop that waits for the aborted request to settle.
   let requested: StopRequest | undefined;
   // A stop whose new turn runs now. Its provider requests carry the continuation until the run
@@ -110,7 +115,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
       return;
     }
     requested = { provider: ctx.model?.provider ?? "", thinking };
-    hideButton(ctx);
+    endThinkingPhase(ctx);
     ctx.abort();
   }
 
@@ -139,6 +144,29 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     }));
   }
 
+  // The key and /stop-thinking work for the whole thinking phase. Only the button waits.
+  function startThinkingPhase(ctx: StopContext): void {
+    if (buttonDelayMs === 0) {
+      showButton(ctx);
+      return;
+    }
+    buttonTimer = setTimeout(() => {
+      buttonTimer = undefined;
+      if (thinking !== undefined && requested === undefined && latestContext !== undefined) {
+        showButton(latestContext);
+      }
+    }, buttonDelayMs);
+  }
+
+  function endThinkingPhase(ctx: StopContext): void {
+    if (buttonTimer !== undefined) {
+      clearTimeout(buttonTimer);
+      buttonTimer = undefined;
+    }
+    thinking = undefined;
+    hideButton(ctx);
+  }
+
   function hideButton(ctx: StopContext): void {
     if (!buttonVisible) {
       return;
@@ -153,7 +181,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
-    hideButton(ctx);
+    endThinkingPhase(ctx);
     reset();
   });
 
@@ -164,12 +192,14 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
       return;
     }
     if (isThinkingPhase(message)) {
+      const starting = thinking === undefined;
       thinking = thinkingText(message);
-      showButton(ctx);
+      if (starting) {
+        startThinkingPhase(ctx);
+      }
       return;
     }
-    thinking = undefined;
-    hideButton(ctx);
+    endThinkingPhase(ctx);
   });
 
   pi.on("message_end", (event, ctx) => {
@@ -177,8 +207,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     if (message.role !== "assistant") {
       return undefined;
     }
-    thinking = undefined;
-    hideButton(ctx);
+    endThinkingPhase(ctx);
     if (requested === undefined) {
       return undefined;
     }

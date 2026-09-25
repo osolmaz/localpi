@@ -120,6 +120,7 @@ export async function writeDefaultExtensions(
       "stop-thinking.ts",
       stopThinkingExtensionSource({
         key: options.stopThinkingKey,
+        buttonDelayMs: Math.round(options.stopThinkingDelay * 1000),
         engines: extensionOptions.engines ?? []
       })
     )

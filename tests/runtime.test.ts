@@ -1918,6 +1918,7 @@ function options(): LocalpiOptions {
     skills: "own",
     tuiMode: "fullscreen",
     stopThinkingKey: "ctrl+shift+s",
+    stopThinkingDelay: 5,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

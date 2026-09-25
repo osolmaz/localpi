@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { stopThinkingExtensionSource } from "../src/pi/extension-sources/stop-thinking.js";
 import { cleanupTemporaryDirs, loadGeneratedExtension } from "./support/extension-harness.js";
@@ -45,6 +45,7 @@ const instruction = "Stop thinking now. Give your answer based on the reasoning 
 const plainTheme: FakeTheme = { fg: (_color, text) => text };
 
 afterEach(async () => {
+  vi.useRealTimers();
   await cleanupTemporaryDirs();
 });
 
@@ -373,6 +374,46 @@ describe("generated localpi stop thinking extension", () => {
     expect(ctx.widget).toBeUndefined();
   });
 
+  it("waits for the delay before it shows the button", async () => {
+    vi.useFakeTimers();
+    const pi = await startPi({ buttonDelayMs: 5000 });
+    const ctx = context();
+
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
+    vi.advanceTimersByTime(4999);
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm, more")]), ctx);
+    expect(ctx.widget).toBeUndefined();
+
+    vi.advanceTimersByTime(1);
+    expect(button(ctx).render(80)[0]).toContain("Stop thinking and answer");
+  });
+
+  it("shows no button when the thinking ends before the delay", async () => {
+    vi.useFakeTimers();
+    const pi = await startPi({ buttonDelayMs: 5000 });
+    const ctx = context();
+
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
+    vi.advanceTimersByTime(3000);
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm"), text("4")]), ctx);
+    vi.advanceTimersByTime(5000);
+
+    expect(ctx.widget).toBeUndefined();
+  });
+
+  it("accepts the key before the button shows", async () => {
+    vi.useFakeTimers();
+    const pi = await startPi({ buttonDelayMs: 5000 });
+    const ctx = context();
+
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
+    pi.shortcuts.get("ctrl+shift+s")?.(ctx);
+    vi.advanceTimersByTime(5000);
+
+    expect(ctx.aborts).toBe(1);
+    expect(ctx.widget).toBeUndefined();
+  });
+
   it("shows no button outside the TUI", async () => {
     const pi = await startPi();
     const ctx = { ...context(), mode: "rpc" };
@@ -408,11 +449,13 @@ describe("generated localpi stop thinking extension", () => {
 });
 
 async function startPi(
-  config: { key: string | undefined } = { key: "ctrl+shift+s" }
+  config: { key?: string | undefined; buttonDelayMs?: number } = {}
 ): Promise<FakePi> {
   const extension = await loadGeneratedExtension(
     stopThinkingExtensionSource({
-      key: config.key,
+      key: "key" in config ? config.key : "ctrl+shift+s",
+      // Most tests look at the button itself, so they show it at once.
+      buttonDelayMs: config.buttonDelayMs ?? 0,
       engines: [
         { provider: "llama-cpp", engine: "llama.cpp" },
         { provider: "llama-server", engine: "llama-server" },
