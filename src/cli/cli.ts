@@ -58,6 +58,8 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       await writePiThemes(options)
     );
     if (options.web) {
+      // Web mode serves until it is stopped, so report connection notes before it starts.
+      if (connection.warnings.length > 0) process.stderr.write(connectionStatus(connection));
       return { code: await launchWebRuntime(app, options), stdout: "", stderr: "" };
     }
     return options.acp
