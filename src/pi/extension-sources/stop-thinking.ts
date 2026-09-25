@@ -36,6 +36,9 @@ const widgetKey = "localpi-stop-thinking";
 const instruction = "Stop thinking now. Give your answer based on the reasoning you have so far.";
 const buttonLabel = "[ Stop thinking and answer ]";
 const stopNotice = "Stopped thinking. Answering now.";
+// Pi's default outputPad, so the button lines up with the streaming text. A widget does not
+// receive the configured value.
+const buttonPad = 1;
 
 type ContentBlock = {
   readonly type?: string;
@@ -68,6 +71,7 @@ type MouseEventLike = {
   readonly type: string;
   readonly button: string;
   readonly x: number;
+  readonly y: number;
 };
 
 type StopRequest = {
@@ -117,11 +121,14 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     buttonVisible = true;
     ctx.ui.setWidget(widgetKey, (_tui: unknown, theme: ThemeLike) => ({
       render(width: number): string[] {
-        return [buttonLine(theme, width)];
+        // The empty second line keeps the button away from Pi's working line below it.
+        return [buttonLine(theme, width), ""];
       },
       invalidate(): void {},
       handleMouse(event: MouseEventLike) {
-        if (event.button !== "left" || event.x >= buttonLabel.length) {
+        const onButton =
+          event.y === 0 && event.x >= buttonPad && event.x < buttonPad + buttonLabel.length;
+        if (event.button !== "left" || !onButton) {
           return undefined;
         }
         if (event.type === "click" && latestContext !== undefined) {
@@ -265,7 +272,8 @@ function thinkingText(message: MessageLike): string {
 
 function buttonLine(theme: ThemeLike, width: number): string {
   const hint = shortcut === undefined ? "" : \`  \${shortcut}\`;
-  return fit(theme.fg("accent", buttonLabel) + theme.fg("dim", hint), buttonLabel + hint, width);
+  const pad = " ".repeat(buttonPad);
+  return pad + fit(theme.fg("accent", buttonLabel) + theme.fg("dim", hint), buttonLabel + hint, width - pad.length);
 }
 
 // Styled text cannot be cut safely, so a line that does not fit falls back to plain text.
