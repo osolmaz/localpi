@@ -289,6 +289,20 @@ describe("generated localpi stop thinking extension", () => {
     expect(replaced).toBeUndefined();
   });
 
+  it("renders the stop notice padded like assistant text with an empty line above", async () => {
+    const pi = await startPi();
+    const renderer = pi.renderers.get("localpi-stop-thinking") as (
+      message: unknown,
+      options: { expanded: boolean; outputPad: number },
+      theme: FakeTheme
+    ) => { render(width: number): string[] };
+
+    const component = renderer({}, { expanded: false, outputPad: 1 }, plainTheme);
+
+    expect(component.render(80)).toEqual(["", " Stopped thinking. Answering now."]);
+    expect(component.render(9)).toEqual(["", " Stopped "]);
+  });
+
   it("drops the stop when the model finished before the abort landed", async () => {
     const pi = await startPi();
     const ctx = context();
