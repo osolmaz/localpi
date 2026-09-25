@@ -292,6 +292,7 @@ function options(stateDir: string): LocalpiOptions {
     webOpen: true,
     webHost: "127.0.0.1",
     webAllowedHosts: [],
+    webTheme: "latte",
     status: false,
     stop: false,
     list: false,

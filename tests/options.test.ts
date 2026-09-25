@@ -119,6 +119,11 @@ describe("localpi option parsing", () => {
       webHost: "100.64.0.1",
       webAllowedHosts: ["box", "box.tailnet.ts.net"]
     });
+    expect(parseLocalpiArgs([]).webTheme).toBe("latte");
+    expect(parseLocalpiArgs(["--web-theme", "frappe"]).webTheme).toBe("frappe");
+    expect(() => parseLocalpiArgs(["--web-theme", "dracula"])).toThrow(
+      "unknown web theme dracula; expected latte, frappe, macchiato, or mocha"
+    );
     expect(() => parseLocalpiArgs(["--web-port", "-1"])).toThrow(
       "expected a non-negative integer, got -1"
     );
@@ -397,6 +402,7 @@ describe("localpi environment defaults", () => {
     "LOCALPI_WEB_OPEN",
     "LOCALPI_WEB_HOST",
     "LOCALPI_WEB_ALLOWED_HOSTS",
+    "LOCALPI_WEB_THEME",
     "LOCALPI_TUI_MODE"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
@@ -437,12 +443,14 @@ describe("localpi environment defaults", () => {
     process.env["LOCALPI_WEB_OPEN"] = "0";
     process.env["LOCALPI_WEB_HOST"] = "100.64.0.2";
     process.env["LOCALPI_WEB_ALLOWED_HOSTS"] = "box";
+    process.env["LOCALPI_WEB_THEME"] = "mocha";
     expect(parseLocalpiArgs([])).toMatchObject({
       web: true,
       webPort: 9000,
       webOpen: false,
       webHost: "100.64.0.2",
-      webAllowedHosts: ["box"]
+      webAllowedHosts: ["box"],
+      webTheme: "mocha"
     });
   });
 

@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { normalizeBaseUrl } from "../llm/openai.js";
+import { catppuccinFlavors, type CatppuccinFlavor } from "./catppuccin.js";
 
 export type RuntimeKind =
   | "auto"
@@ -87,6 +88,7 @@ export type LocalpiOptions = {
   readonly webOpen: boolean;
   readonly webHost: string;
   readonly webAllowedHosts: readonly string[];
+  readonly webTheme: CatppuccinFlavor;
   readonly status: boolean;
   readonly stop: boolean;
   readonly list: boolean;
@@ -151,6 +153,7 @@ export function defaultOptions(): LocalpiOptions {
     webOpen: envBoolean("LOCALPI_WEB_OPEN", true),
     webHost: envString("LOCALPI_WEB_HOST", "127.0.0.1"),
     webAllowedHosts: parseHostList(envString("LOCALPI_WEB_ALLOWED_HOSTS", "")),
+    webTheme: parseWebTheme(envString("LOCALPI_WEB_THEME", "latte")),
     status: false,
     stop: false,
     list: false,
@@ -240,6 +243,8 @@ export function usage(): string {
     "  --web-allowed-hosts <names>",
     "                          extra host names for the web page, comma-separated",
     "                          (LOCALPI_WEB_ALLOWED_HOSTS)",
+    "  --web-theme <flavor>    web mode Catppuccin flavor: latte, frappe, macchiato, or mocha",
+    "                          (LOCALPI_WEB_THEME, default: latte)",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -385,6 +390,7 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--port": (options, value) => ({ ...options, port: parsePositiveInteger(value) }),
   "--web-port": (options, value) => ({ ...options, webPort: parseNonNegativeInteger(value) }),
   "--web-host": (options, value) => ({ ...options, webHost: value }),
+  "--web-theme": (options, value) => ({ ...options, webTheme: parseWebTheme(value) }),
   "--web-allowed-hosts": (options, value) => ({
     ...options,
     webAllowedHosts: parseHostList(value)
@@ -631,6 +637,15 @@ function parseModelThinkingFormat(value: string): ModelThinkingFormat {
   throw new Error(
     `unknown model thinking format ${value}; expected deepseek or qwen-chat-template`
   );
+}
+
+export function parseWebTheme(value: string): CatppuccinFlavor {
+  for (const flavor of catppuccinFlavors) {
+    if (value === flavor) {
+      return flavor;
+    }
+  }
+  throw new Error(`unknown web theme ${value}; expected latte, frappe, macchiato, or mocha`);
 }
 
 function parseHostList(value: string): readonly string[] {

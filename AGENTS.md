@@ -132,9 +132,11 @@ Concrete examples:
 
 - Keep the browser UI in `@osolmaz/pi-factory-web`. localpi only builds the app definition and calls
   `runPiWebApp` from `src/pi/web.ts`; do not add a web server or page code to localpi.
-- Build the web theme and the web Pi theme from the Latte palette in `src/localpi/catppuccin.ts`.
+- Build the web theme and the web Pi theme from the same Catppuccin flavor in
+  `src/localpi/catppuccin.ts`: Latte by default, `--web-theme`/`LOCALPI_WEB_THEME` for Frappé,
+  Macchiato, or Mocha. Terminal launches keep Mocha.
 - Keep every web setting a flag plus an environment variable: `--web`, `--web-port`, `--no-browser`,
-  `--web-host`, `--web-allowed-hosts`.
+  `--web-host`, `--web-allowed-hosts`, `--web-theme`.
 - Keep the default listen address on loopback. A non-loopback host is opt-in.
 
 ## Thinking

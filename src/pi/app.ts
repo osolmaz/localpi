@@ -67,7 +67,11 @@ function piCommand(options: LocalpiOptions, themePath: string | undefined): Loca
     piCommand: options.piCommand,
     forwardedArgs: [
       ...localpiSkillsArgs(options.skills, options.stateDir),
-      ...localpiThemeArgs(themePath, options.forwardedArgs, options.web ? "latte" : "mocha"),
+      ...localpiThemeArgs(
+        themePath,
+        options.forwardedArgs,
+        options.web ? options.webTheme : "mocha"
+      ),
       // Web mode picks the TUI mode itself: fullscreen, so clicks reach Pi.
       ...(options.web ? [] : localpiTuiModeArgs(options)),
       ...(options.demo ? demoForwardedArgs(options.forwardedArgs) : options.forwardedArgs)

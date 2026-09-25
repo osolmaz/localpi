@@ -1,8 +1,8 @@
 // Catppuccin palettes. Source: https://catppuccin.com/palette (MIT).
 //
 // Mocha has two consumers: the Pi theme localpi writes for each terminal session, and localpi's own
-// terminal output. Keep both on this palette so the launcher and the session match. Latte is the
-// light flavor for web mode, where the page and the Pi theme share it.
+// terminal output. Keep both on this palette so the launcher and the session match. Web mode uses
+// one flavor for the page and the Pi theme, Latte by default.
 export const catppuccinMocha = {
   rosewater: "#f5e0dc",
   flamingo: "#f2cdcd",
@@ -63,13 +63,80 @@ export const catppuccinLatte: Readonly<Record<CatppuccinColor, string>> = {
   crust: "#dce0e8"
 };
 
-export type CatppuccinFlavor = "mocha" | "latte";
+export const catppuccinFrappe: Readonly<Record<CatppuccinColor, string>> = {
+  rosewater: "#f2d5cf",
+  flamingo: "#eebebe",
+  pink: "#f4b8e4",
+  mauve: "#ca9ee6",
+  red: "#e78284",
+  maroon: "#ea999c",
+  peach: "#ef9f76",
+  yellow: "#e5c890",
+  green: "#a6d189",
+  teal: "#81c8be",
+  sky: "#99d1db",
+  sapphire: "#85c1dc",
+  blue: "#8caaee",
+  lavender: "#babbf1",
+  text: "#c6d0f5",
+  subtext1: "#b5bfe2",
+  subtext0: "#a5adce",
+  overlay2: "#949cbb",
+  overlay1: "#838ba7",
+  overlay0: "#737994",
+  surface2: "#626880",
+  surface1: "#51576d",
+  surface0: "#414559",
+  base: "#303446",
+  mantle: "#292c3c",
+  crust: "#232634"
+};
+
+export const catppuccinMacchiato: Readonly<Record<CatppuccinColor, string>> = {
+  rosewater: "#f4dbd6",
+  flamingo: "#f0c6c6",
+  pink: "#f5bde6",
+  mauve: "#c6a0f6",
+  red: "#ed8796",
+  maroon: "#ee99a0",
+  peach: "#f5a97f",
+  yellow: "#eed49f",
+  green: "#a6da95",
+  teal: "#8bd5ca",
+  sky: "#91d7e3",
+  sapphire: "#7dc4e4",
+  blue: "#8aadf4",
+  lavender: "#b7bdf8",
+  text: "#cad3f5",
+  subtext1: "#b8c0e0",
+  subtext0: "#a5adcb",
+  overlay2: "#939ab7",
+  overlay1: "#8087a2",
+  overlay0: "#6e738d",
+  surface2: "#5b6078",
+  surface1: "#494d64",
+  surface0: "#363a4f",
+  base: "#24273a",
+  mantle: "#1e2030",
+  crust: "#181926"
+};
+
+export type CatppuccinFlavor = "latte" | "frappe" | "macchiato" | "mocha";
+
+export const catppuccinFlavors: readonly CatppuccinFlavor[] = [
+  "latte",
+  "frappe",
+  "macchiato",
+  "mocha"
+];
 
 export const catppuccinPalettes: Readonly<
   Record<CatppuccinFlavor, Readonly<Record<CatppuccinColor, string>>>
 > = {
-  mocha: catppuccinMocha,
-  latte: catppuccinLatte
+  latte: catppuccinLatte,
+  frappe: catppuccinFrappe,
+  macchiato: catppuccinMacchiato,
+  mocha: catppuccinMocha
 };
 
 export type OutputStream = "stdout" | "stderr";
