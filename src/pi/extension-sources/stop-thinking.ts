@@ -167,22 +167,30 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   pi.on("message_end", (event, ctx) => {
     const message = event.message as MessageLike;
     if (message.role !== "assistant") {
-      return;
+      return undefined;
     }
     thinking = undefined;
     hideButton(ctx);
-    if (requested !== undefined) {
-      if (message.stopReason === "aborted") {
-        // The final aborted message holds every thinking token that arrived before the abort.
-        const finalThinking = thinkingText(message);
-        if (finalThinking.length >= requested.thinking.length) {
-          requested.thinking = finalThinking;
-        }
-      } else {
-        // The model finished on its own before the abort landed, so there is nothing to stop.
-        requested = undefined;
-      }
+    if (requested === undefined) {
+      return undefined;
     }
+    if (message.stopReason !== "aborted") {
+      // The model finished on its own before the abort landed, so there is nothing to stop.
+      requested = undefined;
+      return undefined;
+    }
+    // The final aborted message holds every thinking token that arrived before the abort.
+    const finalThinking = thinkingText(message);
+    if (finalThinking.length >= requested.thinking.length) {
+      requested.thinking = finalThinking;
+    }
+    // The user ended this thinking on purpose, so it finishes as a normal stop. Pi then shows the
+    // stop notice below instead of "Operation aborted". The run still ends, because Pi records
+    // the abort request separately from the message.
+    const { errorMessage: _errorMessage, ...finished } = event.message as typeof event.message & {
+      errorMessage?: string;
+    };
+    return { message: { ...finished, stopReason: "stop" } as typeof event.message };
   });
 
   pi.on("agent_settled", () => {
