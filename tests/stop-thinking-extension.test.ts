@@ -191,7 +191,7 @@ describe("generated localpi stop thinking extension", () => {
     expect(stringContent).toMatchObject({ continue_final_message: "content" });
   });
 
-  it("clears the continuation after the answer arrives", async () => {
+  it("clears the continuation when the continuation run settles", async () => {
     const pi = await startPi();
     const ctx = context();
 
@@ -201,6 +201,7 @@ describe("generated localpi stop thinking extension", () => {
       ctx
     );
     await pi.handlers.get("message_end")?.(end("stop", [text("4")]), ctx);
+    await pi.handlers.get("agent_settled")?.({}, ctx);
     const later = await pi.handlers.get("before_provider_request")?.(
       { payload: request([instructionMessage()]) },
       ctx
@@ -225,6 +226,34 @@ describe("generated localpi stop thinking extension", () => {
     );
 
     expect(retry).toMatchObject({ continue_final_message: "content" });
+  });
+
+  it("stops again after a continuation on an engine it does not rewrite", async () => {
+    const pi = await startPi();
+    const ctx = context("local-openai");
+
+    await stopDuringThinking(pi, ctx, "Hmm");
+    await pi.handlers.get("before_provider_request")?.(
+      { payload: request([instructionMessage()]) },
+      ctx
+    );
+    await pi.handlers.get("message_end")?.(end("stop", [text("4")]), ctx);
+    await pi.handlers.get("agent_settled")?.({}, ctx);
+    await stopDuringThinking(pi, ctx, "More");
+
+    expect(ctx.aborts).toBe(2);
+    expect(pi.sent).toHaveLength(2);
+  });
+
+  it("stops again when the continuation run starts thinking again", async () => {
+    const pi = await startPi();
+    const ctx = context("local-openai");
+
+    await stopDuringThinking(pi, ctx, "Hmm");
+    await pi.handlers.get("message_update")?.(update([thinking("Thinking again")]), ctx);
+    await pi.commands.get("stop-thinking")?.("", ctx);
+
+    expect(ctx.aborts).toBe(2);
   });
 
   it("drops the stop when the model finished before the abort landed", async () => {

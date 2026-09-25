@@ -84,19 +84,18 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   let buttonVisible = false;
   // A stop that waits for the aborted request to settle.
   let requested: StopRequest | undefined;
-  // A stop whose new turn has started; the next provider request carries the continuation.
+  // A stop whose new turn runs now. Its provider requests carry the continuation until the run
+  // settles, so a retry after an error still continues the thinking.
   let continuation: StopRequest | undefined;
-  let rewritten = false;
 
   function reset(): void {
     thinking = undefined;
     requested = undefined;
     continuation = undefined;
-    rewritten = false;
   }
 
   function stop(ctx: StopContext): void {
-    if (requested !== undefined || continuation !== undefined) {
+    if (requested !== undefined) {
       return;
     }
     if (thinking === undefined) {
@@ -183,21 +182,17 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
         // The model finished on its own before the abort landed, so there is nothing to stop.
         requested = undefined;
       }
-      return;
-    }
-    if (continuation !== undefined && rewritten && message.stopReason !== "error") {
-      continuation = undefined;
-      rewritten = false;
     }
   });
 
   pi.on("agent_settled", () => {
     if (requested === undefined) {
+      // The continuation run has settled, whatever the engine did with it.
+      continuation = undefined;
       return;
     }
     continuation = requested;
     requested = undefined;
-    rewritten = false;
     pi.sendMessage({ customType, content: instruction, display: true }, { triggerTurn: true });
   });
 
@@ -205,11 +200,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     if (continuation === undefined) {
       return undefined;
     }
-    const payload = continuationPayload(event.payload, continuation);
-    if (payload !== undefined) {
-      rewritten = true;
-    }
-    return payload;
+    return continuationPayload(event.payload, continuation);
   });
 
   pi.registerMessageRenderer(customType, (_message, _options, theme) => ({
