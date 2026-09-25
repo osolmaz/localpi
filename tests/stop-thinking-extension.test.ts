@@ -540,6 +540,21 @@ describe("generated localpi stop thinking extension", () => {
     expect(pi.sent).toHaveLength(0);
   });
 
+  it("resets the bounded reply continuation on a new session", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const pi = await startPi({ continuationLimit: 1 });
+    const ctx = context();
+    await dispatchTurnEnd(pi, "length", [text("First answer")], ctx);
+    await dispatchTurnEnd(pi, "length", [text("Still cut off")], ctx);
+    expect(stderr.mock.calls.map(([line]) => String(line))).toContain(
+      "localpi: reply was cut off again after 1 continuation; stopping now\n"
+    );
+
+    await pi.handlers.get("session_start")?.({}, ctx);
+    await dispatchTurnEnd(pi, "length", [text("Next answer")], ctx);
+    expect(pi.followUps).toHaveLength(2);
+  });
+
   it("does not continue errors, normal stops, tool turns or a manual stop", async () => {
     const pi = await startPi({ continuationLimit: 2 });
     const ctx = context();
