@@ -128,6 +128,15 @@ Concrete examples:
   forwarded `--tui-mode` wins, `LOCALPI_TUI_MODE` sets the default, and non-interactive launches get
   no TUI flag.
 
+## Web Mode
+
+- Keep the browser UI in `@osolmaz/pi-factory-web`. localpi only builds the app definition and calls
+  `runPiWebApp` from `src/pi/web.ts`; do not add a web server or page code to localpi.
+- Build the web theme and the web Pi theme from the Latte palette in `src/localpi/catppuccin.ts`.
+- Keep every web setting a flag plus an environment variable: `--web`, `--web-port`, `--no-browser`,
+  `--web-host`, `--web-allowed-hosts`.
+- Keep the default listen address on loopback. A non-loopback host is opt-in.
+
 ## Thinking
 
 Pi owns the thinking level. localpi starts Pi from the remembered level and must not reimplement the control.

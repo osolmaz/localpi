@@ -1,17 +1,23 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { catppuccinMocha } from "../localpi/catppuccin.js";
+import { catppuccinPalettes, type CatppuccinFlavor } from "../localpi/catppuccin.js";
 
 export const localpiThemeName = "catppuccin-mocha";
+
+export function catppuccinThemeName(flavor: CatppuccinFlavor): string {
+  return `catppuccin-${flavor}`;
+}
 
 const themeSchema =
   "https://raw.githubusercontent.com/earendil-works/pi/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json";
 
-// Tool status cards need a dark surface with a visible success or failure cast. Both values are the
-// Catppuccin base surface tinted with green and red.
-const toolSuccessSurface = "#24352f";
-const toolErrorSurface = "#3b2633";
+// Tool status cards need a surface with a visible success or failure cast. Each value is the
+// flavor's base surface tinted with green and red.
+const toolSurfaces: Readonly<Record<CatppuccinFlavor, { success: string; error: string }>> = {
+  mocha: { success: "#24352f", error: "#3b2633" },
+  latte: { success: "#dae9d6", error: "#f2d7dd" }
+};
 
 export type PiThemeFile = {
   readonly $schema: string;
@@ -25,13 +31,14 @@ export type PiThemeFile = {
   };
 };
 
-export function localpiThemePath(stateDir: string): string {
-  return path.join(stateDir, "pi-themes", `${localpiThemeName}.json`);
+export function localpiThemePath(stateDir: string, flavor: CatppuccinFlavor = "mocha"): string {
+  return path.join(stateDir, "pi-themes", `${catppuccinThemeName(flavor)}.json`);
 }
 
 export function localpiThemeArgs(
   themePath: string | undefined,
-  forwardedArgs: readonly string[]
+  forwardedArgs: readonly string[],
+  flavor: CatppuccinFlavor = "mocha"
 ): readonly string[] {
   if (themePath === undefined) {
     return [];
@@ -40,31 +47,33 @@ export function localpiThemeArgs(
   // the user did not ask for another theme in the same command line.
   return hasForwardedFlag(forwardedArgs, "--use-theme")
     ? ["--theme", themePath]
-    : ["--theme", themePath, "--use-theme", localpiThemeName];
+    : ["--theme", themePath, "--use-theme", catppuccinThemeName(flavor)];
 }
 
 export async function writeLocalpiTheme(
   stateDir: string,
-  forwardedArgs: readonly string[]
+  forwardedArgs: readonly string[],
+  flavor: CatppuccinFlavor = "mocha"
 ): Promise<string | undefined> {
   if (hasForwardedFlag(forwardedArgs, "--no-themes")) {
     return undefined;
   }
-  const themePath = localpiThemePath(stateDir);
+  const themePath = localpiThemePath(stateDir, flavor);
   await mkdir(path.dirname(themePath), { recursive: true });
-  await writeFile(themePath, catppuccinThemeSource(), "utf8");
+  await writeFile(themePath, catppuccinThemeSource(flavor), "utf8");
   return themePath;
 }
 
-export function catppuccinThemeSource(): string {
-  return `${JSON.stringify(catppuccinTheme(), null, 2)}\n`;
+export function catppuccinThemeSource(flavor: CatppuccinFlavor = "mocha"): string {
+  return `${JSON.stringify(catppuccinTheme(flavor), null, 2)}\n`;
 }
 
-export function catppuccinTheme(): PiThemeFile {
+export function catppuccinTheme(flavor: CatppuccinFlavor = "mocha"): PiThemeFile {
+  const palette = catppuccinPalettes[flavor];
   return {
     $schema: themeSchema,
-    name: localpiThemeName,
-    vars: { ...catppuccinMocha },
+    name: catppuccinThemeName(flavor),
+    vars: { ...palette },
     colors: {
       accent: "lavender",
       border: "surface2",
@@ -88,8 +97,8 @@ export function catppuccinTheme(): PiThemeFile {
       customMessageText: "text",
       customMessageLabel: "mauve",
       toolPendingBg: "mantle",
-      toolSuccessBg: toolSuccessSurface,
-      toolErrorBg: toolErrorSurface,
+      toolSuccessBg: toolSurfaces[flavor].success,
+      toolErrorBg: toolSurfaces[flavor].error,
       toolTitle: "blue",
       toolOutput: "subtext0",
       mdHeading: "peach",
@@ -124,9 +133,9 @@ export function catppuccinTheme(): PiThemeFile {
       bashMode: "green"
     },
     export: {
-      pageBg: "#11111b",
-      cardBg: "#1e1e2e",
-      infoBg: "#313244"
+      pageBg: palette.crust,
+      cardBg: palette.base,
+      infoBg: palette.surface0
     }
   };
 }

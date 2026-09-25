@@ -2,9 +2,10 @@ import { readFile } from "node:fs/promises";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { catppuccinMocha } from "../src/localpi/catppuccin.js";
+import { catppuccinLatte, catppuccinMocha } from "../src/localpi/catppuccin.js";
 import {
   catppuccinTheme,
+  catppuccinThemeName,
   catppuccinThemeSource,
   localpiThemeArgs,
   localpiThemeName,
@@ -142,5 +143,24 @@ describe("localpi Catppuccin theme", () => {
     ]);
     expect(localpiThemeArgs(themePath, ["--use-theme", "light"])).toEqual(["--theme", themePath]);
     expect(localpiThemeArgs(themePath, ["--use-theme=light"])).toEqual(["--theme", themePath]);
+  });
+  it("builds a Latte theme for web mode from the same palette module", async () => {
+    const theme = catppuccinTheme("latte");
+    expect(theme.name).toBe(catppuccinThemeName("latte"));
+    expect(theme.vars["base"]).toBe(catppuccinLatte.base);
+    expect(theme.export.pageBg).toBe(catppuccinLatte.crust);
+    expect(theme.colors["toolSuccessBg"]).not.toBe(catppuccinTheme().colors["toolSuccessBg"]);
+    const stateDir = await makeTemporaryDir("localpi-theme-latte-");
+    const themePath = await writeLocalpiTheme(stateDir, [], "latte");
+    expect(themePath).toBe(localpiThemePath(stateDir, "latte"));
+    expect(JSON.parse(await readFile(themePath ?? "", "utf8"))).toMatchObject({
+      name: "catppuccin-latte"
+    });
+    expect(localpiThemeArgs(themePath, [], "latte")).toEqual([
+      "--theme",
+      themePath,
+      "--use-theme",
+      "catppuccin-latte"
+    ]);
   });
 });

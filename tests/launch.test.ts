@@ -172,6 +172,24 @@ describe("Pi launch plan", () => {
     expect(plan.args.indexOf("--tui-mode")).toBeLessThan(plan.args.indexOf("hello"));
   });
 
+  it("uses the Latte theme and leaves the TUI mode to the web runner in web mode", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const themePath = "/tmp/localpi-state/pi-themes/catppuccin-latte.json";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        { ...options(stateDir), web: true },
+        connection("gemma-4-e4b-it"),
+        { paths: [], env: {}, systemPrompt: "localpi prompt" },
+        themePath
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args[plan.args.indexOf("--use-theme") + 1]).toBe("catppuccin-latte");
+    expect(plan.args[plan.args.indexOf("--theme") + 1]).toBe(themePath);
+    expect(plan.args).not.toContain("--tui-mode");
+  });
+
   it("adds no theme arguments when Pi themes are disabled", async () => {
     const stateDir = "/tmp/localpi-state";
     const plan = await createPiLaunchPlan(
@@ -287,6 +305,11 @@ function options(stateDir: string): LocalpiOptions {
     demoFollowupPromptFile: undefined,
     acp: false,
     acpFromCli: false,
+    web: false,
+    webPort: 0,
+    webOpen: true,
+    webHost: "127.0.0.1",
+    webAllowedHosts: [],
     status: false,
     stop: false,
     list: false,

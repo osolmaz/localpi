@@ -289,6 +289,21 @@ Pi routes mouse input only in fullscreen mode, so localpi adds `--tui-mode fulls
 interactive launch. A forwarded `--tui-mode` wins, `LOCALPI_TUI_MODE` sets the default, and print,
 JSON, RPC, and ACP launches get no TUI flag.
 
+## Web Mode
+
+`localpi --web` serves localpi in the browser through `@osolmaz/pi-factory-web`, with the same Pi
+app definition as a terminal launch.
+
+- The page lists the saved sessions for the working directory and runs one localpi Pi process per
+  open session in a ghostty-web terminal. Sessions can be resumed, renamed, and deleted.
+- Web mode uses the Catppuccin Latte palette for the page and writes a `catppuccin-latte` Pi theme.
+  Terminal launches keep Catppuccin Mocha.
+- The web runner starts Pi in fullscreen mode, so localpi adds no `--tui-mode` flag in web mode.
+- The server listens on `--web-host` (default `127.0.0.1`), answers to the loopback names, the listen
+  host, and `--web-allowed-hosts`, and requires the random token from the printed URL.
+- Web mode rejects `--acp`, `--demo`, and forwarded `-p`, `--print`, or `--mode`. An immediate
+  command such as `--list` wins over an exported `LOCALPI_WEB`.
+
 ## Out Of Scope
 
 - `--final-schema`
