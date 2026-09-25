@@ -2,7 +2,7 @@ import { paint } from "./catppuccin.js";
 
 import {
   formatCatalogWarning,
-  managedCapabilityConfig,
+  llamaServerThinkingConfig,
   type CatalogModel,
   type ModelCatalog
 } from "./catalog.js";
@@ -57,7 +57,8 @@ export function catalogModelFromModelInfo(
   baseUrl: string,
   model: { readonly id: string; readonly contextWindow?: number },
   options: LocalpiOptions,
-  contextWindow?: number
+  contextWindow?: number,
+  thinkingSwitch?: boolean
 ): CatalogModel {
   return {
     providerId,
@@ -68,7 +69,9 @@ export function catalogModelFromModelInfo(
     aliases: [],
     displayName: `${providerName} / ${model.id}`,
     maxTokens: options.maxTokens,
-    ...(runtime === "managed-llama-server" ? managedCapabilityConfig(model.id, options) : {}),
+    ...(runtime === "managed-llama-server"
+      ? llamaServerThinkingConfig(options, thinkingSwitch)
+      : {}),
     capabilities: ["text"],
     availability: "loaded",
     ...optionalContextWindow(contextWindow ?? model.contextWindow)
@@ -82,7 +85,8 @@ export function connectionCatalogModels(
   baseUrl: string,
   modelIds: readonly string[],
   options: LocalpiOptions,
-  contextWindow?: number
+  contextWindow?: number,
+  thinkingSwitches: ReadonlyMap<string, boolean | undefined> = new Map()
 ): readonly CatalogModel[] {
   return modelIds.map((modelId) =>
     catalogModelFromModelInfo(
@@ -92,7 +96,8 @@ export function connectionCatalogModels(
       baseUrl,
       contextWindow === undefined ? { id: modelId } : { id: modelId, contextWindow },
       options,
-      contextWindow
+      contextWindow,
+      thinkingSwitches.get(modelId)
     )
   );
 }

@@ -60,6 +60,54 @@ export async function fetchServerProps(
   };
 }
 
+/**
+ * Ask a llama.cpp server whether a model's chat template honors the thinking switch. The server
+ * renders a tiny prompt twice, with `enable_thinking` on and off, and the answer is whether the two
+ * prompts differ. `/apply-template` generates nothing, so the probe is cheap. The result is
+ * undefined when the server cannot answer, for example another engine or an unloaded model.
+ */
+export async function probeThinkingSwitch(
+  baseUrl: string,
+  modelId: string,
+  timeoutMs = 3000,
+  fetcher: Fetcher = fetch
+): Promise<boolean | undefined> {
+  try {
+    const [on, off] = await Promise.all(
+      [true, false].map((enableThinking) =>
+        renderPrompt(baseUrl, modelId, enableThinking, timeoutMs, fetcher)
+      )
+    );
+    return on === undefined || off === undefined ? undefined : on !== off;
+  } catch {
+    return undefined;
+  }
+}
+
+async function renderPrompt(
+  baseUrl: string,
+  modelId: string,
+  enableThinking: boolean,
+  timeoutMs: number,
+  fetcher: Fetcher
+): Promise<string | undefined> {
+  const response = await fetcher(`${serverRootUrl(baseUrl)}/apply-template`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{ role: "user", content: "hi" }],
+      chat_template_kwargs: { enable_thinking: enableThinking }
+    }),
+    signal: AbortSignal.timeout(timeoutMs)
+  });
+  if (!response.ok) {
+    return undefined;
+  }
+  const payload: unknown = await response.json();
+  return optionalString(asObject(payload, "apply-template response")["prompt"]);
+}
+
 export async function resolveLocalModel(
   baseUrl: string,
   requestedModel: string,

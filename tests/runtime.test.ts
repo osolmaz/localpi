@@ -395,55 +395,80 @@ describe("runtime resolution", () => {
     ).rejects.toThrow("--runtime openai-compatible requires --base-url");
   });
 
-  it("prefers DeepSeek thinking format for DeepSeek distill Qwen model ids", async () => {
-    const baseUrl = await startModelServer("DeepSeek-R1-Distill-Qwen-32B");
-
-    await expect(
-      resolveRuntime({ ...options(), runtime: "lmstudio", baseUrl, model: "auto" })
-    ).resolves.toMatchObject({
-      catalogModels: [
-        {
-          modelId: "DeepSeek-R1-Distill-Qwen-32B",
-          reasoning: true,
-          thinkingFormat: "deepseek"
-        }
-      ]
-    });
+  it("never guesses thinking controls from a model name", async () => {
+    const names = [
+      "DeepSeek-R1-Distill-Qwen-32B",
+      "qwen3.6-35b-a3b",
+      "gemma-4-26b-it",
+      "model-thinking"
+    ];
+    for (const runtime of ["lmstudio", "vllm"] as const) {
+      const baseUrl = await startModelListServer(names.map((id) => ({ id })));
+      const connection = await resolveRuntime({ ...options(), runtime, baseUrl, model: "auto" });
+      for (const model of connection.catalogModels) {
+        expect(model).not.toHaveProperty("reasoning");
+        expect(model).not.toHaveProperty("thinkingFormat");
+      }
+    }
   });
 
-  it("marks Qwen3 model ids with Qwen chat-template thinking format", async () => {
-    const baseUrl = await startModelServer("qwen3.6-35b-a3b-mtp");
+  it("gives a llama.cpp model thinking controls when the server says its template has the switch", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [
+        { id: "switchable", status: { value: "loaded" } },
+        { id: "plain", status: { value: "loaded" } }
+      ],
+      { role: "router", models_autoload: false },
+      new Set(["switchable"])
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
 
-    await expect(
-      resolveRuntime({ ...options(), runtime: "lmstudio", baseUrl, model: "auto" })
-    ).resolves.toMatchObject({
-      catalogModels: [
-        {
-          modelId: "qwen3.6-35b-a3b-mtp",
-          reasoning: true,
-          thinkingFormat: "qwen-chat-template"
-        }
-      ]
+    const connection = await resolveRuntime({
+      ...options(),
+      runtime: "auto",
+      model: "switchable",
+      providersFile
     });
+
+    expect(connection.catalogModels).toEqual([
+      expect.objectContaining({
+        modelId: "switchable",
+        reasoning: true,
+        thinkingFormat: "qwen-chat-template"
+      }),
+      expect.not.objectContaining({ reasoning: expect.anything() as unknown })
+    ]);
   });
 
-  it("marks vLLM Gemma 4 model ids with Qwen chat-template thinking format", async () => {
-    const baseUrl = await startModelServer("nvidia/Gemma-4-26B-A4B-NVFP4", 32768);
+  it("lets flags and a model profile override the server's thinking report", async () => {
+    const { stateDir } = await tempRuntimeState();
+    const baseUrl = await startModelListServer(
+      [{ id: "switchable", status: { value: "loaded" } }],
+      { role: "router", models_autoload: false },
+      new Set(["switchable"])
+    );
+    const providersFile = await llamaCppProvidersFile(stateDir, baseUrl);
+    const profilePath = path.join(stateDir, "profile.json");
+    await writeFile(
+      profilePath,
+      JSON.stringify({
+        id: "switchable-profile",
+        model: "switchable",
+        base_url: baseUrl,
+        capabilities: { reasoning: true, thinking_format: "deepseek" }
+      })
+    );
+    const base = { ...options(), runtime: "auto" as const, model: "switchable", providersFile };
 
-    await expect(
-      resolveRuntime({ ...options(), runtime: "vllm", baseUrl, model: "auto" })
-    ).resolves.toMatchObject({
-      runtime: "vllm",
-      model: "nvidia/Gemma-4-26B-A4B-NVFP4",
-      catalogModels: [
-        {
-          modelId: "nvidia/Gemma-4-26B-A4B-NVFP4",
-          reasoning: true,
-          thinkingFormat: "qwen-chat-template",
-          contextWindow: 32768
-        }
-      ]
+    await expect(resolveRuntime({ ...base, modelReasoning: false })).resolves.toMatchObject({
+      catalogModels: [{ modelId: "switchable", reasoning: false }]
     });
+    await expect(resolveRuntime({ ...base, modelProfileFile: profilePath })).resolves.toMatchObject(
+      {
+        catalogModels: [{ modelId: "switchable", reasoning: true, thinkingFormat: "deepseek" }]
+      }
+    );
   });
 
   it("uses local model profiles for explicit OpenAI-compatible capabilities", async () => {
@@ -1103,19 +1128,25 @@ describe("runtime resolution", () => {
     }
   });
 
-  it("preserves reasoning metadata for already-loaded llama-server reasoning models", async () => {
-    const baseUrl = await startModelServer("gemma-4-12b-it", 32768);
+  it("reads thinking support of an already-loaded llama-server model from the server", async () => {
+    const baseUrl = await startModelListServer(
+      [{ id: "served-model", context_length: 32768 }],
+      undefined,
+      new Set(["served-model"])
+    );
 
     await expect(
       resolveRuntime({
         ...options(),
         runtime: "llama-server",
         baseUrl,
-        model: "gemma-4-12b-it"
+        model: "served-model"
       })
     ).resolves.toMatchObject({
-      model: "gemma-4-12b-it",
-      catalogModels: [{ modelId: "gemma-4-12b-it", reasoning: true }]
+      model: "served-model",
+      catalogModels: [
+        { modelId: "served-model", reasoning: true, thinkingFormat: "qwen-chat-template" }
+      ]
     });
   });
 
@@ -1638,11 +1669,33 @@ describe("runtime resolution", () => {
     return startModelListServer([{ id: model, context_length: contextWindow }]);
   }
 
+  // A fake llama.cpp server. /apply-template closes the thinking block when enable_thinking is
+  // false, but only for the models in `thinkingSwitch`, like a template that honors the switch.
   async function startModelListServer(
     models: readonly Record<string, unknown>[],
-    props?: Record<string, unknown>
+    props?: Record<string, unknown>,
+    thinkingSwitch?: ReadonlySet<string>
   ): Promise<string> {
     const server = createServer((request, response) => {
+      if (thinkingSwitch !== undefined && request.url === "/apply-template") {
+        let body = "";
+        request.on("data", (chunk: Buffer) => {
+          body += chunk.toString("utf8");
+        });
+        request.on("end", () => {
+          const input = JSON.parse(body) as {
+            model: string;
+            chat_template_kwargs: { enable_thinking: boolean };
+          };
+          const closed =
+            thinkingSwitch.has(input.model) && !input.chat_template_kwargs.enable_thinking;
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(
+            JSON.stringify({ prompt: closed ? "<think>\n\n</think>\n\n" : "<think>\n" })
+          );
+        });
+        return;
+      }
       if (request.url === "/v1/models") {
         response.writeHead(200, { "content-type": "application/json" });
         response.end(JSON.stringify({ data: models }));

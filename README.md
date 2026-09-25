@@ -105,7 +105,7 @@ Localpi launches Pi with:
 - token speed, prefill progress, and context usage while responses stream
 - a Catppuccin Mocha theme for the Pi session, written into `<state-dir>/pi-themes/`
 - skills from `<state-dir>/pi-skills/` only, so shared skill directories stay out of the session
-- bounded Gemma/llama-server reasoning controlled by `--thinking`
+- bounded llama-server reasoning controlled by `--thinking`
 - in-session `/thinking` (Pi's own command) and `/approval` (localpi's) for changing session settings
 - a stop-thinking control: `ctrl+shift+s`, a clickable button, or `/stop-thinking` ends the thinking
   phase and asks for the answer now
@@ -573,6 +573,12 @@ For managed `llama-server`, thinking levels map to server-side reasoning:
 | `xhigh`   | `--reasoning on --reasoning-budget 8192` |
 
 The fallback default is `medium`.
+
+Localpi never guesses thinking support from a model name. For a loaded llama.cpp model, it asks the
+server: it renders a prompt through `/apply-template` with thinking on and off, and when the two
+prompts differ, Pi gets thinking controls that send `chat_template_kwargs.enable_thinking`. Then
+`--thinking off` and Pi's `/thinking off` turn thinking off on the server. For vLLM, LM Studio, or
+another engine that does not report this, declare it with `--model-reasoning` or a model profile.
 
 Point at vLLM:
 

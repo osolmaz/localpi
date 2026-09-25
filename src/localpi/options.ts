@@ -275,8 +275,8 @@ export function usage(): string {
     "examples:",
     "  localpi --list",
     "  localpi --status",
-    '  localpi --model gemma-e4b -p "say ok"',
-    "  localpi --runtime lmstudio --model gemma-4-e4b-it",
+    '  localpi --model <name> -p "say ok"',
+    "  localpi --runtime lmstudio --model <model-id>",
     "  localpi -- --help"
   ].join("\n")}\n`;
 }

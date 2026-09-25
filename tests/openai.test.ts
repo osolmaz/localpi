@@ -4,6 +4,7 @@ import {
   fetchServerProps,
   listModels,
   normalizeBaseUrl,
+  probeThinkingSwitch,
   resolveLocalModel
 } from "../src/llm/openai.js";
 // Type-only module; loaded so coverage sees the file as exercised.
@@ -137,6 +138,30 @@ describe("OpenAI-compatible model discovery", () => {
       Promise.resolve(jsonResponse({ data: [{ id: "served", metadata: { n_ctx: "4096" } }] }))
     );
     expect(resolved).toMatchObject({ model: "served", contextWindow: 4096 });
+  });
+
+  it("probes whether a model's template honors the thinking switch", async () => {
+    const answers =
+      (onPrompt: string, offPrompt: string, status = 200): typeof fetch =>
+      (_url, init) => {
+        const body = JSON.parse(init?.body as string) as {
+          chat_template_kwargs: { enable_thinking: boolean };
+        };
+        const prompt = body.chat_template_kwargs.enable_thinking ? onPrompt : offPrompt;
+        return Promise.resolve(new Response(JSON.stringify({ prompt }), { status }));
+      };
+
+    await expect(
+      probeThinkingSwitch("http://x/v1", "m", 1000, answers("<think>\n", "<think></think>"))
+    ).resolves.toBe(true);
+    await expect(probeThinkingSwitch("http://x/v1", "m", 1000, answers("a", "a"))).resolves.toBe(
+      false
+    );
+    await expect(
+      probeThinkingSwitch("http://x/v1", "m", 1000, answers("a", "b", 404))
+    ).resolves.toBeUndefined();
+    const failing: typeof fetch = () => Promise.reject(new Error("offline"));
+    await expect(probeThinkingSwitch("http://x/v1", "m", 1000, failing)).resolves.toBeUndefined();
   });
 });
 
