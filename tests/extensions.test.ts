@@ -187,6 +187,25 @@ describe("Pi extensions", () => {
     }
   });
 
+  it("bakes the stop thinking key and button delay into the extension", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const bundle = await writeDefaultExtensions(
+        { ...options(stateDir), stopThinkingDelay: 2.5 },
+        { engines: [{ provider: "llama-cpp", engine: "llama.cpp" }] }
+      );
+      const stop = await readFile(
+        bundle.paths.find((entry) => path.basename(entry) === "stop-thinking.ts") ?? "",
+        "utf8"
+      );
+      expect(stop).toContain("const buttonDelayMs: number = 2500;");
+      expect(stop).toContain('const shortcut: ShortcutKey | undefined = "ctrl+shift+s";');
+      expect(stop).toContain('const nativeProviders = new Set<string>(["llama-cpp"]);');
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("passes no extension env outside demo mode", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
@@ -280,6 +299,7 @@ function options(stateDir: string): LocalpiOptions {
     skills: "own",
     tuiMode: "fullscreen",
     stopThinkingKey: "ctrl+shift+s",
+    stopThinkingDelay: 5,
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

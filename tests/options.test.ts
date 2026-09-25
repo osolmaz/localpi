@@ -81,6 +81,17 @@ describe("localpi option parsing", () => {
     }
   });
 
+  it("parses and validates the stop thinking button delay", () => {
+    expect(parseLocalpiArgs([]).stopThinkingDelay).toBe(5);
+    expect(parseLocalpiArgs(["--stop-thinking-delay", "0"]).stopThinkingDelay).toBe(0);
+    expect(parseLocalpiArgs(["--stop-thinking-delay", "2.5"]).stopThinkingDelay).toBe(2.5);
+    for (const invalid of ["-1", "five", "1e3", ".5", ""]) {
+      expect(() => parseLocalpiArgs(["--stop-thinking-delay", invalid])).toThrow(
+        `unknown stop thinking delay ${invalid}; expected a number of seconds, 0 or more`
+      );
+    }
+  });
+
   it("parses and validates thinking levels", () => {
     expect(parseLocalpiArgs(["--thinking", "low"])).toMatchObject({
       thinking: "low"
@@ -299,6 +310,7 @@ describe("localpi option parsing", () => {
     expect(text).toContain("--continue-on-truncation <n>");
     expect(text).toContain("--stop-thinking-key <key>");
     expect(text).toContain("LOCALPI_STOP_THINKING_KEY");
+    expect(text).toContain("--stop-thinking-delay <seconds>");
     expect(text).toContain("--demo");
   });
 });
@@ -329,6 +341,7 @@ describe("localpi environment defaults", () => {
     "LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE",
     "LOCALPI_CONTINUE_ON_TRUNCATION",
     "LOCALPI_STOP_THINKING_KEY",
+    "LOCALPI_STOP_THINKING_DELAY",
     "LOCALPI_TUI_MODE"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
@@ -352,6 +365,10 @@ describe("localpi environment defaults", () => {
     expect(options.tuiMode).toBe("regular");
     expect(options.stopThinkingKey).toBeUndefined();
     expect(parseLocalpiArgs(["--stop-thinking-key", "alt+s"]).stopThinkingKey).toBe("alt+s");
+
+    process.env["LOCALPI_STOP_THINKING_DELAY"] = "10";
+    expect(parseLocalpiArgs([]).stopThinkingDelay).toBe(10);
+    expect(parseLocalpiArgs(["--stop-thinking-delay", "1"]).stopThinkingDelay).toBe(1);
 
     process.env["LOCALPI_TUI_MODE"] = "tiny";
     expect(() => parseLocalpiArgs([])).toThrow(

@@ -72,6 +72,7 @@ export type LocalpiOptions = {
   readonly skills: SkillsMode;
   readonly tuiMode: TuiMode;
   readonly stopThinkingKey: string | undefined;
+  readonly stopThinkingDelay: number;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -129,6 +130,7 @@ export function defaultOptions(): LocalpiOptions {
     stopThinkingKey: parseStopThinkingKey(
       envString("LOCALPI_STOP_THINKING_KEY", defaultStopThinkingKey)
     ),
+    stopThinkingDelay: parseStopThinkingDelay(envString("LOCALPI_STOP_THINKING_DELAY", "5")),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -205,6 +207,9 @@ export function usage(): string {
     "  --stop-thinking-key <key>",
     "                          key that stops thinking and asks for the answer, or off",
     "                          (LOCALPI_STOP_THINKING_KEY=<key>, default: ctrl+shift+s)",
+    "  --stop-thinking-delay <seconds>",
+    "                          show the stop thinking button after this much thinking, 0 at once",
+    "                          (LOCALPI_STOP_THINKING_DELAY=<seconds>, default: 5)",
     "  --providers-file <path>  localpi provider registry JSON",
     "  --model-profile <path>   local model capability profile JSON",
     "  --model-reasoning <bool> override generated Pi reasoning capability",
@@ -330,6 +335,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--stop-thinking-key": (options, value) => ({
     ...options,
     stopThinkingKey: parseStopThinkingKey(value)
+  }),
+  "--stop-thinking-delay": (options, value) => ({
+    ...options,
+    stopThinkingDelay: parseStopThinkingDelay(value)
   }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
   "--context-window": (options, value) => ({
@@ -525,6 +534,16 @@ export function parseStopThinkingKey(value: string): string | undefined {
     );
   }
   return value;
+}
+
+/** Read the button delay in seconds. Zero shows the button as soon as the thinking starts. */
+export function parseStopThinkingDelay(value: string): number {
+  if (!/^(0|[1-9]\d*)(\.\d+)?$/u.test(value)) {
+    throw new Error(
+      `unknown stop thinking delay ${value}; expected a number of seconds, 0 or more`
+    );
+  }
+  return Number.parseFloat(value);
 }
 
 function isShortcutKey(key: string): boolean {
