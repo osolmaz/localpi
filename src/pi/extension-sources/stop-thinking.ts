@@ -35,6 +35,7 @@ const customType = "localpi-stop-thinking";
 const widgetKey = "localpi-stop-thinking";
 const instruction = "Stop thinking now. Give your answer based on the reasoning you have so far.";
 const buttonLabel = "[ Stop thinking and answer ]";
+const stopNotice = "Stopped thinking. Answering now.";
 
 type ContentBlock = {
   readonly type?: string;
@@ -211,9 +212,11 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     return continuationPayload(event.payload, continuation);
   });
 
-  pi.registerMessageRenderer(customType, (_message, _options, theme) => ({
+  // Match the assistant text: one empty line above, and the same left padding.
+  pi.registerMessageRenderer(customType, (_message, options, theme) => ({
     render(width: number): string[] {
-      return [fit(theme.fg("muted", "Stopped thinking. Answering now."), "Stopped thinking. Answering now.", width)];
+      const pad = " ".repeat(options.outputPad);
+      return ["", pad + fit(theme.fg("muted", stopNotice), stopNotice, width - pad.length)];
     },
     invalidate(): void {}
   }));
