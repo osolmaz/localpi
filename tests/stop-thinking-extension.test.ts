@@ -256,6 +256,39 @@ describe("generated localpi stop thinking extension", () => {
     expect(ctx.aborts).toBe(2);
   });
 
+  it("finishes the stopped message as a normal stop instead of an abort", async () => {
+    const pi = await startPi();
+    const ctx = context();
+
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
+    pi.shortcuts.get("ctrl+shift+s")?.(ctx);
+    const replaced = await pi.handlers.get("message_end")?.(
+      {
+        message: {
+          role: "assistant",
+          stopReason: "aborted",
+          errorMessage: "Request was aborted",
+          content: [thinking("Hmm")]
+        }
+      },
+      ctx
+    );
+
+    expect(replaced).toEqual({
+      message: { role: "assistant", stopReason: "stop", content: [thinking("Hmm")] }
+    });
+  });
+
+  it("leaves an abort by the user's own Escape alone", async () => {
+    const pi = await startPi();
+    const ctx = context();
+
+    await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
+    const replaced = await pi.handlers.get("message_end")?.(end("aborted", [thinking("Hmm")]), ctx);
+
+    expect(replaced).toBeUndefined();
+  });
+
   it("drops the stop when the model finished before the abort landed", async () => {
     const pi = await startPi();
     const ctx = context();
