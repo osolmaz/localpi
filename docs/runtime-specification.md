@@ -163,7 +163,7 @@ Example:
 
 When the served model id matches `model` or `id`, localpi uses the profile to generate Pi model config. `LOCALPI_MODEL_REASONING` / `LOCALPAGER_AGENT_REASONING` and `LOCALPI_MODEL_THINKING_FORMAT` / `LOCALPAGER_AGENT_THINKING_FORMAT` are explicit overrides.
 
-Name-based capability detection remains fallback behavior. Built-in vLLM Gemma 4 model ids are treated as reasoning-capable with `qwen-chat-template`, matching vLLM Gemma servers launched with `--reasoning-parser gemma4`.
+localpi never infers a capability from a model name. Thinking support comes from the flags, then the profile, then the server. For a loaded llama.cpp model, localpi posts the same one-message chat to `/apply-template` twice, with `chat_template_kwargs.enable_thinking` true and false. When the two rendered prompts differ, the chat template honors the switch, so the Pi model config gets `reasoning: true` and `thinkingFormat: "qwen-chat-template"`, which sends that generic switch. When the prompts are the same, or the endpoint fails, the model gets no thinking controls. vLLM, LM Studio, and other OpenAI-compatible servers report nothing, so a model served with a reasoning parser needs a profile with `capabilities.reasoning`.
 
 ### Image input
 

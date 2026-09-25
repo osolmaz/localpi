@@ -1,4 +1,4 @@
-import { fetchServerProps, listModels } from "../llm/openai.js";
+import { fetchServerProps, listModels, probeThinkingSwitch } from "../llm/openai.js";
 import type { ModelInfo } from "../llm/openai.js";
 import {
   getManagedLlamaServerMetadata,
@@ -124,7 +124,8 @@ function openAiCatalogModel(
   model: ModelInfo,
   options: LocalpiOptions,
   profile?: LocalModelProfile,
-  availability: ModelAvailability = "loaded"
+  availability: ModelAvailability = "loaded",
+  thinkingSwitch?: boolean
 ): CatalogModel {
   const baseUrl = config.baseUrl ?? "";
   const profileConfig = profileCapabilityConfig(profile, baseUrl, model.id);
@@ -139,7 +140,7 @@ function openAiCatalogModel(
     aliases,
     displayName: `${config.name} / ${model.id}`,
     maxTokens: profileConfig.maxTokens ?? options.maxTokens,
-    ...externalCapabilityConfig(config.id, model.id, profileConfig, options),
+    ...thinkingConfig(profileConfig, thinkingSwitch, options),
     capabilities: modelCapabilities(model, profileConfig),
     availability,
     ...(contextWindow === undefined ? {} : { contextWindow })
@@ -179,9 +180,17 @@ async function discoverLlamaCppProvider(
   const unloaded = models.filter((model) => model.status === "unloaded");
   const autoload = await llamaCppAutoload(baseUrl, options);
   const startable = autoload === true ? unloaded : [];
+  // Only a loaded model can render its template, so an unloaded one stays unknown.
+  const switches = await probeThinkingSwitches(
+    baseUrl,
+    loaded.map((model) => model.id),
+    options.timeoutMs
+  );
   return {
     models: [
-      ...loaded.map((model) => openAiCatalogModel(config, model, options, profile, "loaded")),
+      ...loaded.map((model) =>
+        openAiCatalogModel(config, model, options, profile, "loaded", switches.get(model.id))
+      ),
       ...startable.map((model) => openAiCatalogModel(config, model, options, profile, "startable"))
     ],
     warnings: llamaCppUnloadedWarnings(config, unloaded, autoload)
@@ -325,6 +334,11 @@ async function loadedLlamaModels(
     return { models: [], warnings: [] };
   }
   const managed = await getManagedLlamaServerMetadata(options);
+  const switches = await probeThinkingSwitches(
+    baseUrl,
+    models.map((model) => model.id),
+    options.timeoutMs
+  );
   return {
     models: models.map((model): CatalogModel => {
       const contextWindow =
@@ -338,7 +352,7 @@ async function loadedLlamaModels(
         aliases: aliases.filter((alias) => alias.id === model.id).map((alias) => alias.name),
         displayName: `${config.name} / ${model.id}`,
         maxTokens: options.maxTokens,
-        ...managedCapabilityConfig(model.id, options),
+        ...thinkingConfig({}, switches.get(model.id), options),
         capabilities: ["text"],
         availability: "loaded",
         ...(contextWindow === undefined ? {} : { contextWindow })
@@ -372,7 +386,7 @@ async function startableLlamaModels(
           aliases: [alias.name],
           displayName: `${config.name} / ${alias.name}`,
           maxTokens: options.maxTokens,
-          ...managedCapabilityConfig(resolved.id, options),
+          ...thinkingConfig({}, undefined, options),
           capabilities: ["text"] as const,
           availability: "startable" as const,
           ...(resolved.contextWindow === undefined ? {} : { contextWindow: resolved.contextWindow })
@@ -385,74 +399,59 @@ async function startableLlamaModels(
   return startable.filter((model): model is CatalogModel => model !== undefined);
 }
 
-function externalCapabilityConfig(
-  providerId: string,
-  modelId: string,
+/**
+ * Thinking controls for one model. The sources, strongest first: the command-line flags, the model
+ * profile, then what the server reports. A llama.cpp server reports through the thinking-switch
+ * probe; other engines report nothing, so a profile declares their thinking. When no source says
+ * anything, the model gets no thinking controls. A model name is never used to guess.
+ *
+ * Pi's `qwen-chat-template` format sends `chat_template_kwargs.enable_thinking`. Despite the name,
+ * that is llama.cpp's generic switch: the server applies `enable_thinking` to any chat template,
+ * and the probe has just shown that this model's template honors it.
+ */
+function thinkingConfig(
   profileConfig: ProfileCapabilityConfig,
+  thinkingSwitch: boolean | undefined,
   options: LocalpiOptions
 ): {
   readonly reasoning?: boolean;
   readonly thinkingFormat?: CatalogThinkingFormat;
 } {
-  const baseConfig =
-    profileConfig.reasoning !== undefined || profileConfig.thinkingFormat !== undefined
-      ? {
-          reasoning: profileConfig.reasoning,
-          thinkingFormat: profileConfig.thinkingFormat
-        }
-      : externalReasoningConfig(providerId, modelId);
+  const reported = thinkingSwitch === true;
   return withoutUndefined({
-    reasoning: options.modelReasoning ?? baseConfig.reasoning,
-    thinkingFormat: options.modelThinkingFormat ?? baseConfig.thinkingFormat
-  });
+    reasoning: options.modelReasoning ?? profileConfig.reasoning ?? (reported ? true : undefined),
+    thinkingFormat:
+      options.modelThinkingFormat ??
+      profileConfig.thinkingFormat ??
+      (reported ? ("qwen-chat-template" as const) : undefined)
+  }) as { readonly reasoning?: boolean; readonly thinkingFormat?: CatalogThinkingFormat };
 }
 
-function externalReasoningConfig(
-  providerId: string,
-  modelId: string
+/**
+ * Thinking controls for a llama-server model: the flags, then the thinking-switch probe. Pass no
+ * probe result for a model that has not started yet. The managed server also gets
+ * `--reasoning on|off` from `--thinking`, so its thinking follows the flag on the server side too.
+ */
+export function llamaServerThinkingConfig(
+  options: LocalpiOptions,
+  thinkingSwitch?: boolean
 ): {
-  readonly reasoning?: true;
+  readonly reasoning?: boolean;
   readonly thinkingFormat?: CatalogThinkingFormat;
 } {
-  const normalized = modelId.toLowerCase();
-  if (isDeepSeekThinkingModel(normalized)) {
-    return { reasoning: true, thinkingFormat: "deepseek" };
-  }
-  if (isQwenThinkingModel(normalized)) {
-    return { reasoning: true, thinkingFormat: "qwen-chat-template" };
-  }
-  if (providerId === "vllm" && isGemmaThinkingModel(normalized)) {
-    return { reasoning: true, thinkingFormat: "qwen-chat-template" };
-  }
-  return {};
+  return thinkingConfig({}, thinkingSwitch, options);
 }
 
-export function managedModelSupportsReasoning(modelId: string): boolean {
-  const normalized = modelId.toLowerCase();
-  return (
-    normalized.includes("reason") ||
-    normalized.includes("thinking") ||
-    isDeepSeekThinkingModel(normalized) ||
-    isQwenThinkingModel(normalized) ||
-    normalized.includes("gpt-oss") ||
-    isGemmaThinkingModel(normalized)
+/** Probe each model's thinking switch, keyed by model id. */
+export async function probeThinkingSwitches(
+  baseUrl: string,
+  modelIds: readonly string[],
+  timeoutMs: number
+): Promise<ReadonlyMap<string, boolean | undefined>> {
+  const switches = await Promise.all(
+    modelIds.map((modelId) => probeThinkingSwitch(baseUrl, modelId, timeoutMs))
   );
-}
-
-export function managedCapabilityConfig(
-  modelId: string,
-  options: LocalpiOptions
-): {
-  readonly reasoning?: boolean;
-  readonly thinkingFormat?: CatalogThinkingFormat;
-} {
-  return withoutUndefined({
-    reasoning: options.modelReasoning ?? managedModelSupportsReasoning(modelId),
-    thinkingFormat: options.modelThinkingFormat
-  }) as {
-    readonly reasoning?: boolean;
-    readonly thinkingFormat?: CatalogThinkingFormat;
-  };
+  return new Map(modelIds.map((modelId, index) => [modelId, switches[index]]));
 }
 
 export function runtimeCatalogWarning(
@@ -485,36 +484,6 @@ function catalogWarning(
     code,
     message: options.message
   };
-}
-
-function isDeepSeekThinkingModel(normalizedModelId: string): boolean {
-  return (
-    normalizedModelId.includes("deepseek") &&
-    (hasModelToken(normalizedModelId, "r1") ||
-      hasModelToken(normalizedModelId, "v4") ||
-      hasModelToken(normalizedModelId, "4") ||
-      normalizedModelId.includes("reason") ||
-      normalizedModelId.includes("thinking"))
-  );
-}
-
-function isQwenThinkingModel(normalizedModelId: string): boolean {
-  const qwenThinkingMarkers = [
-    "qwq",
-    "qwen3",
-    "qwen-3",
-    "qwen_3",
-    "qwen 3",
-    "qwen4",
-    "qwen-4",
-    "qwen_4",
-    "qwen 4"
-  ];
-  return (
-    qwenThinkingMarkers.some((marker) => normalizedModelId.includes(marker)) ||
-    (normalizedModelId.includes("qwen") &&
-      (normalizedModelId.includes("reason") || normalizedModelId.includes("thinking")))
-  );
 }
 
 type ProfileCapabilityConfig = {
@@ -552,14 +521,6 @@ function profileCapabilityConfig(
     contextWindow: profile.client?.contextWindow,
     maxTokens: profile.client?.maxTokens
   }) as ProfileCapabilityConfig;
-}
-
-function isGemmaThinkingModel(normalizedModelId: string): boolean {
-  return normalizedModelId.includes("gemma-4") || normalizedModelId.includes("gemma4");
-}
-
-function hasModelToken(normalizedModelId: string, token: string): boolean {
-  return normalizedModelId.split(/[^a-z0-9]+/u).includes(token);
 }
 
 function withoutUndefined<T extends Record<string, unknown>>(value: T): Partial<T> {

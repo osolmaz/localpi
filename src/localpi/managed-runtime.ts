@@ -1,3 +1,4 @@
+import { probeThinkingSwitch } from "../llm/openai.js";
 import {
   ensureLlamaServer,
   getManagedLlamaServerMetadata,
@@ -7,7 +8,8 @@ import {
   stopManagedLlamaServer
 } from "./llama-server.js";
 import {
-  managedCapabilityConfig,
+  llamaServerThinkingConfig,
+  probeThinkingSwitches,
   runtimeCatalogWarning,
   type CatalogModel,
   type CatalogWarning,
@@ -49,7 +51,8 @@ export async function resolveLlamaRuntime(options: LocalpiOptions): Promise<Runt
       runtime.baseUrl,
       runtime.availableModels,
       options,
-      runtime.contextWindow
+      runtime.contextWindow,
+      await probeThinkingSwitches(runtime.baseUrl, runtime.availableModels, options.timeoutMs)
     ),
     warnings: runtime.warnings,
     ...optionalContextWindow(options.contextWindow ?? runtime.contextWindow)
@@ -66,7 +69,7 @@ export async function resolveSelectedLlamaRuntime(
       ? await existingLlamaRuntime(options, selected.modelId)
       : undefined;
   if (existing !== undefined) {
-    const selectedModel = managedCatalogModelFromConnection(options, selected, existing);
+    const selectedModel = await managedCatalogModelFromConnection(options, selected, existing);
     return catalogRuntimeConnection(options, selectedModel, {
       models: replaceManagedLoadedModels(catalog.models, selected, existing.catalogModels),
       warnings: [
@@ -100,7 +103,7 @@ export async function customPathCatalogModel(
     aliases: [requested],
     displayName: `llama-server / ${resolved.name}`,
     maxTokens: options.maxTokens,
-    ...managedCapabilityConfig(resolved.id, options),
+    ...llamaServerThinkingConfig(options),
     capabilities: ["text"],
     availability: "startable",
     ...optionalContextWindow(options.contextWindow ?? resolved.contextWindow)
@@ -149,14 +152,20 @@ async function existingLlamaRuntime(
     return undefined;
   }
   assertCompatibleRuntimeContext(options, match.modelId, reportedContextWindow);
-  return existingRuntimeConnection(options, match, managed, reportedContextWindow);
+  const switches = await probeThinkingSwitches(
+    llamaBaseUrl(options),
+    match.models.map((model) => model.id),
+    options.timeoutMs
+  );
+  return existingRuntimeConnection(options, match, managed, reportedContextWindow, switches);
 }
 
 function existingRuntimeConnection(
   options: LocalpiOptions,
   match: ExistingModelMatch,
   managed: Awaited<ReturnType<typeof getManagedLlamaServerMetadata>>,
-  reportedContextWindow: number | undefined
+  reportedContextWindow: number | undefined,
+  switches: ReadonlyMap<string, boolean | undefined>
 ): RuntimeConnection {
   return {
     runtime: runtimeName(managed),
@@ -173,7 +182,8 @@ function existingRuntimeConnection(
         llamaBaseUrl(options),
         model,
         options,
-        model.id === match.modelId ? reportedContextWindow : model.contextWindow
+        model.id === match.modelId ? reportedContextWindow : model.contextWindow,
+        switches.get(model.id)
       )
     ),
     warnings: [],
@@ -298,7 +308,7 @@ async function startSelectedLlamaRuntime(
   await stopStaleManagedLlamaServer(options, modelForStart);
   assertNoLoadedExternalModels(catalog);
   const runtime = await ensureLlamaServer(options, modelForStart);
-  const loadedSelected = runtimeSelectedCatalogModel(options, selected, runtime);
+  const loadedSelected = await runtimeSelectedCatalogModel(options, selected, runtime);
   return catalogRuntimeConnection(options, loadedSelected, {
     models: replaceManagedLoadedModels(catalog.models, selected, [loadedSelected]),
     warnings: [
@@ -337,11 +347,11 @@ async function stopStaleManagedLlamaServer(
   }
 }
 
-function runtimeSelectedCatalogModel(
+async function runtimeSelectedCatalogModel(
   options: LocalpiOptions,
   selected: CatalogModel,
   runtime: Awaited<ReturnType<typeof ensureLlamaServer>>
-): CatalogModel {
+): Promise<CatalogModel> {
   return catalogModelFromModelInfo(
     selected.providerId,
     selected.providerName,
@@ -351,15 +361,16 @@ function runtimeSelectedCatalogModel(
       ? { id: runtime.model }
       : { id: runtime.model, contextWindow: runtime.contextWindow },
     options,
-    runtime.contextWindow
+    runtime.contextWindow,
+    await probeThinkingSwitch(runtime.baseUrl, runtime.model, options.timeoutMs)
   );
 }
 
-function managedCatalogModelFromConnection(
+async function managedCatalogModelFromConnection(
   options: LocalpiOptions,
   selected: CatalogModel,
   connection: RuntimeConnection
-): CatalogModel {
+): Promise<CatalogModel> {
   return catalogModelFromModelInfo(
     selected.providerId,
     selected.providerName,
@@ -369,7 +380,8 @@ function managedCatalogModelFromConnection(
       ? { id: connection.model }
       : { id: connection.model, contextWindow: connection.contextWindow },
     options,
-    connection.contextWindow
+    connection.contextWindow,
+    await probeThinkingSwitch(connection.baseUrl, connection.model, options.timeoutMs)
   );
 }
 
