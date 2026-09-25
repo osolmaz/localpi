@@ -7,7 +7,7 @@ type Handler = (event: unknown, ctx: FakeContext) => unknown;
 
 type WidgetComponent = {
   render(width: number): string[];
-  handleMouse(event: { type: string; button: string; x: number }): unknown;
+  handleMouse(event: { type: string; button: string; x: number; y: number }): unknown;
 };
 
 type WidgetFactory = (tui: unknown, theme: FakeTheme) => WidgetComponent;
@@ -347,8 +347,8 @@ describe("generated localpi stop thinking extension", () => {
     await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
     const widget = button(ctx);
 
-    expect(widget.render(80)).toEqual(["[ Stop thinking and answer ]  ctrl+shift+s"]);
-    expect(widget.render(10)).toEqual(["[ Stop thi"]);
+    expect(widget.render(80)).toEqual([" [ Stop thinking and answer ]  ctrl+shift+s", ""]);
+    expect(widget.render(10)).toEqual([" [ Stop th", ""]);
   });
 
   it("stops on a left click on the button", async () => {
@@ -358,11 +358,17 @@ describe("generated localpi stop thinking extension", () => {
     await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
     const widget = button(ctx);
 
-    expect(widget.handleMouse({ type: "press", button: "right", x: 2 })).toBeUndefined();
-    expect(widget.handleMouse({ type: "press", button: "left", x: 40 })).toBeUndefined();
-    expect(widget.handleMouse({ type: "press", button: "left", x: 2 })).toEqual({ handled: true });
+    expect(widget.handleMouse({ type: "press", button: "right", x: 2, y: 0 })).toBeUndefined();
+    expect(widget.handleMouse({ type: "press", button: "left", x: 40, y: 0 })).toBeUndefined();
+    expect(widget.handleMouse({ type: "press", button: "left", x: 0, y: 0 })).toBeUndefined();
+    expect(widget.handleMouse({ type: "press", button: "left", x: 2, y: 1 })).toBeUndefined();
+    expect(widget.handleMouse({ type: "press", button: "left", x: 2, y: 0 })).toEqual({
+      handled: true
+    });
     expect(ctx.aborts).toBe(0);
-    expect(widget.handleMouse({ type: "click", button: "left", x: 2 })).toEqual({ handled: true });
+    expect(widget.handleMouse({ type: "click", button: "left", x: 2, y: 0 })).toEqual({
+      handled: true
+    });
     expect(ctx.aborts).toBe(1);
     expect(ctx.widget).toBeUndefined();
   });
@@ -383,7 +389,8 @@ describe("generated localpi stop thinking extension", () => {
     await pi.handlers.get("message_update")?.(update([thinking("Hmm")]), ctx);
 
     expect(ctx.widget?.(undefined, plainTheme).render(80)).toEqual([
-      "[ Stop thinking and answer ]"
+      " [ Stop thinking and answer ]",
+      ""
     ]);
   });
 
