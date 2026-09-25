@@ -264,7 +264,13 @@ The guard changes no served limit. It reacts to the stop reason Pi reports, so a
 
 Localpi always installs the `stop-thinking.ts` Pi extension. While an assistant message is in its
 thinking phase, `ctrl+shift+s`, a click on the button above the editor, or `/stop-thinking` stops the
-thinking and asks for the answer.
+thinking and asks for the answer. `docs/stop-thinking.md` describes the implementation.
+
+- The button shows after the thinking has run for `--stop-thinking-delay` seconds
+  (`LOCALPI_STOP_THINKING_DELAY`, default `5`, `0` at once). The key and the command work for the
+  whole thinking phase.
+- In `message_end`, the extension finishes the stopped message with the stop reason `stop`, so Pi
+  shows the stop notice instead of "Operation aborted". An Escape abort stays unchanged.
 
 - The extension aborts the running request, keeps the partial thinking, and starts one new turn with
   a displayed custom message (`localpi-stop-thinking`) that holds the instruction.

@@ -12,7 +12,10 @@ tags:
 
 ## Status
 
-Selected plan. This document is the only source to follow for the feature.
+Implemented. `docs/stop-thinking.md` describes the implementation as it is now. After this plan,
+the implementation also finishes the stopped message as a normal stop instead of an abort, shows
+the button only after a configurable thinking delay, and sets `add_generation_prompt: false` for
+llama.cpp.
 
 ## Goal
 
