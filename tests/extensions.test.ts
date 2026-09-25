@@ -14,7 +14,7 @@ describe("Pi extensions", () => {
       const bundle = await writeDefaultExtensions(options(stateDir), {
         engines: [{ provider: "llama-cpp", engine: "llama.cpp" }]
       });
-      expect(bundle.paths).toHaveLength(4);
+      expect(bundle.paths).toHaveLength(5);
       expect(bundle.systemPrompt).toContain("may require user approval");
       const thinking = await readFile(bundle.paths[0] ?? "", "utf8");
       const approval = await readFile(bundle.paths[1] ?? "", "utf8");
@@ -88,7 +88,7 @@ describe("Pi extensions", () => {
         approval: false,
         stats: "off"
       });
-      expect(bundle.paths).toHaveLength(2);
+      expect(bundle.paths).toHaveLength(3);
       const thinking = await readFile(bundle.paths[0] ?? "", "utf8");
       expect(thinking).toContain("thinking_level_select");
       const approval = await readFile(bundle.paths[1] ?? "", "utf8");
@@ -104,13 +104,13 @@ describe("Pi extensions", () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const off = await writeDefaultExtensions(options(stateDir));
-      expect(off.paths).toHaveLength(4);
+      expect(off.paths).toHaveLength(5);
       expect(off.paths.map((entry) => path.basename(entry))).not.toContain(
         "continue-on-truncation.ts"
       );
 
       const on = await writeDefaultExtensions({ ...options(stateDir), continueOnTruncation: 2 });
-      expect(on.paths).toHaveLength(5);
+      expect(on.paths).toHaveLength(6);
       const guard = await readFile(
         on.paths.find((entry) => path.basename(entry) === "continue-on-truncation.ts") ?? "",
         "utf8"
@@ -170,7 +170,7 @@ describe("Pi extensions", () => {
         demoInitialPrompt: "- start story",
         demoFollowupPrompt: "@keep going"
       });
-      expect(bundle.paths).toHaveLength(5);
+      expect(bundle.paths).toHaveLength(6);
       const demoPath = bundle.paths[0] ?? "";
       expect(demoPath).toContain(path.join("pi-demo-mode", "extensions", "demo-mode.ts"));
       const demo = await readFile(demoPath, "utf8");
@@ -208,7 +208,7 @@ describe("Pi extensions", () => {
           ]
         }
       });
-      expect(bundle.paths).toHaveLength(5);
+      expect(bundle.paths).toHaveLength(6);
       const selector = await readFile(bundle.paths[0] ?? "", "utf8");
       expect(selector).toContain("ModelSelectorComponent");
       expect(selector).toContain('pi.on("session_start"');
@@ -278,6 +278,8 @@ function options(stateDir: string): LocalpiOptions {
     approveReadTools: false,
     stats: "full",
     skills: "own",
+    tuiMode: "fullscreen",
+    stopThinkingKey: "ctrl+shift+s",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

@@ -63,6 +63,24 @@ describe("localpi option parsing", () => {
     );
   });
 
+  it("parses and validates the stop thinking key", () => {
+    expect(parseLocalpiArgs([]).stopThinkingKey).toBe("ctrl+shift+s");
+    expect(parseLocalpiArgs(["--stop-thinking-key", "alt+s"]).stopThinkingKey).toBe("alt+s");
+    expect(parseLocalpiArgs(["--stop-thinking-key", "ctrl+alt+f5"]).stopThinkingKey).toBe(
+      "ctrl+alt+f5"
+    );
+    expect(parseLocalpiArgs(["--stop-thinking-key", "ctrl+pageDown"]).stopThinkingKey).toBe(
+      "ctrl+pageDown"
+    );
+    expect(parseLocalpiArgs(["--stop-thinking-key", "ctrl+/"]).stopThinkingKey).toBe("ctrl+/");
+    expect(parseLocalpiArgs(["--stop-thinking-key", "off"]).stopThinkingKey).toBeUndefined();
+    for (const invalid of ["s", "ctrl+", "ctrl+ctrl+s", "hyper+s", "ctrl+shift+enterx", ""]) {
+      expect(() => parseLocalpiArgs(["--stop-thinking-key", invalid])).toThrow(
+        `unknown stop thinking key ${invalid}; expected off or a modified key such as ctrl+shift+s`
+      );
+    }
+  });
+
   it("parses and validates thinking levels", () => {
     expect(parseLocalpiArgs(["--thinking", "low"])).toMatchObject({
       thinking: "low"
@@ -279,6 +297,8 @@ describe("localpi option parsing", () => {
     expect(text).toContain("--thinking <level>");
     expect(text).toContain("--skills <mode>");
     expect(text).toContain("--continue-on-truncation <n>");
+    expect(text).toContain("--stop-thinking-key <key>");
+    expect(text).toContain("LOCALPI_STOP_THINKING_KEY");
     expect(text).toContain("--demo");
   });
 });
@@ -307,7 +327,9 @@ describe("localpi environment defaults", () => {
     "LOCALPI_DEMO_FOLLOWUP_PROMPT",
     "LOCALPI_DEMO_INITIAL_PROMPT_FILE",
     "LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE",
-    "LOCALPI_CONTINUE_ON_TRUNCATION"
+    "LOCALPI_CONTINUE_ON_TRUNCATION",
+    "LOCALPI_STOP_THINKING_KEY",
+    "LOCALPI_TUI_MODE"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
 
@@ -320,6 +342,21 @@ describe("localpi environment defaults", () => {
         process.env[name] = value;
       }
     }
+  });
+
+  it("reads the TUI mode and the stop thinking key from the environment", () => {
+    expect(parseLocalpiArgs([]).tuiMode).toBe("fullscreen");
+    process.env["LOCALPI_TUI_MODE"] = "regular";
+    process.env["LOCALPI_STOP_THINKING_KEY"] = "off";
+    const options = parseLocalpiArgs([]);
+    expect(options.tuiMode).toBe("regular");
+    expect(options.stopThinkingKey).toBeUndefined();
+    expect(parseLocalpiArgs(["--stop-thinking-key", "alt+s"]).stopThinkingKey).toBe("alt+s");
+
+    process.env["LOCALPI_TUI_MODE"] = "tiny";
+    expect(() => parseLocalpiArgs([])).toThrow(
+      "unknown TUI mode tiny; expected regular or fullscreen"
+    );
   });
 
   it("reads defaults from LOCALPI_* environment variables", () => {

@@ -8,8 +8,33 @@ import { describe, expect, it } from "vitest";
 import type { CatalogModel } from "../src/localpi/catalog.js";
 import type { LocalpiOptions } from "../src/localpi/options.js";
 import type { RuntimeConnection } from "../src/localpi/runtime.js";
-import { createLocalpiAppDefinition } from "../src/pi/app.js";
+import { createLocalpiAppDefinition, localpiTuiModeArgs } from "../src/pi/app.js";
 import { localpiVersion } from "../src/pi/version.js";
+
+describe("Pi TUI mode", () => {
+  const base = { acp: false, tuiMode: "fullscreen" as const, forwardedArgs: [] };
+
+  it("starts interactive Pi in the configured mode", () => {
+    expect(localpiTuiModeArgs(base)).toEqual(["--tui-mode", "fullscreen"]);
+    expect(localpiTuiModeArgs({ ...base, tuiMode: "regular" })).toEqual(["--tui-mode", "regular"]);
+    expect(localpiTuiModeArgs({ ...base, forwardedArgs: ["explain this"] })).toEqual([
+      "--tui-mode",
+      "fullscreen"
+    ]);
+  });
+
+  it("keeps a forwarded Pi TUI mode", () => {
+    expect(localpiTuiModeArgs({ ...base, forwardedArgs: ["--tui-mode", "regular"] })).toEqual([]);
+    expect(localpiTuiModeArgs({ ...base, forwardedArgs: ["--tui-mode=regular"] })).toEqual([]);
+  });
+
+  it("adds no TUI mode to a non-interactive launch", () => {
+    for (const forwardedArgs of [["-p", "hi"], ["--print"], ["--mode", "json"], ["--mode=rpc"]]) {
+      expect(localpiTuiModeArgs({ ...base, forwardedArgs })).toEqual([]);
+    }
+    expect(localpiTuiModeArgs({ ...base, acp: true })).toEqual([]);
+  });
+});
 
 describe("Pi runtime config", () => {
   it("uses package metadata for the Pi app version", () => {
@@ -250,6 +275,8 @@ function options(stateDir: string): LocalpiOptions {
     approveReadTools: false,
     stats: "full",
     skills: "own",
+    tuiMode: "fullscreen",
+    stopThinkingKey: "ctrl+shift+s",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

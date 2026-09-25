@@ -28,7 +28,7 @@ describe("generated Pi extensions", () => {
   it("typecheck against the installed Pi extension API", { timeout: 120_000 }, async () => {
     const files = await writeGeneratedExtensions();
 
-    expect(files).toHaveLength(6);
+    expect(files).toHaveLength(7);
     expect(typeCheck(files)).toEqual([]);
   });
 

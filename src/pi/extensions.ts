@@ -9,6 +9,7 @@ import { resolveDemoPrompts } from "./demo.js";
 import { continueOnTruncationExtensionSource } from "./extension-sources/continue-on-truncation.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { statusLineExtensionSource } from "./extension-sources/status-line.js";
+import { stopThinkingExtensionSource } from "./extension-sources/stop-thinking.js";
 import { thinkingControlExtensionSource } from "./extension-sources/thinking-control.js";
 import {
   tokenStatusExtensionSource,
@@ -113,6 +114,16 @@ export async function writeDefaultExtensions(
       )
     );
   }
+  paths.push(
+    await writeExtension(
+      extensionDir,
+      "stop-thinking.ts",
+      stopThinkingExtensionSource({
+        key: options.stopThinkingKey,
+        engines: extensionOptions.engines ?? []
+      })
+    )
+  );
   return {
     paths,
     env,

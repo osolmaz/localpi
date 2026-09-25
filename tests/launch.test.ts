@@ -156,6 +156,22 @@ describe("Pi launch plan", () => {
     expect(plan.args[plan.args.indexOf("--use-theme") + 1]).toBe("light");
   });
 
+  it("starts the interactive Pi TUI in fullscreen mode by default", async () => {
+    const stateDir = "/tmp/localpi-state";
+    const plan = await createPiLaunchPlan(
+      createLocalpiAppDefinition(
+        { ...options(stateDir), forwardedArgs: ["hello"] },
+        connection("gemma-4-e4b-it"),
+        { paths: [], env: {}, systemPrompt: "localpi prompt" },
+        undefined
+      ),
+      runtimeConfig(stateDir)
+    );
+
+    expect(plan.args[plan.args.indexOf("--tui-mode") + 1]).toBe("fullscreen");
+    expect(plan.args.indexOf("--tui-mode")).toBeLessThan(plan.args.indexOf("hello"));
+  });
+
   it("adds no theme arguments when Pi themes are disabled", async () => {
     const stateDir = "/tmp/localpi-state";
     const plan = await createPiLaunchPlan(
@@ -259,6 +275,8 @@ function options(stateDir: string): LocalpiOptions {
     approveReadTools: false,
     stats: "full",
     skills: "own",
+    tuiMode: "fullscreen",
+    stopThinkingKey: "ctrl+shift+s",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,
