@@ -476,6 +476,34 @@ describe("generated localpi stop thinking extension", () => {
     }
   );
 
+  it.each([
+    ["llama-cpp", "max_tokens", 8000, 4000],
+    ["vllm", "max_completion_tokens", 6000, 3000],
+    ["llama-cpp", "max_tokens", 2, 1]
+  ] as const)(
+    "leaves answer tokens for %s with %s limited to %i",
+    async (provider, field, maximum, phaseLimit) => {
+      const pi = await startPi({ thinkingPhaseOutputCap: 8000 });
+      const ctx = context(provider);
+      const first = await pi.handlers.get("before_provider_request")?.(
+        { payload: { ...request([userMessage("Solve it")]), [field]: maximum } },
+        ctx
+      );
+      expect(first).toMatchObject({ [field]: phaseLimit });
+      await pi.handlers.get("message_end")?.(end("length", [thinking("Partial reasoning")]), ctx);
+      await pi.handlers.get("agent_settled")?.({}, ctx);
+      expect(pi.sent).toHaveLength(1);
+      const answer = await pi.handlers.get("before_provider_request")?.(
+        {
+          payload: { ...request([userMessage("Solve it"), instructionMessage()]), [field]: maximum }
+        },
+        ctx
+      );
+      expect(answer).toMatchObject({ [field]: maximum - phaseLimit });
+      expect(ctx.aborts).toBe(0);
+    }
+  );
+
   it("never forces an answer when a capped request ended with answer text or an error", async () => {
     const pi = await startPi({ thinkingPhaseOutputCap: 8000 });
     const ctx = context("vllm");
@@ -518,8 +546,8 @@ describe("generated localpi stop thinking extension", () => {
       "requires a positive provider output limit"
     );
     expect(() =>
-      handler?.({ payload: { ...request([userMessage("Solve it")]), max_tokens: 8000 } }, ctx)
-    ).toThrow("must leave tokens for the answer");
+      handler?.({ payload: { ...request([userMessage("Solve it")]), max_tokens: 1 } }, ctx)
+    ).toThrow("requires room for thinking and an answer");
     expect(ctx.aborts).toBe(2);
   });
 
