@@ -4,7 +4,7 @@ import type { PiAppDefinition } from "@osolmaz/pi-factory";
 import type { PiWebOptions } from "@osolmaz/pi-factory-web";
 
 import { run } from "../src/cli/cli.js";
-import { catppuccinLatte } from "../src/localpi/catppuccin.js";
+import { catppuccinLatte, catppuccinMacchiato } from "../src/localpi/catppuccin.js";
 import { launchWebRuntime, localpiWebTheme } from "../src/pi/web.js";
 
 describe("localpi web mode", () => {
@@ -38,7 +38,13 @@ describe("localpi web mode", () => {
 
     const code = await launchWebRuntime(
       app,
-      { webPort: 8421, webOpen: false, webHost: "100.64.0.1", webAllowedHosts: ["box"] },
+      {
+        webPort: 8421,
+        webOpen: false,
+        webHost: "100.64.0.1",
+        webAllowedHosts: ["box"],
+        webTheme: "mocha"
+      },
       (served, options = {}) => {
         calls.push({ app: served, options });
         return Promise.resolve(0);
@@ -55,10 +61,17 @@ describe("localpi web mode", () => {
           port: 8421,
           open: false,
           cwd: process.cwd(),
-          theme: localpiWebTheme()
+          theme: localpiWebTheme("mocha")
         }
       }
     ]);
+  });
+
+  it("builds dark page colors from a dark flavor", () => {
+    const theme = localpiWebTheme("macchiato");
+    expect(theme.background).toBe(catppuccinMacchiato.base);
+    expect(theme.black).toBe(catppuccinMacchiato.surface1);
+    expect(theme.white).toBe(catppuccinMacchiato.subtext1);
   });
 
   it("builds the page colors from the Latte palette", () => {

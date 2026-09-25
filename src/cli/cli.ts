@@ -1,6 +1,6 @@
 import { runPiApp } from "@osolmaz/pi-factory";
 
-import { paint } from "../localpi/catppuccin.js";
+import { paint, type CatppuccinFlavor } from "../localpi/catppuccin.js";
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { runAcpApp } from "../localpi/acp.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
@@ -55,11 +55,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       options,
       connection,
       extensions,
-      await writeLocalpiTheme(
-        options.stateDir,
-        options.forwardedArgs,
-        options.web ? "latte" : "mocha"
-      )
+      await writeLocalpiTheme(options.stateDir, options.forwardedArgs, piThemeFlavor(options))
     );
     if (options.web) {
       return { code: await launchWebRuntime(app, options), stdout: "", stderr: "" };
@@ -134,6 +130,11 @@ function validateDemoTty(): void {
       "--demo requires an interactive TTY on stdin and stdout; run it directly in a terminal"
     );
   }
+}
+
+// A terminal launch keeps Mocha; web mode uses the flavor of the page.
+function piThemeFlavor(options: ParsedOptions): CatppuccinFlavor {
+  return options.web ? options.webTheme : "mocha";
 }
 
 // Web mode runs the normal interactive Pi TUI in the browser, one process per session, so it

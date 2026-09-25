@@ -296,8 +296,9 @@ app definition as a terminal launch.
 
 - The page lists the saved sessions for the working directory and runs one localpi Pi process per
   open session in a ghostty-web terminal. Sessions can be resumed, renamed, and deleted.
-- Web mode uses the Catppuccin Latte palette for the page and writes a `catppuccin-latte` Pi theme.
-  Terminal launches keep Catppuccin Mocha.
+- Web mode uses one Catppuccin flavor for the page and the Pi theme: `--web-theme` or
+  `LOCALPI_WEB_THEME`, `latte` by default, or `frappe`, `macchiato`, or `mocha`. localpi writes the
+  matching `catppuccin-<flavor>` Pi theme. Terminal launches keep Catppuccin Mocha.
 - The web runner starts Pi in fullscreen mode, so localpi adds no `--tui-mode` flag in web mode.
 - The server listens on `--web-host` (default `127.0.0.1`), answers to the loopback names, the listen
   host, and `--web-allowed-hosts`, and requires the random token from the printed URL.

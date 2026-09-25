@@ -15,8 +15,10 @@ const themeSchema =
 // Tool status cards need a surface with a visible success or failure cast. Each value is the
 // flavor's base surface tinted with green and red.
 const toolSurfaces: Readonly<Record<CatppuccinFlavor, { success: string; error: string }>> = {
-  mocha: { success: "#24352f", error: "#3b2633" },
-  latte: { success: "#dae9d6", error: "#f2d7dd" }
+  latte: { success: "#dae9d6", error: "#f2d7dd" },
+  frappe: { success: "#3c4a45", error: "#4b3d4a" },
+  macchiato: { success: "#2f3d3e", error: "#42323f" },
+  mocha: { success: "#24352f", error: "#3b2633" }
 };
 
 export type PiThemeFile = {

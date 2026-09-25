@@ -2,7 +2,12 @@ import { readFile } from "node:fs/promises";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { catppuccinLatte, catppuccinMocha } from "../src/localpi/catppuccin.js";
+import {
+  catppuccinFlavors,
+  catppuccinLatte,
+  catppuccinMocha,
+  catppuccinPalettes
+} from "../src/localpi/catppuccin.js";
 import {
   catppuccinTheme,
   catppuccinThemeName,
@@ -162,5 +167,12 @@ describe("localpi Catppuccin theme", () => {
       "--use-theme",
       "catppuccin-latte"
     ]);
+  });
+  it("builds a Pi theme for every Catppuccin flavor", () => {
+    for (const flavor of catppuccinFlavors) {
+      const theme = catppuccinTheme(flavor);
+      expect(theme.name).toBe(`catppuccin-${flavor}`);
+      expect(theme.vars["base"]).toBe(catppuccinPalettes[flavor].base);
+    }
   });
 });

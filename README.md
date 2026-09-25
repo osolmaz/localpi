@@ -328,7 +328,9 @@ localpi --web --web-host 100.64.0.1 --web-allowed-hosts box.tailnet.ts.net   # o
   example for a tool approval.
 - **Running sessions.** Each open session keeps its own Pi process while localpi runs, also when the
   browser is closed. Stop localpi with Ctrl-C to stop them all. The sessions stay on disk.
-- **Look.** Web mode uses Catppuccin Latte for the page and for the Pi theme.
+- **Look.** Web mode uses Catppuccin Latte for the page and for the Pi theme. `--web-theme frappe`,
+  `macchiato`, or `mocha` picks a darker flavor. The terminal font is Monaspace Argon, which the page
+  serves itself.
 - **Keys.** `Ctrl+Shift+S` and the stop button work in the page. Browsers keep some keys, such as
   `Ctrl+W` and `Ctrl+T`, for themselves.
 - **Access.** The server listens on `127.0.0.1` unless `--web-host` says otherwise, and every
@@ -342,6 +344,7 @@ localpi --web --web-host 100.64.0.1 --web-allowed-hosts box.tailnet.ts.net   # o
 | `--no-browser`                | `LOCALPI_WEB_OPEN=0`        | opens       |
 | `--web-host <host>`           | `LOCALPI_WEB_HOST`          | `127.0.0.1` |
 | `--web-allowed-hosts <names>` | `LOCALPI_WEB_ALLOWED_HOSTS` | none        |
+| `--web-theme <flavor>`        | `LOCALPI_WEB_THEME`         | `latte`     |
 
 Web mode cannot be combined with `--acp`, `--demo`, or a forwarded `-p` or `--mode`. The page comes
 from [`@osolmaz/pi-factory-web`](https://github.com/osolmaz/pi-factory/tree/main/packages/web).
@@ -648,7 +651,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--stop-thinking-key <key|off>`: key that stops the thinking phase and asks for the answer. Default: `ctrl+shift+s`. `off` removes the key, and the button and `/stop-thinking` stay. `LOCALPI_STOP_THINKING_KEY` sets the same key
 - `--stop-thinking-delay <seconds>`: thinking time before the stop thinking button shows. Default: `5`. `0` shows it at once. `LOCALPI_STOP_THINKING_DELAY` sets the same delay
 - `--web`: run localpi in the browser, with a session list and the Pi TUI. `LOCALPI_WEB=1` does the same. See [Web Mode](#web-mode)
-- `--web-port <n>`, `--no-browser`, `--web-host <host>`, `--web-allowed-hosts <names>`: web mode port, browser opening, listen address, and extra host names
+- `--web-port <n>`, `--no-browser`, `--web-host <host>`, `--web-allowed-hosts <names>`, `--web-theme <latte|frappe|macchiato|mocha>`: web mode port, browser opening, listen address, extra host names, and Catppuccin flavor
 - `--skills <own|ambient|off>`: skill sources. Default: `own`, which loads only `<state-dir>/pi-skills/` and turns off shared discovery such as `~/.agents/skills`. `ambient` keeps Pi's own discovery, and `off` loads no skills
 - `--no-skills`: load no skills. Alias for `--skills off`
 - `--no-token-status`: disable the token status extension. Alias for `--stats off`
@@ -712,6 +715,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_WEB_OPEN`
 - `LOCALPI_WEB_HOST`
 - `LOCALPI_WEB_ALLOWED_HOSTS`
+- `LOCALPI_WEB_THEME`
 - `LOCALPI_APPROVE_READ_TOOLS`
 - `LOCALPI_ACP`
 - `LOCALPI_ACP_ADAPTER`
