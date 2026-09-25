@@ -15,7 +15,8 @@ import {
   localpiThemeArgs,
   localpiThemeName,
   localpiThemePath,
-  writeLocalpiTheme
+  writeLocalpiTheme,
+  writeLocalpiThemes
 } from "../src/pi/theme.js";
 import { cleanupTemporaryDirs, makeTemporaryDir } from "./support/extension-harness.js";
 
@@ -174,5 +175,16 @@ describe("localpi Catppuccin theme", () => {
       expect(theme.name).toBe(`catppuccin-${flavor}`);
       expect(theme.vars["base"]).toBe(catppuccinPalettes[flavor].base);
     }
+  });
+  it("writes and loads every flavor for web mode", async () => {
+    const stateDir = await makeTemporaryDir("localpi-theme-web-");
+    const paths = await writeLocalpiThemes(stateDir, [], catppuccinFlavors);
+    expect(paths).toEqual(catppuccinFlavors.map((flavor) => localpiThemePath(stateDir, flavor)));
+    expect(localpiThemeArgs(paths, [], "frappe")).toEqual([
+      ...(paths ?? []).flatMap((entry) => ["--theme", entry]),
+      "--use-theme",
+      "catppuccin-frappe"
+    ]);
+    expect(await writeLocalpiThemes(stateDir, ["--no-themes"], catppuccinFlavors)).toBeUndefined();
   });
 });

@@ -1,7 +1,13 @@
 import type { PiAppDefinition } from "@osolmaz/pi-factory";
-import { runPiWebApp, type PiWebTheme } from "@osolmaz/pi-factory-web";
+import { runPiWebApp, type PiWebTheme, type PiWebThemeChoice } from "@osolmaz/pi-factory-web";
 
-import { catppuccinPalettes, type CatppuccinFlavor } from "../localpi/catppuccin.js";
+import {
+  catppuccinFlavors,
+  catppuccinPalettes,
+  type CatppuccinColor,
+  type CatppuccinFlavor
+} from "../localpi/catppuccin.js";
+import { catppuccinThemeName } from "./theme.js";
 import type { LocalpiOptions } from "../localpi/options.js";
 
 /**
@@ -41,6 +47,46 @@ export function localpiWebTheme(flavor: CatppuccinFlavor = "latte"): PiWebTheme 
   };
 }
 
+const flavorLabels: Readonly<Record<CatppuccinFlavor, string>> = {
+  latte: "Catppuccin Latte",
+  frappe: "Catppuccin Frappé",
+  macchiato: "Catppuccin Macchiato",
+  mocha: "Catppuccin Mocha"
+};
+
+const accentNames: readonly CatppuccinColor[] = [
+  "rosewater",
+  "flamingo",
+  "pink",
+  "mauve",
+  "red",
+  "maroon",
+  "peach",
+  "yellow",
+  "green",
+  "teal",
+  "sky",
+  "sapphire",
+  "blue",
+  "lavender"
+];
+
+/**
+ * The theme choices for web mode's settings: every Catppuccin flavor, each with the Pi theme that
+ * localpi writes for it, so a change in the page also switches Pi's theme in every session.
+ */
+export function localpiWebThemeChoices(): readonly PiWebThemeChoice[] {
+  return catppuccinFlavors.map((flavor) => ({
+    id: catppuccinThemeName(flavor),
+    label: flavorLabels[flavor],
+    theme: localpiWebTheme(flavor),
+    accents: Object.fromEntries(
+      accentNames.map((name) => [name, catppuccinPalettes[flavor][name]])
+    ),
+    piTheme: catppuccinThemeName(flavor)
+  }));
+}
+
 /** Serve localpi in the browser until the process is stopped. */
 export async function launchWebRuntime(
   app: PiAppDefinition,
@@ -53,6 +99,7 @@ export async function launchWebRuntime(
     port: options.webPort,
     open: options.webOpen,
     cwd: process.cwd(),
-    theme: localpiWebTheme(options.webTheme)
+    themes: localpiWebThemeChoices(),
+    defaultTheme: catppuccinThemeName(options.webTheme)
   });
 }

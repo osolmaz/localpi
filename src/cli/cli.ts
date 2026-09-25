@@ -1,6 +1,6 @@
 import { runPiApp } from "@osolmaz/pi-factory";
 
-import { paint, type CatppuccinFlavor } from "../localpi/catppuccin.js";
+import { catppuccinFlavors, paint } from "../localpi/catppuccin.js";
 import { errorMessage, fail, ok, type CommandResult } from "../common/result.js";
 import { runAcpApp } from "../localpi/acp.js";
 import { parseLocalpiArgs, usage } from "../localpi/options.js";
@@ -14,7 +14,7 @@ import {
 } from "../localpi/runtime.js";
 import { applyRememberedSettings } from "../localpi/settings-state.js";
 import { createLocalpiAppDefinition } from "../pi/app.js";
-import { writeLocalpiTheme } from "../pi/theme.js";
+import { writeLocalpiTheme, writeLocalpiThemes } from "../pi/theme.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
 import { ensureLocalpiSkillsDir } from "../pi/skills.js";
 import { launchWebRuntime } from "../pi/web.js";
@@ -55,7 +55,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       options,
       connection,
       extensions,
-      await writeLocalpiTheme(options.stateDir, options.forwardedArgs, piThemeFlavor(options))
+      await writePiThemes(options)
     );
     if (options.web) {
       return { code: await launchWebRuntime(app, options), stdout: "", stderr: "" };
@@ -132,9 +132,14 @@ function validateDemoTty(): void {
   }
 }
 
-// A terminal launch keeps Mocha; web mode uses the flavor of the page.
-function piThemeFlavor(options: ParsedOptions): CatppuccinFlavor {
-  return options.web ? options.webTheme : "mocha";
+// A terminal launch writes Mocha. Web mode writes every flavor, because its theme setting switches
+// the Pi theme of running sessions.
+async function writePiThemes(
+  options: ParsedOptions
+): Promise<string | readonly string[] | undefined> {
+  return options.web
+    ? await writeLocalpiThemes(options.stateDir, options.forwardedArgs, catppuccinFlavors)
+    : await writeLocalpiTheme(options.stateDir, options.forwardedArgs, "mocha");
 }
 
 // Web mode runs the normal interactive Pi TUI in the browser, one process per session, so it
