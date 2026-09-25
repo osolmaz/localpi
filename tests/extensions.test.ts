@@ -29,7 +29,8 @@ describe("Pi extensions", () => {
       expect(approval).toContain("ctx.ui.select");
       expect(approval).toContain('pi.registerCommand("approval"');
       expect(approval).toContain("const initialEnabled: boolean = true;");
-      expect(approval).toContain("Tool approval rule:");
+      expect(bundle.systemPrompt).toContain("Tool approval rule:");
+      expect(approval).not.toContain("before_agent_start");
       expect(approval).toContain("Allow all tools for this session");
       expect(approval).toContain(
         'const readOnlyTools: readonly string[] = ["read", "grep", "find", "ls"]'
