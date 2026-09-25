@@ -166,23 +166,26 @@ leaves it out of later requests.
 ## Endpoint thinking ceiling
 
 For a selected `llama-cpp` or `vllm` provider, `--thinking-phase-output-cap N` opts in to a
-request-level ceiling. Pi keeps thinking on but sends `max_tokens: N` (or
-`max_completion_tokens: N`) for each request. If the server stops at that ceiling
+request-level ceiling. Pi keeps thinking on but sends an output limit of at most
+`N` (`max_tokens` or `max_completion_tokens`) for each request. If the server stops at that ceiling
 while the message contains only thinking, localpi asks for an answer through the
 same stop-thinking path. For llama.cpp, it continues the partial reasoning as
 assistant content. For vLLM, it asks for an answer with
-`chat_template_kwargs.enable_thinking: false`. The continuation uses no more
-than the original request limit minus `N` tokens. The same extension handles manual
-stops, capped thinking stops, and ordinary truncated answers. It chooses only
-one follow-up for each stop.
+`chat_template_kwargs.enable_thinking: false`. Pi can lower the request's output
+limit as the context fills. In that case, localpi sets the thinking ceiling to the
+smaller of `N` and half the available output tokens. The continuation can use
+up to the remaining tokens for the answer. The same extension handles manual stops, capped
+thinking stops, and ordinary truncated answers. It chooses only one follow-up
+for each stop.
 
 This is an output-token ceiling for the first request, **not** an exact count of
 thinking tokens. If the model starts its answer before `N`, that answer still
 uses the first request's remaining tokens. An error, a tool call, an answer
 that hits the ceiling, or an abort does not trigger the answer-only path. If
-Pi turns thinking off, the ceiling does not apply. An endpoint must expose an
-output limit above `N`; otherwise localpi requests an abort and reports an
-error. The backend must honor the output ceiling and report a length stop for
+Pi turns thinking off, the ceiling does not apply. The request needs at least
+two available output tokens so both phases have room. If the limit is missing
+or lower than two, localpi aborts the request and reports an error. The backend
+must honor the output ceiling and report a length stop for
 this to work. Offline tests cannot confirm either behavior on an endpoint.
 
 The managed `llama-server` keeps its existing `--thinking-budget` option and native

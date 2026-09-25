@@ -322,12 +322,16 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
       throw new Error("localpi: thinking-phase output cap requires a positive provider output limit");
     }
     const maximum = event.payload[field] as number;
-    if (maximum <= thinkingPhaseOutputCap) {
+    if (maximum < 2) {
       ctx.abort();
-      throw new Error("localpi: thinking-phase output cap must leave tokens for the answer");
+      throw new Error("localpi: thinking-phase output cap requires room for thinking and an answer");
     }
-    cappedRequest = { provider, answerTokens: maximum - thinkingPhaseOutputCap };
-    return { ...event.payload, [field]: thinkingPhaseOutputCap };
+    // Pi can lower this request's output limit as the context fills. The configured cap is an
+    // upper bound, not a requirement: preserve at least half of the available tokens for the
+    // answer instead of aborting an otherwise valid request late in a session.
+    const phaseLimit = Math.min(thinkingPhaseOutputCap, Math.floor(maximum / 2));
+    cappedRequest = { provider, answerTokens: maximum - phaseLimit };
+    return { ...event.payload, [field]: phaseLimit };
   });
 
   // Match the assistant text padding. Pi already puts one empty line above a custom message.
