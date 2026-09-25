@@ -39,6 +39,7 @@ type FakePi = {
   readonly commands: Map<string, (args: string, ctx: FakeContext) => Promise<void>>;
   readonly renderers: Map<string, unknown>;
   readonly sent: SentMessage[];
+  thinkingLevel: string;
 };
 
 const instruction = "Stop thinking now. Give your answer based on the reasoning you have so far.";
@@ -435,6 +436,88 @@ describe("generated localpi stop thinking extension", () => {
     ]);
   });
 
+  it.each(["llama-cpp", "vllm"])(
+    "caps the first %s request and reserves the rest for an answer-only continuation",
+    async (provider) => {
+      const pi = await startPi({ endpointThinkingBudget: 8000 });
+      const ctx = context(provider);
+      const first = await pi.handlers.get("before_provider_request")?.(
+        { payload: { ...request([userMessage("Solve it")]), max_tokens: 16384 } },
+        ctx
+      );
+      expect(first).toMatchObject({ max_tokens: 8000 });
+      expect(
+        await pi.handlers.get("message_end")?.(end("length", [thinking("Partial reasoning")]), ctx)
+      ).toBeUndefined();
+      await pi.handlers.get("agent_settled")?.({}, ctx);
+      expect(pi.sent).toHaveLength(1);
+      const answer = await pi.handlers.get("before_provider_request")?.(
+        {
+          payload: {
+            ...request([userMessage("Solve it"), instructionMessage()]),
+            max_tokens: 16384
+          }
+        },
+        ctx
+      );
+      expect(answer).toMatchObject({ max_tokens: 8384 });
+      if (provider === "vllm") {
+        expect(answer).toMatchObject({ chat_template_kwargs: { enable_thinking: false } });
+      } else {
+        expect(answer).toMatchObject({ continue_final_message: "content" });
+      }
+      await pi.handlers.get("message_end")?.(end("stop", [text("The answer")]), ctx);
+      await pi.handlers.get("agent_settled")?.({}, ctx);
+      expect(pi.sent).toHaveLength(1);
+    }
+  );
+
+  it("never forces an answer when a capped request ended with answer text or an error", async () => {
+    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const ctx = context("vllm");
+    for (const [reason, content] of [
+      ["length", [thinking("Reasoning"), text("Partial answer")]],
+      ["error", [thinking("Reasoning")]],
+      ["length", [thinking("Reasoning"), toolCall()]]
+    ] as const) {
+      await pi.handlers.get("before_provider_request")?.(
+        { payload: { ...request([userMessage("Solve it")]), max_tokens: 16384 } },
+        ctx
+      );
+      await pi.handlers.get("message_end")?.(end(reason, content), ctx);
+      await pi.handlers.get("agent_settled")?.({}, ctx);
+    }
+    expect(pi.sent).toHaveLength(0);
+  });
+
+  it("does not cap unsupported providers or thinking-off requests", async () => {
+    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const payload = { ...request([userMessage("Solve it")]), max_completion_tokens: 16384 };
+    expect(
+      await pi.handlers.get("before_provider_request")?.({ payload }, context("lmstudio"))
+    ).toBeUndefined();
+    pi.thinkingLevel = "off";
+    expect(
+      await pi.handlers.get("before_provider_request")?.({ payload }, context("vllm"))
+    ).toBeUndefined();
+    pi.thinkingLevel = "high";
+    expect(
+      await pi.handlers.get("before_provider_request")?.({ payload }, context("vllm"))
+    ).toMatchObject({ max_completion_tokens: 8000 });
+  });
+
+  it("fails closed when the endpoint has no room for an answer", async () => {
+    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const handler = pi.handlers.get("before_provider_request");
+    const ctx = context("vllm");
+    expect(() => handler?.({ payload: request([userMessage("Solve it")]) }, ctx)).toThrow(
+      "requires a positive output limit"
+    );
+    expect(() =>
+      handler?.({ payload: { ...request([userMessage("Solve it")]), max_tokens: 8000 } }, ctx)
+    ).toThrow("must leave output tokens for the answer");
+  });
+
   it("starts over when a new session begins", async () => {
     const pi = await startPi();
     const ctx = context();
@@ -449,13 +532,14 @@ describe("generated localpi stop thinking extension", () => {
 });
 
 async function startPi(
-  config: { key?: string | undefined; buttonDelayMs?: number } = {}
+  config: { key?: string | undefined; buttonDelayMs?: number; endpointThinkingBudget?: number } = {}
 ): Promise<FakePi> {
   const extension = await loadGeneratedExtension(
     stopThinkingExtensionSource({
       key: "key" in config ? config.key : "ctrl+shift+s",
       // Most tests look at the button itself, so they show it at once.
       buttonDelayMs: config.buttonDelayMs ?? 0,
+      endpointThinkingBudget: config.endpointThinkingBudget,
       engines: [
         { provider: "llama-cpp", engine: "llama.cpp" },
         { provider: "llama-server", engine: "llama-server" },
@@ -469,7 +553,8 @@ async function startPi(
     shortcuts: new Map(),
     commands: new Map(),
     renderers: new Map(),
-    sent: []
+    sent: [],
+    thinkingLevel: "high"
   };
   extension({
     on: (event: string, handler: Handler) => {
@@ -487,6 +572,7 @@ async function startPi(
     registerMessageRenderer: (customType: string, renderer: unknown) => {
       pi.renderers.set(customType, renderer);
     },
+    getThinkingLevel: () => pi.thinkingLevel,
     sendMessage: (message: SentMessage["message"], options: unknown) => {
       pi.sent.push({ message, options });
     }

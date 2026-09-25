@@ -6,6 +6,8 @@ export type StopThinkingConfig = {
   // How long the model must think before the button shows, in milliseconds.
   readonly buttonDelayMs: number;
   readonly engines: readonly EngineEntry[];
+  // An opt-in per-request output ceiling for external engines, not a tokenizer-based counter.
+  readonly endpointThinkingBudget?: number | undefined;
 };
 
 // llama.cpp closes the thinking phase itself when a request continues a final assistant message
@@ -32,8 +34,10 @@ type ShortcutKey = Parameters<ExtensionAPI["registerShortcut"]>[0];
 const shortcut: ShortcutKey | undefined = ${config.key === undefined ? "undefined" : JSON.stringify(config.key)};
 const nativeProviders = new Set<string>(${JSON.stringify(nativeProviders)});
 const templateKwargsProviders = new Set<string>(${JSON.stringify(templateKwargsProviders)});
+const cappedProviders = new Set<string>(${JSON.stringify(config.engines.filter((entry) => entry.engine === "llama.cpp" || entry.engine === "vLLM").map((entry) => entry.provider))});
 // A short thinking phase needs no button, so the button waits this long before it shows.
 const buttonDelayMs: number = ${String(config.buttonDelayMs)};
+const endpointThinkingBudget: number | undefined = ${config.endpointThinkingBudget === undefined ? "undefined" : String(config.endpointThinkingBudget)};
 
 const customType = "localpi-stop-thinking";
 const widgetKey = "localpi-stop-thinking";
@@ -81,6 +85,12 @@ type MouseEventLike = {
 type StopRequest = {
   readonly provider: string;
   thinking: string;
+  readonly answerTokens?: number;
+};
+
+type CappedRequest = {
+  readonly provider: string;
+  readonly answerTokens: number;
 };
 
 type PayloadMessage = Record<string, unknown>;
@@ -97,8 +107,10 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   // A stop whose new turn runs now. Its provider requests carry the continuation until the run
   // settles, so a retry after an error still continues the thinking.
   let continuation: StopRequest | undefined;
+  let cappedRequest: CappedRequest | undefined;
 
   function reset(): void {
+    cappedRequest = undefined;
     thinking = undefined;
     requested = undefined;
     continuation = undefined;
@@ -208,11 +220,26 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
       return undefined;
     }
     endThinkingPhase(ctx);
+    if (requested === undefined && cappedRequest !== undefined) {
+      const cap = cappedRequest;
+      cappedRequest = undefined;
+      // The server stopped at the enforced output ceiling while still thinking. Do not rewrite
+      // length stops that include an answer or a tool call, or errors/aborts from the provider.
+      if (message.stopReason === "length" && isThinkingPhase(message) &&
+          ctx.model?.provider === cap.provider) {
+        requested = {
+          provider: cap.provider,
+          thinking: thinkingText(message),
+          answerTokens: cap.answerTokens
+        };
+        return undefined;
+      }
+    }
     if (requested === undefined) {
       return undefined;
     }
     if (message.stopReason !== "aborted") {
-      // The model finished on its own before the abort landed, so there is nothing to stop.
+      // A manual stop arrived after the model finished. A capped length stop is handled above.
       requested = undefined;
       return undefined;
     }
@@ -241,11 +268,28 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     pi.sendMessage({ customType, content: instruction, display: true }, { triggerTurn: true });
   });
 
-  pi.on("before_provider_request", (event) => {
-    if (continuation === undefined) {
+  pi.on("before_provider_request", (event, ctx) => {
+    if (continuation !== undefined) {
+      return continuationPayload(event.payload, continuation);
+    }
+    cappedRequest = undefined;
+    const provider = ctx.model?.provider ?? "";
+    if (endpointThinkingBudget === undefined || endpointThinkingBudget < 1 ||
+        pi.getThinkingLevel() === "off" ||
+        !cappedProviders.has(provider) ||
+        !isRecord(event.payload)) {
       return undefined;
     }
-    return continuationPayload(event.payload, continuation);
+    const field = outputLimitField(event.payload);
+    if (field === undefined) {
+      throw new Error("localpi: endpoint thinking cap requires a positive output limit in the provider request");
+    }
+    const maximum = event.payload[field] as number;
+    if (maximum <= endpointThinkingBudget) {
+      throw new Error("localpi: endpoint thinking cap must leave output tokens for the answer");
+    }
+    cappedRequest = { provider, answerTokens: maximum - endpointThinkingBudget };
+    return { ...event.payload, [field]: endpointThinkingBudget };
   });
 
   // Match the assistant text padding. Pi already puts one empty line above a custom message.
@@ -314,6 +358,16 @@ function fit(styled: string, plain: string, width: number): string {
  * Rewrite only the request that follows a stop. The last message must be the stop instruction, so
  * a normal request never changes.
  */
+function outputLimitField(payload: Record<string, unknown>): "max_tokens" | "max_completion_tokens" | undefined {
+  for (const field of ["max_tokens", "max_completion_tokens"] as const) {
+    const value = payload[field];
+    if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
+      return field;
+    }
+  }
+  return undefined;
+}
+
 function continuationPayload(payload: unknown, stop: StopRequest): unknown {
   if (!isRecord(payload) || !Array.isArray(payload["messages"])) {
     return undefined;
@@ -322,6 +376,13 @@ function continuationPayload(payload: unknown, stop: StopRequest): unknown {
   if (!isStopInstruction(messages[messages.length - 1])) {
     return undefined;
   }
+  const field = outputLimitField(payload);
+  if (stop.answerTokens !== undefined && field === undefined) {
+    throw new Error("localpi: answer continuation has no output limit");
+  }
+  const capped = stop.answerTokens !== undefined && field !== undefined
+    ? { ...payload, [field]: Math.min(payload[field] as number, stop.answerTokens) }
+    : payload;
   if (nativeProviders.has(stop.provider)) {
     // llama.cpp skips a continuation whose message is empty, so a stop that came before the first
     // thinking token still sends one newline. The server then closes the thinking at once.
@@ -331,7 +392,7 @@ function continuationPayload(payload: unknown, stop: StopRequest): unknown {
       reasoning_content: stop.thinking.trim().length > 0 ? stop.thinking : "\\n"
     };
     return {
-      ...payload,
+      ...capped,
       messages: [...messages.slice(0, -1), prefill],
       // llama.cpp rejects an explicit continuation together with a generation prompt.
       add_generation_prompt: false,
@@ -340,7 +401,7 @@ function continuationPayload(payload: unknown, stop: StopRequest): unknown {
   }
   if (templateKwargsProviders.has(stop.provider)) {
     const kwargs = isRecord(payload["chat_template_kwargs"]) ? payload["chat_template_kwargs"] : {};
-    return { ...payload, chat_template_kwargs: { ...kwargs, enable_thinking: false } };
+    return { ...capped, chat_template_kwargs: { ...kwargs, enable_thinking: false } };
   }
   return undefined;
 }

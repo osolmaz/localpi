@@ -206,6 +206,37 @@ describe("Pi extensions", () => {
     }
   });
 
+  it("wires the endpoint cap only for explicitly mapped engines, not the managed server", async () => {
+    const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
+    try {
+      const engines = [
+        { provider: "llama-cpp", engine: "llama.cpp" },
+        { provider: "vllm", engine: "vLLM" },
+        { provider: "llama-server", engine: "llama-server" },
+        { provider: "other", engine: "unknown" }
+      ];
+      const readSources = async (runtime: LocalpiOptions["runtime"]) => {
+        const bundle = await writeDefaultExtensions(
+          { ...options(stateDir), runtime, thinkingBudget: 8000, continueOnTruncation: 2 },
+          { engines }
+        );
+        return Promise.all(
+          ["stop-thinking.ts", "continue-on-truncation.ts"].map((name) =>
+            readFile(bundle.paths.find((entry) => path.basename(entry) === name) ?? "", "utf8")
+          )
+        );
+      };
+      const [stop, guard] = await readSources("auto");
+      expect(stop).toContain("const endpointThinkingBudget: number | undefined = 8000;");
+      expect(stop).toContain('["llama-cpp","vllm"]');
+      expect(guard).toContain('new Set<string>(["llama-cpp","vllm"])');
+      const [managed] = await readSources("llama-server");
+      expect(managed).toContain("const endpointThinkingBudget: number | undefined = undefined;");
+    } finally {
+      await rm(stateDir, { recursive: true, force: true });
+    }
+  });
+
   it("passes no extension env outside demo mode", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {

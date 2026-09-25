@@ -89,15 +89,13 @@ export async function writeDefaultExtensions(
       })
     )
   );
-  if (options.continueOnTruncation > 0) {
-    paths.push(
-      await writeExtension(
-        extensionDir,
-        "continue-on-truncation.ts",
-        continueOnTruncationExtensionSource(options.continueOnTruncation)
-      )
-    );
-  }
+  const { endpointThinkingBudget, cappedProviders } = endpointThinkingSettings(
+    options,
+    extensionOptions.engines ?? []
+  );
+  paths.push(
+    ...(await continuationExtensions(extensionDir, options.continueOnTruncation, cappedProviders))
+  );
   if (options.stats !== "off") {
     paths.push(
       await writeExtension(
@@ -121,7 +119,8 @@ export async function writeDefaultExtensions(
       stopThinkingExtensionSource({
         key: options.stopThinkingKey,
         buttonDelayMs: Math.round(options.stopThinkingDelay * 1000),
-        engines: extensionOptions.engines ?? []
+        engines: extensionOptions.engines ?? [],
+        endpointThinkingBudget
       })
     )
   );
@@ -144,6 +143,42 @@ async function writeExtension(extensionDir: string, name: string, source: string
   const extensionPath = path.join(extensionDir, name);
   await writeFile(extensionPath, source, "utf8");
   return extensionPath;
+}
+
+async function continuationExtensions(
+  extensionDir: string,
+  limit: number,
+  cappedProviders: readonly string[]
+): Promise<string[]> {
+  if (limit === 0) {
+    return [];
+  }
+  return [
+    await writeExtension(
+      extensionDir,
+      "continue-on-truncation.ts",
+      continueOnTruncationExtensionSource(limit, cappedProviders)
+    )
+  ];
+}
+
+function endpointThinkingSettings(
+  options: LocalpiOptions,
+  engines: readonly EngineEntry[]
+): { endpointThinkingBudget: number | undefined; cappedProviders: string[] } {
+  const endpointThinkingBudget =
+    options.thinkingBudget !== undefined &&
+    options.thinkingBudget > 0 &&
+    options.runtime !== "llama-server"
+      ? options.thinkingBudget
+      : undefined;
+  const cappedProviders =
+    endpointThinkingBudget === undefined
+      ? []
+      : engines
+          .filter((entry) => entry.engine === "llama.cpp" || entry.engine === "vLLM")
+          .map((entry) => entry.provider);
+  return { endpointThinkingBudget, cappedProviders };
 }
 
 function tokenStatusConfig(

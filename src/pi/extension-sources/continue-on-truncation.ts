@@ -6,10 +6,14 @@
  * such a turn, at most `limit` times per session. The limit lives in the generated source, so the
  * extension carries no extra environment variable into the Pi child.
  */
-export function continueOnTruncationExtensionSource(limit: number): string {
+export function continueOnTruncationExtensionSource(
+  limit: number,
+  cappedProviders: readonly string[] = []
+): string {
   return `import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const limit = ${String(limit)};
+const cappedProviders = new Set<string>(${JSON.stringify(cappedProviders)});
 
 const nudge = [
   "You hit the output limit before finishing.",
@@ -26,8 +30,17 @@ export default function localpiContinueOnTruncation(pi: ExtensionAPI): void {
     limitReported = false;
   });
 
-  pi.on("turn_end", (event) => {
+  pi.on("turn_end", (event, ctx) => {
     if (event.message.role !== "assistant" || event.message.stopReason !== "length") {
+      return;
+    }
+    // The stop-thinking extension owns this thinking-only length stop. A generic follow-up
+    // would race its answer-only continuation and spend the reserved answer budget twice.
+    if (cappedProviders.has(ctx?.model?.provider ?? "") &&
+        pi.getThinkingLevel() !== "off" &&
+        event.message.content.some((part) => part.type === "thinking") &&
+        !event.message.content.some((part) =>
+          part.type === "toolCall" || (part.type === "text" && part.text.trim().length > 0))) {
       return;
     }
     // A turn that already asked for tools keeps running on its own.
