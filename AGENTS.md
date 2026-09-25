@@ -104,6 +104,24 @@ Concrete examples:
 - Session settings should use Pi's own dialog components, for example `ctx.ui.select` for a list with the current value marked, and `ctx.ui.notify` for the result. Do not build a localpi-owned settings screen.
 - Do not register a command name that Pi already uses. Pi owns built-ins such as `/settings`, `/model`, `/thinking`, `/session`, and `/reload`. Check the built-in list before choosing a name, and rename the localpi command if it conflicts.
 
+## Stop Thinking
+
+- Keep the stop-thinking control in the generated `stop-thinking.ts` extension. Always write it, so
+  `/stop-thinking` and the button exist in every session. `--stop-thinking-key off` removes only the
+  key.
+- Let the engine write the end-of-thinking marker. For llama.cpp, continue the partial thinking with
+  `continue_final_message: "content"` and `add_generation_prompt: false`. Never hard-code `</think>`
+  or another model's marker.
+- Pick the engine behavior from the launch-time provider map (`engineEntries`), never from a model
+  name or a base URL.
+- Rewrite only the request that ends with the stop instruction. A normal request must stay
+  byte-identical.
+- Keep the button a plain component with `render` and `handleMouse`, shown with `ctx.ui.setWidget`
+  only during the thinking phase.
+- Keep interactive Pi in fullscreen mode by default, because Pi routes mouse clicks only there. A
+  forwarded `--tui-mode` wins, `LOCALPI_TUI_MODE` sets the default, and non-interactive launches get
+  no TUI flag.
+
 ## Thinking
 
 Pi owns the thinking level. localpi starts Pi from the remembered level and must not reimplement the control.

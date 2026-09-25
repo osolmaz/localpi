@@ -14,12 +14,17 @@ export type ModelThinkingFormat = "deepseek" | "qwen-chat-template";
 export type StatsMode = "off" | "line" | "full";
 export type PermissionMode = "ask" | "allow";
 export type SkillsMode = "own" | "ambient" | "off";
+export type TuiMode = "regular" | "fullscreen";
 
 export const statsModes: readonly StatsMode[] = ["off", "line", "full"];
 
 export const skillsModes: readonly SkillsMode[] = ["own", "ambient", "off"];
 
 export const permissionModes: readonly PermissionMode[] = ["ask", "allow"];
+
+export const tuiModes: readonly TuiMode[] = ["regular", "fullscreen"];
+
+export const defaultStopThinkingKey = "ctrl+shift+s";
 
 // localpi launches Pi through npx, so a normal launch always runs the newest Pi release.
 const defaultPiCommand = "npx -y @earendil-works/pi-coding-agent@latest";
@@ -65,6 +70,8 @@ export type LocalpiOptions = {
   readonly approveReadTools: boolean;
   readonly stats: StatsMode;
   readonly skills: SkillsMode;
+  readonly tuiMode: TuiMode;
+  readonly stopThinkingKey: string | undefined;
   readonly demo: boolean;
   readonly demoFromCli: boolean;
   readonly demoInitialPrompt: string | undefined;
@@ -118,6 +125,10 @@ export function defaultOptions(): LocalpiOptions {
     approveReadTools: envBoolean("LOCALPI_APPROVE_READ_TOOLS", false),
     stats: defaultStatsMode(),
     skills: parseSkillsMode(envString("LOCALPI_SKILLS", "own")),
+    tuiMode: parseTuiMode(envString("LOCALPI_TUI_MODE", "fullscreen")),
+    stopThinkingKey: parseStopThinkingKey(
+      envString("LOCALPI_STOP_THINKING_KEY", defaultStopThinkingKey)
+    ),
     demo: envBoolean("LOCALPI_DEMO", false),
     demoFromCli: false,
     demoInitialPrompt: process.env["LOCALPI_DEMO_INITIAL_PROMPT"],
@@ -191,6 +202,9 @@ export function usage(): string {
     "  --tools <list>           Pi tools allow list",
     "  --stats <mode>           stats: off, line, or full (default: full)",
     "  --skills <mode>          skills: own, ambient, or off (default: own)",
+    "  --stop-thinking-key <key>",
+    "                          key that stops thinking and asks for the answer, or off",
+    "                          (LOCALPI_STOP_THINKING_KEY=<key>, default: ctrl+shift+s)",
     "  --providers-file <path>  localpi provider registry JSON",
     "  --model-profile <path>   local model capability profile JSON",
     "  --model-reasoning <bool> override generated Pi reasoning capability",
@@ -313,6 +327,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--skills": (options, value) => ({ ...options, skills: parseSkillsMode(value) }),
+  "--stop-thinking-key": (options, value) => ({
+    ...options,
+    stopThinkingKey: parseStopThinkingKey(value)
+  }),
   "--ctx": (options, value) => ({ ...options, contextWindow: parsePositiveInteger(value) }),
   "--context-window": (options, value) => ({
     ...options,
@@ -453,6 +471,69 @@ export function parseSkillsMode(value: string): SkillsMode {
     }
   }
   throw new Error(`unknown skills mode ${value}; expected own, ambient, or off`);
+}
+
+export function parseTuiMode(value: string): TuiMode {
+  for (const mode of tuiModes) {
+    if (value === mode) {
+      return mode;
+    }
+  }
+  throw new Error(`unknown TUI mode ${value}; expected regular or fullscreen`);
+}
+
+const keyModifiers = new Set(["ctrl", "shift", "alt", "super"]);
+const namedKeys = new Set([
+  "escape",
+  "esc",
+  "enter",
+  "return",
+  "tab",
+  "space",
+  "backspace",
+  "delete",
+  "insert",
+  "clear",
+  "home",
+  "end",
+  "pageUp",
+  "pageDown",
+  "up",
+  "down",
+  "left",
+  "right"
+]);
+
+/**
+ * Read a key in Pi's shortcut format, such as `ctrl+shift+s`, or `off` for no key. A key must carry
+ * at least one modifier, so a plain letter can never steal typed text from the editor.
+ */
+export function parseStopThinkingKey(value: string): string | undefined {
+  if (value === "off") {
+    return undefined;
+  }
+  const parts = value.split("+");
+  const key = parts[parts.length - 1] ?? "";
+  const modifiers = parts.slice(0, -1);
+  const validModifiers =
+    modifiers.length > 0 &&
+    modifiers.every((modifier) => keyModifiers.has(modifier)) &&
+    new Set(modifiers).size === modifiers.length;
+  if (!validModifiers || !isShortcutKey(key)) {
+    throw new Error(
+      `unknown stop thinking key ${value}; expected off or a modified key such as ctrl+shift+s`
+    );
+  }
+  return value;
+}
+
+function isShortcutKey(key: string): boolean {
+  return (
+    /^[a-z0-9]$/u.test(key) ||
+    /^f([1-9]|1[0-2])$/u.test(key) ||
+    namedKeys.has(key) ||
+    /^[`\-=[\]\\;',./!@#$%^&*()_|~{}:<>?]$/u.test(key)
+  );
 }
 
 export function parsePermissionMode(value: string): PermissionMode {

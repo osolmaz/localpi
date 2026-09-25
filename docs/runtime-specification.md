@@ -260,6 +260,29 @@ Pi has no ACP mode of its own. ACP support always comes from the adapter, and lo
 
 The guard changes no served limit. It reacts to the stop reason Pi reports, so a run that reached the declared output cap continues inside the declared limits.
 
+## Stop Thinking
+
+Localpi always installs the `stop-thinking.ts` Pi extension. While an assistant message is in its
+thinking phase, `ctrl+shift+s`, a click on the button above the editor, or `/stop-thinking` stops the
+thinking and asks for the answer.
+
+- The extension aborts the running request, keeps the partial thinking, and starts one new turn with
+  a displayed custom message (`localpi-stop-thinking`) that holds the instruction.
+- For a llama.cpp or managed llama-server provider, `before_provider_request` replaces that
+  instruction with an assistant message whose `reasoning_content` holds the partial thinking, and
+  sets `continue_final_message: "content"` and `add_generation_prompt: false`. llama.cpp writes the
+  model's own end-of-thinking marker. A stop before the first thinking token sends one newline as the
+  thinking, because llama.cpp skips an empty continuation.
+- For vLLM, the request keeps the instruction and sets `chat_template_kwargs.enable_thinking: false`.
+- For other engines, the request keeps the instruction only.
+- The engine comes from the launch-time provider map, never from a model name.
+- Only the request that ends with the instruction changes. Every other request stays byte-identical.
+- `--stop-thinking-key` and `LOCALPI_STOP_THINKING_KEY` change the key, and `off` removes it.
+
+Pi routes mouse input only in fullscreen mode, so localpi adds `--tui-mode fullscreen` to an
+interactive launch. A forwarded `--tui-mode` wins, `LOCALPI_TUI_MODE` sets the default, and print,
+JSON, RPC, and ACP launches get no TUI flag.
+
 ## Out Of Scope
 
 - `--final-schema`

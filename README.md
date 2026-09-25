@@ -107,6 +107,9 @@ Localpi launches Pi with:
 - skills from `<state-dir>/pi-skills/` only, so shared skill directories stay out of the session
 - bounded Gemma/llama-server reasoning controlled by `--thinking`
 - in-session `/thinking` (Pi's own command) and `/approval` (localpi's) for changing session settings
+- a stop-thinking control: `ctrl+shift+s`, a clickable button, or `/stop-thinking` ends the thinking
+  phase and asks for the answer now
+- Pi's fullscreen TUI mode, so the transcript scrolls inside Pi and mouse clicks reach the TUI
 - local state under `~/.local/state/localpi`
 
 Pi owns stdout. Localpi writes its own diagnostics, including the connection summary and catalog
@@ -257,6 +260,50 @@ stopped without repeating earlier text. The guard:
 The guard installs as the `continue-on-truncation.ts` Pi extension. It is not a default extension,
 so a normal session writes it only when you ask for it. It works in ACP mode too, because both
 launch paths share the same Pi configuration and extension bundle.
+
+## Stop Thinking and Answer
+
+A local reasoning model can think for a long time before it answers. Press `ctrl+shift+s`, click
+the `[ Stop thinking and answer ]` button, or run `/stop-thinking` while the model thinks, and the
+model answers with the reasoning it has so far.
+
+The button shows above the editor only during the thinking phase. The key and `/stop-thinking` do
+nothing outside it, apart from a short notice.
+
+How localpi stops the thinking depends on the engine that serves the model:
+
+- **llama.cpp and the managed llama-server:** localpi aborts the running request and sends one new
+  request that continues the partial thinking as content (`continue_final_message: "content"`).
+  llama.cpp then writes the model's own end-of-thinking marker, for example `</think>`, and the model
+  answers from that point. localpi never hard-codes the marker.
+- **vLLM:** localpi aborts the request and asks for the answer with thinking turned off for that one
+  reply (`chat_template_kwargs.enable_thinking: false`).
+- **other engines:** localpi aborts the request and sends only the instruction to answer now.
+
+The session keeps a short record of each stop (`Stopped thinking. Answering now.`), so later turns
+know why the thinking ended.
+
+```bash
+localpi --stop-thinking-key alt+s    # use another key
+localpi --stop-thinking-key off      # no key; the button and /stop-thinking stay
+LOCALPI_STOP_THINKING_KEY=ctrl+shift+x localpi
+```
+
+The key needs a terminal that reports `ctrl+shift` combinations separately, through the Kitty
+keyboard protocol (Ghostty, Kitty, WezTerm, recent Windows Terminal). In tmux, set
+`extended-keys on`. When a terminal cannot report the key, pick another one or use the button.
+
+### Fullscreen TUI mode
+
+Pi sends mouse clicks to extension components only in its fullscreen TUI mode, so localpi starts
+interactive Pi with `--tui-mode fullscreen`. In fullscreen mode the transcript scrolls inside Pi,
+the editor and status line stay fixed at the bottom, and dragging selects and copies text.
+
+- `localpi --tui-mode regular` forwards Pi's own flag and keeps regular mode for one launch
+- `LOCALPI_TUI_MODE=regular` keeps regular mode for a shell
+- print, JSON, RPC, and ACP launches get no TUI flag
+
+In regular mode the button still shows the key hint, but a click does not reach Pi.
 
 ## llama.cpp (Default Engine)
 
@@ -556,6 +603,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--no-approval`: start with the tool approval gate off for the session
 - `--approve-read-tools`: also ask before read-only tools (`read`, `grep`, `find`, `ls`)
 - `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
+- `--stop-thinking-key <key|off>`: key that stops the thinking phase and asks for the answer. Default: `ctrl+shift+s`. `off` removes the key, and the button and `/stop-thinking` stay. `LOCALPI_STOP_THINKING_KEY` sets the same key
 - `--skills <own|ambient|off>`: skill sources. Default: `own`, which loads only `<state-dir>/pi-skills/` and turns off shared discovery such as `~/.agents/skills`. `ambient` keeps Pi's own discovery, and `off` loads no skills
 - `--no-skills`: load no skills. Alias for `--skills off`
 - `--no-token-status`: disable the token status extension. Alias for `--stats off`
@@ -611,6 +659,8 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_THINKING_BUDGET_MESSAGE`
 - `LOCALPI_STATS`
 - `LOCALPI_SKILLS`
+- `LOCALPI_STOP_THINKING_KEY`
+- `LOCALPI_TUI_MODE`
 - `LOCALPI_APPROVE_READ_TOOLS`
 - `LOCALPI_ACP`
 - `LOCALPI_ACP_ADAPTER`

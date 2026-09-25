@@ -334,6 +334,8 @@ function options(stateDir: string): LocalpiOptions {
     approveReadTools: false,
     stats: "full",
     skills: "own",
+    tuiMode: "fullscreen",
+    stopThinkingKey: "ctrl+shift+s",
     demo: false,
     demoFromCli: false,
     demoInitialPrompt: undefined,

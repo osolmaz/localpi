@@ -68,9 +68,31 @@ function piCommand(options: LocalpiOptions, themePath: string | undefined): Loca
     forwardedArgs: [
       ...localpiSkillsArgs(options.skills, options.stateDir),
       ...localpiThemeArgs(themePath, options.forwardedArgs),
+      ...localpiTuiModeArgs(options),
       ...(options.demo ? demoForwardedArgs(options.forwardedArgs) : options.forwardedArgs)
     ]
   };
+}
+
+/**
+ * Pi routes mouse clicks to extension components only in fullscreen mode, so localpi starts the
+ * interactive TUI there by default. A forwarded `--tui-mode` wins, and a non-interactive launch
+ * gets no TUI flag at all.
+ */
+export function localpiTuiModeArgs(
+  options: Pick<LocalpiOptions, "acp" | "tuiMode" | "forwardedArgs">
+): readonly string[] {
+  const args = options.forwardedArgs;
+  const nonInteractive = args.some(
+    (arg) => arg === "-p" || arg === "--print" || arg === "--mode" || arg.startsWith("--mode=")
+  );
+  const forwardedTuiMode = args.some(
+    (arg) => arg === "--tui-mode" || arg.startsWith("--tui-mode=")
+  );
+  if (options.acp || nonInteractive || forwardedTuiMode) {
+    return [];
+  }
+  return ["--tui-mode", options.tuiMode];
 }
 
 function demoForwardedArgs(args: readonly string[]): readonly string[] {

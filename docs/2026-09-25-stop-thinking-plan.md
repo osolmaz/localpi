@@ -47,7 +47,8 @@ So the flow is:
 3. When Pi settles, the extension starts one new turn with a short hidden instruction message.
 4. In `before_provider_request`, the extension rewrites only that request. For a llama.cpp provider
    it replaces the instruction with an assistant message that holds the partial thinking in
-   `reasoning_content`, and sets `continue_final_message: "content"`. llama.cpp then writes the end
+   `reasoning_content`, and sets `continue_final_message: "content"` with
+   `add_generation_prompt: false`. llama.cpp then writes the end
    marker itself, and the model answers.
 5. The answer streams as a normal assistant message. Tool calls after the answer work as usual.
 
@@ -59,8 +60,11 @@ Engine behavior, taken from the launch-time engine map, never guessed from a mod
 | vLLM                            | Instruction message plus `chat_template_kwargs.enable_thinking: false` for that one request.                      |
 | other or unknown engines        | Instruction message only. localpi does not guess engine-specific fields.                                          |
 
-When the model stopped before any thinking text arrived, there is nothing to continue. llama.cpp then
-gets the instruction plus `chat_template_kwargs.enable_thinking: false`, like vLLM.
+When the user stops before the first thinking token arrived, llama.cpp would skip an empty
+continuation. The extension then sends one newline as the thinking, so the server still closes the
+thinking at once. A check against the live server showed the rendered prompt `<think>\n</think>` and
+a direct answer. `enable_thinking: false` is not a safe llama.cpp fallback, because many chat
+templates ignore it.
 
 ## Where the button lives
 
