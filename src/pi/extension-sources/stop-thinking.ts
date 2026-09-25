@@ -212,11 +212,11 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     return continuationPayload(event.payload, continuation);
   });
 
-  // Match the assistant text: one empty line above, and the same left padding.
+  // Match the assistant text padding. Pi already puts one empty line above a custom message.
   pi.registerMessageRenderer(customType, (_message, options, theme) => ({
     render(width: number): string[] {
       const pad = " ".repeat(options.outputPad);
-      return ["", pad + fit(theme.fg("muted", stopNotice), stopNotice, width - pad.length)];
+      return [pad + fit(theme.fg("muted", stopNotice), stopNotice, width - pad.length)];
     },
     invalidate(): void {}
   }));
