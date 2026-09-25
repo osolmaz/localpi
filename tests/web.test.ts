@@ -43,7 +43,8 @@ describe("localpi web mode", () => {
         webOpen: false,
         webHost: "100.64.0.1",
         webAllowedHosts: ["box"],
-        webTheme: "mocha"
+        webTheme: "mocha",
+        forwardedArgs: []
       },
       (served, options = {}) => {
         calls.push({ app: served, options });
@@ -79,6 +80,32 @@ describe("localpi web mode", () => {
     expect(choices[3]?.theme).toEqual(localpiWebTheme("mocha"));
     expect(choices[0]?.accents["peach"]).toBe(catppuccinLatte.peach);
     expect(Object.keys(choices[0]?.accents ?? {})).toHaveLength(14);
+  });
+
+  it("offers no Pi theme switch when Pi themes are off", async () => {
+    const seen: PiWebOptions[] = [];
+    await launchWebRuntime(
+      { id: "localpi" } as PiAppDefinition,
+      {
+        webPort: 0,
+        webOpen: false,
+        webHost: "127.0.0.1",
+        webAllowedHosts: [],
+        webTheme: "latte",
+        forwardedArgs: ["--no-themes"]
+      },
+      (_app, options = {}) => {
+        seen.push(options);
+        return Promise.resolve(0);
+      }
+    );
+
+    expect(seen[0]?.themes?.map((choice) => choice.piTheme)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    ]);
   });
 
   it("builds dark page colors from a dark flavor", () => {

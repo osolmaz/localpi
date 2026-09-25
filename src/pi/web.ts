@@ -75,7 +75,7 @@ const accentNames: readonly CatppuccinColor[] = [
  * The theme choices for web mode's settings: every Catppuccin flavor, each with the Pi theme that
  * localpi writes for it, so a change in the page also switches Pi's theme in every session.
  */
-export function localpiWebThemeChoices(): readonly PiWebThemeChoice[] {
+export function localpiWebThemeChoices(piThemes = true): readonly PiWebThemeChoice[] {
   return catppuccinFlavors.map((flavor) => ({
     id: catppuccinThemeName(flavor),
     label: flavorLabels[flavor],
@@ -83,14 +83,18 @@ export function localpiWebThemeChoices(): readonly PiWebThemeChoice[] {
     accents: Object.fromEntries(
       accentNames.map((name) => [name, catppuccinPalettes[flavor][name]])
     ),
-    piTheme: catppuccinThemeName(flavor)
+    // With Pi themes off (a forwarded --no-themes), Pi has no theme to switch to.
+    ...(piThemes ? { piTheme: catppuccinThemeName(flavor) } : {})
   }));
 }
 
 /** Serve localpi in the browser until the process is stopped. */
 export async function launchWebRuntime(
   app: PiAppDefinition,
-  options: Pick<LocalpiOptions, "webPort" | "webOpen" | "webHost" | "webAllowedHosts" | "webTheme">,
+  options: Pick<
+    LocalpiOptions,
+    "webPort" | "webOpen" | "webHost" | "webAllowedHosts" | "webTheme" | "forwardedArgs"
+  >,
   run: typeof runPiWebApp = runPiWebApp
 ): Promise<number> {
   return await run(app, {
@@ -99,7 +103,7 @@ export async function launchWebRuntime(
     port: options.webPort,
     open: options.webOpen,
     cwd: process.cwd(),
-    themes: localpiWebThemeChoices(),
+    themes: localpiWebThemeChoices(!options.forwardedArgs.includes("--no-themes")),
     defaultTheme: catppuccinThemeName(options.webTheme)
   });
 }
