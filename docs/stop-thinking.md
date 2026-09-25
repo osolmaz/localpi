@@ -163,6 +163,31 @@ leaves it out of later requests.
 - The stop notice uses the renderer's `outputPad`, so it lines up with the assistant text. Pi already
   puts one empty line above every custom message, so the renderer adds none.
 
+## Endpoint thinking ceiling
+
+For an explicit `llama-cpp` or `vllm` provider, `--thinking-budget N` opts in to a
+request-level ceiling. Pi keeps thinking on but sends `max_tokens: N` (or
+`max_completion_tokens: N`) for each request. If the server stops at that ceiling
+while the message contains only thinking, localpi asks for an answer through the
+same stop-thinking path. For llama.cpp, it continues the partial reasoning as
+assistant content. For vLLM, it asks for an answer with
+`chat_template_kwargs.enable_thinking: false`. The continuation uses no more
+than the original request limit minus `N` tokens. The generic truncation guard
+does not send a second follow-up for that thinking-only stop.
+
+This is an output-token ceiling for the first request, **not** an exact count of
+thinking tokens. If the model starts its answer before `N`, that answer still
+uses the first request's remaining tokens. An error, a tool call, an answer
+that hits the ceiling, or an abort does not trigger the answer-only path. If
+Pi turns thinking off, the ceiling does not apply. An endpoint must expose an
+output limit above `N`; otherwise the request fails before inference. The
+backend must honor the output ceiling and report a length stop for this to
+work. Offline tests cannot confirm that an endpoint does so.
+
+The managed `llama-server` keeps its existing native `--reasoning-budget`
+behavior. This endpoint path neither changes a server nor applies to an
+unknown OpenAI-compatible engine. It is off by default.
+
 ## Settings
 
 | Setting                                                          | Default        | Meaning                                                      |
@@ -170,6 +195,7 @@ leaves it out of later requests.
 | `--stop-thinking-key <key\|off>`, `LOCALPI_STOP_THINKING_KEY`    | `ctrl+shift+s` | The key. `off` removes the key and its hint.                 |
 | `--stop-thinking-delay <seconds>`, `LOCALPI_STOP_THINKING_DELAY` | `5`            | Thinking time before the button shows. `0` shows it at once. |
 | `LOCALPI_TUI_MODE`, forwarded `--tui-mode`                       | `fullscreen`   | Pi's TUI mode for interactive launches.                      |
+| `--thinking-budget <n>`, `LOCALPI_THINKING_BUDGET`               | unset          | Native managed-server budget, or opt-in endpoint ceiling.    |
 
 The flag wins over the environment variable. The key needs a terminal that reports `ctrl+shift`
 combinations separately (the Kitty keyboard protocol). In tmux, set `extended-keys on`.
@@ -178,7 +204,7 @@ combinations separately (the Kitty keyboard protocol). In tmux, set `extended-ke
 
 - `tests/stop-thinking-extension.test.ts` covers the thinking phase, the button delay, the key, the
   click area, the command, the `message_end` replacement, each engine rewrite, the empty-thinking
-  case, retries, repeated stops, and session resets.
+  case, retries, repeated stops, session resets, and the opt-in endpoint ceiling.
 - `tests/generated-extension-types.test.ts` typechecks the generated extension against the installed
   Pi version.
 - `tests/options.test.ts` and `tests/pi-config.test.ts` cover the options and the TUI mode rules.

@@ -597,7 +597,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--model-thinking-format <deepseek|qwen-chat-template>`: override generated Pi thinking format
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
 - `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: last saved level, then `medium`
-- `--thinking-budget <n>`: managed `llama-server` thinking cap in tokens. `-1` leaves thinking unrestricted, and a positive value replaces the budget of the thinking level
+- `--thinking-budget <n>`: managed `llama-server` thinking cap, or an opt-in output ceiling for a selected `llama-cpp` or `vllm` provider. `-1` disables the endpoint ceiling. See [Stop Thinking](docs/stop-thinking.md#endpoint-thinking-ceiling) for the difference.
 - `--thinking-budget-message <text>`: text the server injects before the end-of-thinking tag when the budget runs out. An empty value passes no message. Default: `Reasoning budget reached. Stop thinking and answer now.`
 - `--demo`: endlessly run Pi prompts inside the normal Pi TUI until interrupted or Pi exits; requires an explicit non-`auto` model
 - `--demo-initial-prompt <text>`: first demo prompt
