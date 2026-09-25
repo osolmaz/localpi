@@ -1,7 +1,8 @@
-// Catppuccin Mocha palette. Source: https://catppuccin.com/palette (MIT).
+// Catppuccin palettes. Source: https://catppuccin.com/palette (MIT).
 //
-// The palette has two consumers: the Pi theme localpi writes for each session, and localpi's own
-// terminal output. Keep both on this palette so the launcher and the session match.
+// Mocha has two consumers: the Pi theme localpi writes for each terminal session, and localpi's own
+// terminal output. Keep both on this palette so the launcher and the session match. Latte is the
+// light flavor for web mode, where the page and the Pi theme share it.
 export const catppuccinMocha = {
   rosewater: "#f5e0dc",
   flamingo: "#f2cdcd",
@@ -32,6 +33,44 @@ export const catppuccinMocha = {
 } as const;
 
 export type CatppuccinColor = keyof typeof catppuccinMocha;
+
+export const catppuccinLatte: Readonly<Record<CatppuccinColor, string>> = {
+  rosewater: "#dc8a78",
+  flamingo: "#dd7878",
+  pink: "#ea76cb",
+  mauve: "#8839ef",
+  red: "#d20f39",
+  maroon: "#e64553",
+  peach: "#fe640b",
+  yellow: "#df8e1d",
+  green: "#40a02b",
+  teal: "#179299",
+  sky: "#04a5e5",
+  sapphire: "#209fb5",
+  blue: "#1e66f5",
+  lavender: "#7287fd",
+  text: "#4c4f69",
+  subtext1: "#5c5f77",
+  subtext0: "#6c6f85",
+  overlay2: "#7c7f93",
+  overlay1: "#8c8fa1",
+  overlay0: "#9ca0b0",
+  surface2: "#acb0be",
+  surface1: "#bcc0cc",
+  surface0: "#ccd0da",
+  base: "#eff1f5",
+  mantle: "#e6e9ef",
+  crust: "#dce0e8"
+};
+
+export type CatppuccinFlavor = "mocha" | "latte";
+
+export const catppuccinPalettes: Readonly<
+  Record<CatppuccinFlavor, Readonly<Record<CatppuccinColor, string>>>
+> = {
+  mocha: catppuccinMocha,
+  latte: catppuccinLatte
+};
 
 export type OutputStream = "stdout" | "stderr";
 

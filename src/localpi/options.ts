@@ -82,6 +82,11 @@ export type LocalpiOptions = {
   readonly demoFollowupPromptFile: string | undefined;
   readonly acp: boolean;
   readonly acpFromCli: boolean;
+  readonly web: boolean;
+  readonly webPort: number;
+  readonly webOpen: boolean;
+  readonly webHost: string;
+  readonly webAllowedHosts: readonly string[];
   readonly status: boolean;
   readonly stop: boolean;
   readonly list: boolean;
@@ -141,6 +146,11 @@ export function defaultOptions(): LocalpiOptions {
     demoFollowupPromptFile: process.env["LOCALPI_DEMO_FOLLOWUP_PROMPT_FILE"],
     acp: envBoolean("LOCALPI_ACP", false),
     acpFromCli: false,
+    web: envBoolean("LOCALPI_WEB", false),
+    webPort: envNonNegativeInteger("LOCALPI_WEB_PORT", "0"),
+    webOpen: envBoolean("LOCALPI_WEB_OPEN", true),
+    webHost: envString("LOCALPI_WEB_HOST", "127.0.0.1"),
+    webAllowedHosts: parseHostList(envString("LOCALPI_WEB_ALLOWED_HOSTS", "")),
     status: false,
     stop: false,
     list: false,
@@ -222,6 +232,14 @@ export function usage(): string {
     "  --no-token-status       alias for --stats off",
     "  --acp                   serve ACP on stdio through the pinned pi-acp adapter",
     "                          (LOCALPI_ACP=1); requires an explicit --model",
+    "  --web                   run localpi in the browser: sessions and the Pi TUI (LOCALPI_WEB=1)",
+    "  --web-port <n>          web mode port, 0 picks a free port (LOCALPI_WEB_PORT, default: 0)",
+    "  --no-browser            do not open the browser in web mode (LOCALPI_WEB_OPEN=0)",
+    "  --web-host <host>       web mode listen address, for example a Tailscale address",
+    "                          (LOCALPI_WEB_HOST, default: 127.0.0.1)",
+    "  --web-allowed-hosts <names>",
+    "                          extra host names for the web page, comma-separated",
+    "                          (LOCALPI_WEB_ALLOWED_HOSTS)",
     "  --demo                  endlessly run Pi prompts for demo mode",
     "  --demo-initial-prompt <text>",
     "                          first demo prompt",
@@ -303,6 +321,8 @@ const booleanFlagUpdaters: Readonly<Record<string, BooleanUpdater>> = {
   "--no-skills": (options) => ({ ...options, skills: "off" }),
   "-ns": (options) => ({ ...options, skills: "off" }),
   "--acp": (options) => ({ ...options, acp: true, acpFromCli: true }),
+  "--web": (options) => ({ ...options, web: true }),
+  "--no-browser": (options) => ({ ...options, webOpen: false }),
   "--demo": (options) => ({ ...options, demo: true, demoFromCli: true })
 };
 
@@ -363,6 +383,12 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--llama-server": (options, value) => ({ ...options, serverCommand: value }),
   "--host": (options, value) => ({ ...options, host: value }),
   "--port": (options, value) => ({ ...options, port: parsePositiveInteger(value) }),
+  "--web-port": (options, value) => ({ ...options, webPort: parseNonNegativeInteger(value) }),
+  "--web-host": (options, value) => ({ ...options, webHost: value }),
+  "--web-allowed-hosts": (options, value) => ({
+    ...options,
+    webAllowedHosts: parseHostList(value)
+  }),
   "--gpu-layers": (options, value) => ({ ...options, gpuLayers: parseNonNegativeInteger(value) }),
   "--parallel": (options, value) => ({ ...options, parallel: parsePositiveInteger(value) }),
   "--chat-template": (options, value) => ({ ...options, chatTemplate: value }),
@@ -605,6 +631,13 @@ function parseModelThinkingFormat(value: string): ModelThinkingFormat {
   throw new Error(
     `unknown model thinking format ${value}; expected deepseek or qwen-chat-template`
   );
+}
+
+function parseHostList(value: string): readonly string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== "");
 }
 
 function envString(name: string, fallback: string): string {

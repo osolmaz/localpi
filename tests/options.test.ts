@@ -92,6 +92,38 @@ describe("localpi option parsing", () => {
     }
   });
 
+  it("parses the web mode options", () => {
+    const defaults = parseLocalpiArgs([]);
+    expect(defaults).toMatchObject({
+      web: false,
+      webPort: 0,
+      webOpen: true,
+      webHost: "127.0.0.1",
+      webAllowedHosts: []
+    });
+    expect(
+      parseLocalpiArgs([
+        "--web",
+        "--web-port",
+        "8421",
+        "--no-browser",
+        "--web-host",
+        "100.64.0.1",
+        "--web-allowed-hosts",
+        "box, box.tailnet.ts.net,"
+      ])
+    ).toMatchObject({
+      web: true,
+      webPort: 8421,
+      webOpen: false,
+      webHost: "100.64.0.1",
+      webAllowedHosts: ["box", "box.tailnet.ts.net"]
+    });
+    expect(() => parseLocalpiArgs(["--web-port", "-1"])).toThrow(
+      "expected a non-negative integer, got -1"
+    );
+  });
+
   it("parses and validates thinking levels", () => {
     expect(parseLocalpiArgs(["--thinking", "low"])).toMatchObject({
       thinking: "low"
@@ -327,6 +359,8 @@ describe("localpi option parsing", () => {
     expect(text).toContain("--stop-thinking-key <key>");
     expect(text).toContain("LOCALPI_STOP_THINKING_KEY");
     expect(text).toContain("--stop-thinking-delay <seconds>");
+    expect(text).toContain("--web ");
+    expect(text).toContain("--web-host <host>");
     expect(text).toContain("--demo");
   });
 });
@@ -358,6 +392,11 @@ describe("localpi environment defaults", () => {
     "LOCALPI_CONTINUE_ON_TRUNCATION",
     "LOCALPI_STOP_THINKING_KEY",
     "LOCALPI_STOP_THINKING_DELAY",
+    "LOCALPI_WEB",
+    "LOCALPI_WEB_PORT",
+    "LOCALPI_WEB_OPEN",
+    "LOCALPI_WEB_HOST",
+    "LOCALPI_WEB_ALLOWED_HOSTS",
     "LOCALPI_TUI_MODE"
   ] as const;
   const previous = new Map(names.map((name) => [name, process.env[name]]));
@@ -390,6 +429,21 @@ describe("localpi environment defaults", () => {
     expect(() => parseLocalpiArgs([])).toThrow(
       "unknown TUI mode tiny; expected regular or fullscreen"
     );
+  });
+
+  it("reads the web mode options from the environment", () => {
+    process.env["LOCALPI_WEB"] = "1";
+    process.env["LOCALPI_WEB_PORT"] = "9000";
+    process.env["LOCALPI_WEB_OPEN"] = "0";
+    process.env["LOCALPI_WEB_HOST"] = "100.64.0.2";
+    process.env["LOCALPI_WEB_ALLOWED_HOSTS"] = "box";
+    expect(parseLocalpiArgs([])).toMatchObject({
+      web: true,
+      webPort: 9000,
+      webOpen: false,
+      webHost: "100.64.0.2",
+      webAllowedHosts: ["box"]
+    });
   });
 
   it("reads defaults from LOCALPI_* environment variables", () => {

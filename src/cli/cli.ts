@@ -17,6 +17,7 @@ import { createLocalpiAppDefinition } from "../pi/app.js";
 import { writeLocalpiTheme } from "../pi/theme.js";
 import { writeDefaultExtensions } from "../pi/extensions.js";
 import { ensureLocalpiSkillsDir } from "../pi/skills.js";
+import { launchWebRuntime } from "../pi/web.js";
 
 export async function run(args: readonly string[]): Promise<CommandResult> {
   try {
@@ -26,6 +27,7 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       return helpResult;
     }
     validateAcpOptions(options);
+    validateWebOptions(options);
     validateDemoOptions(options);
     const commandResult = await immediateCommandResult(options);
     if (commandResult !== undefined) {
@@ -53,8 +55,15 @@ export async function run(args: readonly string[]): Promise<CommandResult> {
       options,
       connection,
       extensions,
-      await writeLocalpiTheme(options.stateDir, options.forwardedArgs)
+      await writeLocalpiTheme(
+        options.stateDir,
+        options.forwardedArgs,
+        options.web ? "latte" : "mocha"
+      )
     );
+    if (options.web) {
+      return { code: await launchWebRuntime(app, options), stdout: "", stderr: "" };
+    }
     return options.acp
       ? await launchAcpRuntime(app, connection)
       : await launchResolvedRuntime(app, connection);
@@ -123,6 +132,33 @@ function validateDemoTty(): void {
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
     throw new Error(
       "--demo requires an interactive TTY on stdin and stdout; run it directly in a terminal"
+    );
+  }
+}
+
+// Web mode runs the normal interactive Pi TUI in the browser, one process per session, so it
+// cannot share the terminal with ACP or demo mode, or run a non-interactive Pi mode.
+function validateWebOptions(options: ParsedOptions): void {
+  // An immediate command wins over an exported LOCALPI_WEB, as it does for ACP and demo mode.
+  if (!options.web || hasImmediateCommand(options)) {
+    return;
+  }
+  if (options.acp) {
+    throw new Error("--web cannot be used with --acp");
+  }
+  if (options.demo) {
+    throw new Error("--web cannot be used with --demo");
+  }
+  const mode = forwardedIncompatibleMode(options.forwardedArgs);
+  if (mode !== undefined) {
+    throw new Error(
+      `--web cannot be used with forwarded Pi mode ${mode}; web mode runs the Pi TUI`
+    );
+  }
+  const print = options.forwardedArgs.find((arg) => arg === "-p" || arg === "--print");
+  if (print !== undefined) {
+    throw new Error(
+      `--web cannot be used with forwarded Pi flag ${print}; web mode runs the Pi TUI`
     );
   }
 }
