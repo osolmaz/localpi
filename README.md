@@ -267,8 +267,10 @@ A local reasoning model can think for a long time before it answers. Press `ctrl
 the `[ Stop thinking and answer ]` button, or run `/stop-thinking` while the model thinks, and the
 model answers with the reasoning it has so far.
 
-The button shows above the editor only during the thinking phase. The key and `/stop-thinking` do
-nothing outside it, apart from a short notice.
+The button shows above the editor after the model has thought for more than 5 seconds, so a short
+thinking phase stays quiet. The key and `/stop-thinking` work for the whole thinking phase, and
+outside it they only show a short notice. `--stop-thinking-delay <seconds>` or
+`LOCALPI_STOP_THINKING_DELAY` changes the delay, and `0` shows the button at once.
 
 How localpi stops the thinking depends on the engine that serves the model:
 
@@ -287,7 +289,10 @@ know why the thinking ended.
 localpi --stop-thinking-key alt+s    # use another key
 localpi --stop-thinking-key off      # no key; the button and /stop-thinking stay
 LOCALPI_STOP_THINKING_KEY=ctrl+shift+x localpi
+localpi --stop-thinking-delay 0      # show the button as soon as the thinking starts
 ```
+
+`docs/stop-thinking.md` describes how the feature is implemented.
 
 The key needs a terminal that reports `ctrl+shift` combinations separately, through the Kitty
 keyboard protocol (Ghostty, Kitty, WezTerm, recent Windows Terminal). In tmux, set
@@ -604,6 +609,7 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--approve-read-tools`: also ask before read-only tools (`read`, `grep`, `find`, `ls`)
 - `--stats <off|line|full>`: status detail level. Default: `full`, or the last saved `/stats` choice
 - `--stop-thinking-key <key|off>`: key that stops the thinking phase and asks for the answer. Default: `ctrl+shift+s`. `off` removes the key, and the button and `/stop-thinking` stay. `LOCALPI_STOP_THINKING_KEY` sets the same key
+- `--stop-thinking-delay <seconds>`: thinking time before the stop thinking button shows. Default: `5`. `0` shows it at once. `LOCALPI_STOP_THINKING_DELAY` sets the same delay
 - `--skills <own|ambient|off>`: skill sources. Default: `own`, which loads only `<state-dir>/pi-skills/` and turns off shared discovery such as `~/.agents/skills`. `ambient` keeps Pi's own discovery, and `off` loads no skills
 - `--no-skills`: load no skills. Alias for `--skills off`
 - `--no-token-status`: disable the token status extension. Alias for `--stats off`
@@ -660,6 +666,7 @@ explicit `PI_OFFLINE=0` or `PI_OFFLINE=1` always wins.
 - `LOCALPI_STATS`
 - `LOCALPI_SKILLS`
 - `LOCALPI_STOP_THINKING_KEY`
+- `LOCALPI_STOP_THINKING_DELAY`
 - `LOCALPI_TUI_MODE`
 - `LOCALPI_APPROVE_READ_TOOLS`
 - `LOCALPI_ACP`

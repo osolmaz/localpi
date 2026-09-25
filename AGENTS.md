@@ -117,7 +117,12 @@ Concrete examples:
 - Rewrite only the request that ends with the stop instruction. A normal request must stay
   byte-identical.
 - Keep the button a plain component with `render` and `handleMouse`, shown with `ctx.ui.setWidget`
-  only during the thinking phase.
+  only during the thinking phase and only after `--stop-thinking-delay` (default 5 seconds). Keep
+  the key and `/stop-thinking` working for the whole thinking phase.
+- Use only existing Pi session entry types. A stop may add the `localpi-stop-thinking` custom
+  message and finish the stopped message as `stop` through `message_end`; add no new fields or entry
+  types.
+- Keep `docs/stop-thinking.md` in step with the implementation.
 - Keep interactive Pi in fullscreen mode by default, because Pi routes mouse clicks only there. A
   forwarded `--tui-mode` wins, `LOCALPI_TUI_MODE` sets the default, and non-interactive launches get
   no TUI flag.
