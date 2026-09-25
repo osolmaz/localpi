@@ -165,37 +165,39 @@ leaves it out of later requests.
 
 ## Endpoint thinking ceiling
 
-For an explicit `llama-cpp` or `vllm` provider, `--thinking-budget N` opts in to a
+For a selected `llama-cpp` or `vllm` provider, `--thinking-phase-output-cap N` opts in to a
 request-level ceiling. Pi keeps thinking on but sends `max_tokens: N` (or
 `max_completion_tokens: N`) for each request. If the server stops at that ceiling
 while the message contains only thinking, localpi asks for an answer through the
 same stop-thinking path. For llama.cpp, it continues the partial reasoning as
 assistant content. For vLLM, it asks for an answer with
 `chat_template_kwargs.enable_thinking: false`. The continuation uses no more
-than the original request limit minus `N` tokens. The generic truncation guard
-does not send a second follow-up for that thinking-only stop.
+than the original request limit minus `N` tokens. The same extension handles manual
+stops, capped thinking stops, and ordinary truncated answers. It chooses only
+one follow-up for each stop.
 
 This is an output-token ceiling for the first request, **not** an exact count of
 thinking tokens. If the model starts its answer before `N`, that answer still
 uses the first request's remaining tokens. An error, a tool call, an answer
 that hits the ceiling, or an abort does not trigger the answer-only path. If
 Pi turns thinking off, the ceiling does not apply. An endpoint must expose an
-output limit above `N`; otherwise the request fails before inference. The
-backend must honor the output ceiling and report a length stop for this to
-work. Offline tests cannot confirm that an endpoint does so.
+output limit above `N`; otherwise localpi requests an abort and reports an
+error. The backend must honor the output ceiling and report a length stop for
+this to work. Offline tests cannot confirm either behavior on an endpoint.
 
-The managed `llama-server` keeps its existing native `--reasoning-budget`
-behavior. This endpoint path neither changes a server nor applies to an
+The managed `llama-server` keeps its existing `--thinking-budget` option and native
+`--reasoning-budget` behavior. This endpoint path neither changes a server nor applies to an
 unknown OpenAI-compatible engine. It is off by default.
 
 ## Settings
 
-| Setting                                                          | Default        | Meaning                                                      |
-| ---------------------------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `--stop-thinking-key <key\|off>`, `LOCALPI_STOP_THINKING_KEY`    | `ctrl+shift+s` | The key. `off` removes the key and its hint.                 |
-| `--stop-thinking-delay <seconds>`, `LOCALPI_STOP_THINKING_DELAY` | `5`            | Thinking time before the button shows. `0` shows it at once. |
-| `LOCALPI_TUI_MODE`, forwarded `--tui-mode`                       | `fullscreen`   | Pi's TUI mode for interactive launches.                      |
-| `--thinking-budget <n>`, `LOCALPI_THINKING_BUDGET`               | unset          | Native managed-server budget, or opt-in endpoint ceiling.    |
+| Setting                                                                | Default        | Meaning                                                      |
+| ---------------------------------------------------------------------- | -------------- | ------------------------------------------------------------ |
+| `--stop-thinking-key <key\|off>`, `LOCALPI_STOP_THINKING_KEY`          | `ctrl+shift+s` | The key. `off` removes the key and its hint.                 |
+| `--stop-thinking-delay <seconds>`, `LOCALPI_STOP_THINKING_DELAY`       | `5`            | Thinking time before the button shows. `0` shows it at once. |
+| `LOCALPI_TUI_MODE`, forwarded `--tui-mode`                             | `fullscreen`   | Pi's TUI mode for interactive launches.                      |
+| `--thinking-budget <n>`, `LOCALPI_THINKING_BUDGET`                     | unset          | Native managed-server reasoning budget.                      |
+| `--thinking-phase-output-cap <n>`, `LOCALPI_THINKING_PHASE_OUTPUT_CAP` | unset          | Optional first-request output ceiling on supported engines.  |
 
 The flag wins over the environment variable. The key needs a terminal that reports `ctrl+shift`
 combinations separately (the Kitty keyboard protocol). In tmux, set `extended-keys on`.

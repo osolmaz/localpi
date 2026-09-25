@@ -6,7 +6,6 @@ import type { LocalpiOptions } from "../localpi/options.js";
 import type { EngineEntry } from "../localpi/provider-registry.js";
 import { localpiSettingsPath } from "../localpi/settings-state.js";
 import { resolveDemoPrompts } from "./demo.js";
-import { continueOnTruncationExtensionSource } from "./extension-sources/continue-on-truncation.js";
 import { startupModelSelectorExtensionSource } from "./extension-sources/startup-model-selector.js";
 import { statusLineExtensionSource } from "./extension-sources/status-line.js";
 import { stopThinkingExtensionSource } from "./extension-sources/stop-thinking.js";
@@ -89,13 +88,7 @@ export async function writeDefaultExtensions(
       })
     )
   );
-  const { endpointThinkingBudget, cappedProviders } = endpointThinkingSettings(
-    options,
-    extensionOptions.engines ?? []
-  );
-  paths.push(
-    ...(await continuationExtensions(extensionDir, options.continueOnTruncation, cappedProviders))
-  );
+  const thinkingPhaseOutputCap = endpointOutputCap(options, extensionOptions);
   if (options.stats !== "off") {
     paths.push(
       await writeExtension(
@@ -120,7 +113,8 @@ export async function writeDefaultExtensions(
         key: options.stopThinkingKey,
         buttonDelayMs: Math.round(options.stopThinkingDelay * 1000),
         engines: extensionOptions.engines ?? [],
-        endpointThinkingBudget
+        thinkingPhaseOutputCap,
+        continuationLimit: options.continueOnTruncation
       })
     )
   );
@@ -145,40 +139,20 @@ async function writeExtension(extensionDir: string, name: string, source: string
   return extensionPath;
 }
 
-async function continuationExtensions(
-  extensionDir: string,
-  limit: number,
-  cappedProviders: readonly string[]
-): Promise<string[]> {
-  if (limit === 0) {
-    return [];
-  }
-  return [
-    await writeExtension(
-      extensionDir,
-      "continue-on-truncation.ts",
-      continueOnTruncationExtensionSource(limit, cappedProviders)
-    )
-  ];
-}
-
-function endpointThinkingSettings(
+function endpointOutputCap(
   options: LocalpiOptions,
-  engines: readonly EngineEntry[]
-): { endpointThinkingBudget: number | undefined; cappedProviders: string[] } {
-  const endpointThinkingBudget =
-    options.thinkingBudget !== undefined &&
-    options.thinkingBudget > 0 &&
-    options.runtime !== "llama-server"
-      ? options.thinkingBudget
-      : undefined;
-  const cappedProviders =
-    endpointThinkingBudget === undefined
-      ? []
-      : engines
-          .filter((entry) => entry.engine === "llama.cpp" || entry.engine === "vLLM")
-          .map((entry) => entry.provider);
-  return { endpointThinkingBudget, cappedProviders };
+  extensionOptions: ExtensionOptions
+): number | undefined {
+  const cap = options.thinkingPhaseOutputCap;
+  if (cap === undefined) {
+    return undefined;
+  }
+  const selected = extensionOptions.runtime?.providerId;
+  const engine = extensionOptions.engines?.find((entry) => entry.provider === selected)?.engine;
+  if (engine !== "llama.cpp" && engine !== "vLLM") {
+    throw new Error("--thinking-phase-output-cap needs a selected llama.cpp or vLLM provider");
+  }
+  return cap;
 }
 
 function tokenStatusConfig(

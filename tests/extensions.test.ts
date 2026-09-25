@@ -100,25 +100,21 @@ describe("Pi extensions", () => {
     }
   });
 
-  it("adds the continuation guard only when a limit is set", async () => {
+  it("uses the same extension for manual stop and generic truncation", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const off = await writeDefaultExtensions(options(stateDir));
       expect(off.paths).toHaveLength(5);
-      expect(off.paths.map((entry) => path.basename(entry))).not.toContain(
-        "continue-on-truncation.ts"
-      );
-
       const on = await writeDefaultExtensions({ ...options(stateDir), continueOnTruncation: 2 });
-      expect(on.paths).toHaveLength(6);
-      const guard = await readFile(
-        on.paths.find((entry) => path.basename(entry) === "continue-on-truncation.ts") ?? "",
+      expect(on.paths).toHaveLength(5);
+      const stop = await readFile(
+        on.paths.find((entry) => path.basename(entry) === "stop-thinking.ts") ?? "",
         "utf8"
       );
-      expect(guard).toContain("const limit = 2;");
-      expect(guard).toContain('pi.on("turn_end"');
-      expect(guard).toContain('pi.sendUserMessage(nudge, { deliverAs: "followUp" })');
-      expect(guard).not.toContain("process.env");
+      expect(stop).toContain("const continuationLimit: number = 2;");
+      expect(stop).toContain('pi.on("turn_end"');
+      expect(stop).toContain('pi.sendUserMessage(nudge, { deliverAs: "followUp" })');
+      expect(stop).not.toContain("process.env");
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -206,32 +202,49 @@ describe("Pi extensions", () => {
     }
   });
 
-  it("wires the endpoint cap only for explicitly mapped engines, not the managed server", async () => {
+  it("requires a selected supported engine for an opt-in endpoint cap", async () => {
     const stateDir = await mkdtemp(path.join(os.tmpdir(), "localpi-ext-"));
     try {
       const engines = [
         { provider: "llama-cpp", engine: "llama.cpp" },
         { provider: "vllm", engine: "vLLM" },
-        { provider: "llama-server", engine: "llama-server" },
-        { provider: "other", engine: "unknown" }
+        { provider: "llama-server", engine: "llama-server" }
       ];
-      const readSources = async (runtime: LocalpiOptions["runtime"]) => {
-        const bundle = await writeDefaultExtensions(
-          { ...options(stateDir), runtime, thinkingBudget: 8000, continueOnTruncation: 2 },
-          { engines }
-        );
-        return Promise.all(
-          ["stop-thinking.ts", "continue-on-truncation.ts"].map((name) =>
-            readFile(bundle.paths.find((entry) => path.basename(entry) === name) ?? "", "utf8")
-          )
-        );
-      };
-      const [stop, guard] = await readSources("auto");
-      expect(stop).toContain("const endpointThinkingBudget: number | undefined = 8000;");
+      const capped = { ...options(stateDir), thinkingPhaseOutputCap: 8000 };
+      const bundle = await writeDefaultExtensions(capped, {
+        engines,
+        runtime: { providerId: "vllm", baseUrl: "https://example.test/v1", model: "model" }
+      });
+      const stop = await readFile(
+        bundle.paths.find((entry) => path.basename(entry) === "stop-thinking.ts") ?? "",
+        "utf8"
+      );
+      expect(stop).toContain("const thinkingPhaseOutputCap: number | undefined = 8000;");
       expect(stop).toContain('["llama-cpp","vllm"]');
-      expect(guard).toContain('new Set<string>(["llama-cpp","vllm"])');
-      const [managed] = await readSources("llama-server");
-      expect(managed).toContain("const endpointThinkingBudget: number | undefined = undefined;");
+      await expect(
+        writeDefaultExtensions(capped, {
+          engines,
+          runtime: {
+            providerId: "llama-server",
+            baseUrl: "http://127.0.0.1:18194/v1",
+            model: "model"
+          }
+        })
+      ).rejects.toThrow("needs a selected llama.cpp or vLLM provider");
+      const managed = await writeDefaultExtensions(
+        { ...options(stateDir), thinkingBudget: 8000 },
+        {
+          engines,
+          runtime: {
+            providerId: "llama-server",
+            baseUrl: "http://127.0.0.1:18194/v1",
+            model: "model"
+          }
+        }
+      );
+      expect(await readFile(managed.paths[4] ?? "", "utf8")).toContain(
+        "const thinkingPhaseOutputCap: number | undefined = undefined;"
+      );
     } finally {
       await rm(stateDir, { recursive: true, force: true });
     }
@@ -313,6 +326,7 @@ function options(stateDir: string): LocalpiOptions {
     thinking: "off",
     thinkingBudget: undefined,
     thinkingBudgetMessage: undefined,
+    thinkingPhaseOutputCap: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     continueOnTruncation: 0,

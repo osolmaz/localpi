@@ -257,9 +257,8 @@ stopped without repeating earlier text. The guard:
 - changes no served limit. `--max-tokens` and `--context-window` keep their meaning, and the guard
   only reacts to the stop reason Pi reports
 
-The guard installs as the `continue-on-truncation.ts` Pi extension. It is not a default extension,
-so a normal session writes it only when you ask for it. It works in ACP mode too, because both
-launch paths share the same Pi configuration and extension bundle.
+The always-generated `stop-thinking.ts` extension also owns this optional guard. With no limit,
+it sends no truncation follow-up. In ACP mode, the same Pi extension handles both controls.
 
 ## Stop Thinking and Answer
 
@@ -597,7 +596,8 @@ demowall record --session demowall-<timestamp> --out demo.mp4 --seconds 60
 - `--model-thinking-format <deepseek|qwen-chat-template>`: override generated Pi thinking format
 - `--tools <list>`: Pi tools allow list. Default: `read,bash,edit,write,grep,find,ls`
 - `--thinking <off|minimal|low|medium|high|xhigh>`: Pi thinking level and managed `llama-server` reasoning budget. Default: last saved level, then `medium`
-- `--thinking-budget <n>`: managed `llama-server` thinking cap, or an opt-in output ceiling for a selected `llama-cpp` or `vllm` provider. `-1` disables the endpoint ceiling. See [Stop Thinking](docs/stop-thinking.md#endpoint-thinking-ceiling) for the difference.
+- `--thinking-budget <n>`: native reasoning budget for a managed `llama-server`. `-1` leaves it unrestricted. It does not cap an external endpoint.
+- `--thinking-phase-output-cap <n>`: optional first-request total output ceiling for a selected `llama-cpp` or `vllm` provider. It is off by default. See [Stop Thinking](docs/stop-thinking.md#endpoint-thinking-ceiling).
 - `--thinking-budget-message <text>`: text the server injects before the end-of-thinking tag when the budget runs out. An empty value passes no message. Default: `Reasoning budget reached. Stop thinking and answer now.`
 - `--demo`: endlessly run Pi prompts inside the normal Pi TUI until interrupted or Pi exits; requires an explicit non-`auto` model
 - `--demo-initial-prompt <text>`: first demo prompt

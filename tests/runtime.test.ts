@@ -1901,6 +1901,7 @@ function options(): LocalpiOptions {
     thinking: "off",
     thinkingBudget: undefined,
     thinkingBudgetMessage: undefined,
+    thinkingPhaseOutputCap: undefined,
     contextWindow: undefined,
     maxTokens: 8192,
     continueOnTruncation: 0,

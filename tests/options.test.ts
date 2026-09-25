@@ -117,6 +117,22 @@ describe("localpi option parsing", () => {
     expect(usage()).toContain("--thinking-budget <n>");
   });
 
+  it("keeps the endpoint output cap off unless explicitly set", () => {
+    expect(parseLocalpiArgs([]).thinkingPhaseOutputCap).toBeUndefined();
+    expect(parseLocalpiArgs(["--thinking-phase-output-cap", "8000"]).thinkingPhaseOutputCap).toBe(
+      8000
+    );
+    expect(() => parseLocalpiArgs(["--thinking-phase-output-cap", "0"])).toThrow();
+    expect(() => parseLocalpiArgs(["--thinking-phase-output-cap", "-1"])).toThrow();
+    process.env["LOCALPI_THINKING_PHASE_OUTPUT_CAP"] = "4096";
+    expect(parseLocalpiArgs([]).thinkingPhaseOutputCap).toBe(4096);
+    expect(parseLocalpiArgs(["--thinking-phase-output-cap", "8000"]).thinkingPhaseOutputCap).toBe(
+      8000
+    );
+    delete process.env["LOCALPI_THINKING_PHASE_OUTPUT_CAP"];
+    expect(usage()).toContain("--thinking-phase-output-cap <n>");
+  });
+
   it("defaults the provider API key to local", () => {
     delete process.env["LOCALPI_API_KEY"];
     expect(parseLocalpiArgs([]).apiKey).toBe("local");
