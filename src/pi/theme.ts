@@ -38,18 +38,38 @@ export function localpiThemePath(stateDir: string, flavor: CatppuccinFlavor = "m
 }
 
 export function localpiThemeArgs(
-  themePath: string | undefined,
+  themePath: string | readonly string[] | undefined,
   forwardedArgs: readonly string[],
   flavor: CatppuccinFlavor = "mocha"
 ): readonly string[] {
   if (themePath === undefined) {
     return [];
   }
-  // The theme file is always loaded, so /settings can offer it. Catppuccin is only selected when
-  // the user did not ask for another theme in the same command line.
+  // The theme files are always loaded, so /settings, and web mode's theme setting, can offer them.
+  // Catppuccin is only selected when the user did not ask for another theme on the command line.
+  const paths = typeof themePath === "string" ? [themePath] : themePath;
+  const load = paths.flatMap((entry) => ["--theme", entry]);
   return hasForwardedFlag(forwardedArgs, "--use-theme")
-    ? ["--theme", themePath]
-    : ["--theme", themePath, "--use-theme", catppuccinThemeName(flavor)];
+    ? load
+    : [...load, "--use-theme", catppuccinThemeName(flavor)];
+}
+
+/**
+ * Write the Pi theme of every given flavor, for web mode, whose theme setting switches the Pi theme
+ * of running sessions. Returns undefined when the user turned Pi themes off.
+ */
+export async function writeLocalpiThemes(
+  stateDir: string,
+  forwardedArgs: readonly string[],
+  flavors: readonly CatppuccinFlavor[]
+): Promise<readonly string[] | undefined> {
+  const paths: string[] = [];
+  for (const flavor of flavors) {
+    const written = await writeLocalpiTheme(stateDir, forwardedArgs, flavor);
+    if (written === undefined) return undefined;
+    paths.push(written);
+  }
+  return paths;
 }
 
 export async function writeLocalpiTheme(

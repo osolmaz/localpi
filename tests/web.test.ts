@@ -5,7 +5,7 @@ import type { PiWebOptions } from "@osolmaz/pi-factory-web";
 
 import { run } from "../src/cli/cli.js";
 import { catppuccinLatte, catppuccinMacchiato } from "../src/localpi/catppuccin.js";
-import { launchWebRuntime, localpiWebTheme } from "../src/pi/web.js";
+import { launchWebRuntime, localpiWebTheme, localpiWebThemeChoices } from "../src/pi/web.js";
 
 describe("localpi web mode", () => {
   it("rejects modes that cannot share the browser terminal", async () => {
@@ -61,10 +61,24 @@ describe("localpi web mode", () => {
           port: 8421,
           open: false,
           cwd: process.cwd(),
-          theme: localpiWebTheme("mocha")
+          themes: localpiWebThemeChoices(),
+          defaultTheme: "catppuccin-mocha"
         }
       }
     ]);
+  });
+
+  it("offers every flavor with the Pi theme that localpi writes for it", () => {
+    const choices = localpiWebThemeChoices();
+    expect(choices.map((choice) => [choice.id, choice.piTheme])).toEqual([
+      ["catppuccin-latte", "catppuccin-latte"],
+      ["catppuccin-frappe", "catppuccin-frappe"],
+      ["catppuccin-macchiato", "catppuccin-macchiato"],
+      ["catppuccin-mocha", "catppuccin-mocha"]
+    ]);
+    expect(choices[3]?.theme).toEqual(localpiWebTheme("mocha"));
+    expect(choices[0]?.accents["peach"]).toBe(catppuccinLatte.peach);
+    expect(Object.keys(choices[0]?.accents ?? {})).toHaveLength(14);
   });
 
   it("builds dark page colors from a dark flavor", () => {

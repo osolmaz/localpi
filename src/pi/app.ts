@@ -44,7 +44,7 @@ export function createLocalpiAppDefinition(
   options: LocalpiOptions,
   connection: RuntimeConnection,
   extensions?: ExtensionBundle,
-  themePath?: string
+  themePath?: string | readonly string[]
 ): PiAppDefinition {
   return {
     ...localpiAppIdentity,
@@ -62,7 +62,10 @@ function appDirectories(options: LocalpiOptions): LocalpiAppDirectories {
   };
 }
 
-function piCommand(options: LocalpiOptions, themePath: string | undefined): LocalpiPiCommand {
+function piCommand(
+  options: LocalpiOptions,
+  themePath: string | readonly string[] | undefined
+): LocalpiPiCommand {
   return {
     piCommand: options.piCommand,
     forwardedArgs: [
