@@ -39,6 +39,7 @@ type FakePi = {
   readonly commands: Map<string, (args: string, ctx: FakeContext) => Promise<void>>;
   readonly renderers: Map<string, unknown>;
   readonly sent: SentMessage[];
+  readonly followUps: { text: string; options: unknown }[];
   thinkingLevel: string;
 };
 
@@ -47,6 +48,7 @@ const plainTheme: FakeTheme = { fg: (_color, text) => text };
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   await cleanupTemporaryDirs();
 });
 
@@ -439,7 +441,7 @@ describe("generated localpi stop thinking extension", () => {
   it.each(["llama-cpp", "vllm"])(
     "caps the first %s request and reserves the rest for an answer-only continuation",
     async (provider) => {
-      const pi = await startPi({ endpointThinkingBudget: 8000 });
+      const pi = await startPi({ thinkingPhaseOutputCap: 8000, continuationLimit: 2 });
       const ctx = context(provider);
       const first = await pi.handlers.get("before_provider_request")?.(
         { payload: { ...request([userMessage("Solve it")]), max_tokens: 16384 } },
@@ -449,6 +451,8 @@ describe("generated localpi stop thinking extension", () => {
       expect(
         await pi.handlers.get("message_end")?.(end("length", [thinking("Partial reasoning")]), ctx)
       ).toBeUndefined();
+      await dispatchTurnEnd(pi, "length", [thinking("Partial reasoning")], ctx);
+      expect(pi.followUps).toHaveLength(0);
       await pi.handlers.get("agent_settled")?.({}, ctx);
       expect(pi.sent).toHaveLength(1);
       const answer = await pi.handlers.get("before_provider_request")?.(
@@ -473,7 +477,7 @@ describe("generated localpi stop thinking extension", () => {
   );
 
   it("never forces an answer when a capped request ended with answer text or an error", async () => {
-    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const pi = await startPi({ thinkingPhaseOutputCap: 8000 });
     const ctx = context("vllm");
     for (const [reason, content] of [
       ["length", [thinking("Reasoning"), text("Partial answer")]],
@@ -491,7 +495,7 @@ describe("generated localpi stop thinking extension", () => {
   });
 
   it("does not cap unsupported providers or thinking-off requests", async () => {
-    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const pi = await startPi({ thinkingPhaseOutputCap: 8000 });
     const payload = { ...request([userMessage("Solve it")]), max_completion_tokens: 16384 };
     expect(
       await pi.handlers.get("before_provider_request")?.({ payload }, context("lmstudio"))
@@ -507,15 +511,48 @@ describe("generated localpi stop thinking extension", () => {
   });
 
   it("fails closed when the endpoint has no room for an answer", async () => {
-    const pi = await startPi({ endpointThinkingBudget: 8000 });
+    const pi = await startPi({ thinkingPhaseOutputCap: 8000 });
     const handler = pi.handlers.get("before_provider_request");
     const ctx = context("vllm");
     expect(() => handler?.({ payload: request([userMessage("Solve it")]) }, ctx)).toThrow(
-      "requires a positive output limit"
+      "requires a positive provider output limit"
     );
     expect(() =>
       handler?.({ payload: { ...request([userMessage("Solve it")]), max_tokens: 8000 } }, ctx)
-    ).toThrow("must leave output tokens for the answer");
+    ).toThrow("must leave tokens for the answer");
+    expect(ctx.aborts).toBe(2);
+  });
+
+  it("continues a cut-off answer once and stops at the configured limit", async () => {
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const pi = await startPi({ continuationLimit: 1 });
+    const ctx = context();
+    await pi.handlers.get("turn_end")?.(turnEnd("length", [text("Partial answer")]), ctx);
+    expect(pi.followUps).toHaveLength(1);
+    expect(pi.followUps[0]?.options).toEqual({ deliverAs: "followUp" });
+    await pi.handlers.get("agent_settled")?.({}, ctx);
+    await pi.handlers.get("turn_end")?.(turnEnd("length", [text("More answer")]), ctx);
+    await pi.handlers.get("turn_end")?.(turnEnd("length", [text("Still cut off")]), ctx);
+    expect(pi.followUps).toHaveLength(1);
+    expect(
+      stderr.mock.calls.filter(([line]) => String(line).includes("stopping now"))
+    ).toHaveLength(1);
+    expect(pi.sent).toHaveLength(0);
+  });
+
+  it("does not continue errors, normal stops, tool turns or a manual stop", async () => {
+    const pi = await startPi({ continuationLimit: 2 });
+    const ctx = context();
+    await dispatchTurnEnd(pi, "error", [], ctx);
+    await dispatchTurnEnd(pi, "stop", [], ctx);
+    await dispatchTurnEnd(pi, "length", [toolCall()], ctx, 1);
+    await pi.handlers.get("message_update")?.(update([thinking("Still thinking")]), ctx);
+    pi.shortcuts.get("ctrl+shift+s")?.(ctx);
+    await pi.handlers.get("message_end")?.(end("aborted", [thinking("Still thinking")]), ctx);
+    await dispatchTurnEnd(pi, "stop", [thinking("Still thinking")], ctx);
+    await pi.handlers.get("agent_settled")?.({}, ctx);
+    expect(pi.followUps).toHaveLength(0);
+    expect(pi.sent).toHaveLength(1);
   });
 
   it("starts over when a new session begins", async () => {
@@ -532,14 +569,20 @@ describe("generated localpi stop thinking extension", () => {
 });
 
 async function startPi(
-  config: { key?: string | undefined; buttonDelayMs?: number; endpointThinkingBudget?: number } = {}
+  config: {
+    key?: string | undefined;
+    buttonDelayMs?: number;
+    thinkingPhaseOutputCap?: number;
+    continuationLimit?: number;
+  } = {}
 ): Promise<FakePi> {
   const extension = await loadGeneratedExtension(
     stopThinkingExtensionSource({
       key: "key" in config ? config.key : "ctrl+shift+s",
       // Most tests look at the button itself, so they show it at once.
       buttonDelayMs: config.buttonDelayMs ?? 0,
-      endpointThinkingBudget: config.endpointThinkingBudget,
+      thinkingPhaseOutputCap: config.thinkingPhaseOutputCap,
+      continuationLimit: config.continuationLimit,
       engines: [
         { provider: "llama-cpp", engine: "llama.cpp" },
         { provider: "llama-server", engine: "llama-server" },
@@ -554,6 +597,7 @@ async function startPi(
     commands: new Map(),
     renderers: new Map(),
     sent: [],
+    followUps: [],
     thinkingLevel: "high"
   };
   extension({
@@ -573,6 +617,9 @@ async function startPi(
       pi.renderers.set(customType, renderer);
     },
     getThinkingLevel: () => pi.thinkingLevel,
+    sendUserMessage: (text: string, options: unknown) => {
+      pi.followUps.push({ text, options });
+    },
     sendMessage: (message: SentMessage["message"], options: unknown) => {
       pi.sent.push({ message, options });
     }
@@ -615,6 +662,23 @@ async function stopDuringThinking(pi: FakePi, ctx: FakeContext, partial: string)
   pi.shortcuts.get("ctrl+shift+s")?.(ctx);
   await pi.handlers.get("message_end")?.(end("aborted", [thinking(partial)]), ctx);
   await pi.handlers.get("agent_settled")?.({}, ctx);
+}
+
+async function dispatchTurnEnd(
+  pi: FakePi,
+  reason: string,
+  content: readonly unknown[],
+  ctx: FakeContext,
+  toolResults = 0
+): Promise<void> {
+  await pi.handlers.get("turn_end")?.(turnEnd(reason, content, toolResults), ctx);
+}
+
+function turnEnd(stopReason: string, content: readonly unknown[] = [], toolResults = 0): unknown {
+  return {
+    message: { role: "assistant", stopReason, content },
+    toolResults: Array.from({ length: toolResults }, () => ({}))
+  };
 }
 
 function update(content: readonly unknown[]): unknown {

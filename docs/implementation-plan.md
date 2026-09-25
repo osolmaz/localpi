@@ -90,6 +90,10 @@ Older workspace wrappers outside this repository still mention `localagent --fin
 
 ## 9. Continue On Truncation
 
+This checklist records the original implementation. The generated guard was later folded into
+`stop-thinking.ts`, which owns manual stops, automatic thinking stops, and ordinary truncation.
+The user option remains opt-in; see `docs/stop-thinking.md` for current behavior.
+
 - [x] Add `--continue-on-truncation <n>` and `LOCALPI_CONTINUE_ON_TRUNCATION=<n>`, where `n` is a positive integer and is the maximum number of extra continuations.
 - [x] Keep the feature off by default, so a normal launch, an ACP launch, and demo mode behave exactly as they do today with no flag and no environment variable.
 - [x] Treat `0` from the environment as off, so an inherited value can be disabled without dropping the variable.

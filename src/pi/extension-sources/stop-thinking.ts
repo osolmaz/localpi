@@ -7,7 +7,8 @@ export type StopThinkingConfig = {
   readonly buttonDelayMs: number;
   readonly engines: readonly EngineEntry[];
   // An opt-in per-request output ceiling for external engines, not a tokenizer-based counter.
-  readonly endpointThinkingBudget?: number | undefined;
+  readonly thinkingPhaseOutputCap?: number | undefined;
+  readonly continuationLimit?: number | undefined;
 };
 
 // llama.cpp closes the thinking phase itself when a request continues a final assistant message
@@ -37,7 +38,13 @@ const templateKwargsProviders = new Set<string>(${JSON.stringify(templateKwargsP
 const cappedProviders = new Set<string>(${JSON.stringify(config.engines.filter((entry) => entry.engine === "llama.cpp" || entry.engine === "vLLM").map((entry) => entry.provider))});
 // A short thinking phase needs no button, so the button waits this long before it shows.
 const buttonDelayMs: number = ${String(config.buttonDelayMs)};
-const endpointThinkingBudget: number | undefined = ${config.endpointThinkingBudget === undefined ? "undefined" : String(config.endpointThinkingBudget)};
+const thinkingPhaseOutputCap: number | undefined = ${config.thinkingPhaseOutputCap === undefined ? "undefined" : String(config.thinkingPhaseOutputCap)};
+const continuationLimit: number = ${String(config.continuationLimit ?? 0)};
+const nudge = [
+  "You hit the output limit before finishing.",
+  "Continue from where you stopped.",
+  "Do not repeat earlier text. Take the next tool call or write the answer."
+].join(" ");
 
 const customType = "localpi-stop-thinking";
 const widgetKey = "localpi-stop-thinking";
@@ -108,8 +115,12 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
   // settles, so a retry after an error still continues the thinking.
   let continuation: StopRequest | undefined;
   let cappedRequest: CappedRequest | undefined;
+  let continued = 0;
+  let limitReported = false;
 
   function reset(): void {
+    continued = 0;
+    limitReported = false;
     cappedRequest = undefined;
     thinking = undefined;
     requested = undefined;
@@ -257,6 +268,31 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     return { message: { ...finished, stopReason: "stop" } as typeof event.message };
   });
 
+  // One controller owns the length stop. A thinking-only stop already selected by message_end
+  // must never queue the generic continuation as well.
+  pi.on("turn_end", (event) => {
+    if (continuationLimit === 0 || event.message.role !== "assistant" ||
+        event.message.stopReason !== "length" || requested !== undefined ||
+        event.toolResults.length > 0) {
+      return;
+    }
+    if (continued >= continuationLimit) {
+      if (!limitReported) {
+        limitReported = true;
+        const plural = continued === 1 ? "" : "s";
+        process.stderr.write(
+          \`localpi: reply was cut off again after \${continued} continuation\${plural}; stopping now\\n\`
+        );
+      }
+      return;
+    }
+    continued += 1;
+    process.stderr.write(
+      \`localpi: reply was cut off by the output limit; continuing (\${continued}/\${continuationLimit})\\n\`
+    );
+    pi.sendUserMessage(nudge, { deliverAs: "followUp" });
+  });
+
   pi.on("agent_settled", () => {
     if (requested === undefined) {
       // The continuation run has settled, whatever the engine did with it.
@@ -274,7 +310,7 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     }
     cappedRequest = undefined;
     const provider = ctx.model?.provider ?? "";
-    if (endpointThinkingBudget === undefined || endpointThinkingBudget < 1 ||
+    if (thinkingPhaseOutputCap === undefined || thinkingPhaseOutputCap < 1 ||
         pi.getThinkingLevel() === "off" ||
         !cappedProviders.has(provider) ||
         !isRecord(event.payload)) {
@@ -282,14 +318,16 @@ export default function localpiStopThinking(pi: ExtensionAPI): void {
     }
     const field = outputLimitField(event.payload);
     if (field === undefined) {
-      throw new Error("localpi: endpoint thinking cap requires a positive output limit in the provider request");
+      ctx.abort();
+      throw new Error("localpi: thinking-phase output cap requires a positive provider output limit");
     }
     const maximum = event.payload[field] as number;
-    if (maximum <= endpointThinkingBudget) {
-      throw new Error("localpi: endpoint thinking cap must leave output tokens for the answer");
+    if (maximum <= thinkingPhaseOutputCap) {
+      ctx.abort();
+      throw new Error("localpi: thinking-phase output cap must leave tokens for the answer");
     }
-    cappedRequest = { provider, answerTokens: maximum - endpointThinkingBudget };
-    return { ...event.payload, [field]: endpointThinkingBudget };
+    cappedRequest = { provider, answerTokens: maximum - thinkingPhaseOutputCap };
+    return { ...event.payload, [field]: thinkingPhaseOutputCap };
   });
 
   // Match the assistant text padding. Pi already puts one empty line above a custom message.

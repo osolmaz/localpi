@@ -55,6 +55,7 @@ export type LocalpiOptions = {
   readonly thinking: ThinkingLevel;
   readonly thinkingBudget: number | undefined;
   readonly thinkingBudgetMessage: string | undefined;
+  readonly thinkingPhaseOutputCap: number | undefined;
   readonly contextWindow: number | undefined;
   readonly maxTokens: number;
   readonly continueOnTruncation: number;
@@ -111,6 +112,7 @@ export function defaultOptions(): LocalpiOptions {
     thinking: parseThinkingLevel(envString("LOCALPI_THINKING", "medium")),
     thinkingBudget: envOptionalThinkingBudget("LOCALPI_THINKING_BUDGET"),
     thinkingBudgetMessage: process.env["LOCALPI_THINKING_BUDGET_MESSAGE"],
+    thinkingPhaseOutputCap: envOptionalPositiveInteger("LOCALPI_THINKING_PHASE_OUTPUT_CAP"),
     contextWindow: envOptionalPositiveInteger("LOCALPI_CONTEXT_WINDOW"),
     maxTokens: envPositiveInteger("LOCALPI_MAX_TOKENS", "8192"),
     continueOnTruncation: envContinuationLimit("LOCALPI_CONTINUE_ON_TRUNCATION"),
@@ -236,9 +238,9 @@ export function usage(): string {
     "  --session-dir <path>    Pi session directory",
     "  --pi-command <command>  Pi launch command, split on whitespace and quotes",
     "  --thinking <level>      thinking level: off, minimal, low, medium, high, xhigh",
-    "  --thinking-budget <n>   managed llama-server cap; for explicit llama.cpp/vLLM",
-    "                          providers, opt-in output ceiling during thinking;",
-    "                          -1 disables the endpoint ceiling",
+    "  --thinking-budget <n>   managed llama-server thinking cap, -1 for unrestricted",
+    "  --thinking-phase-output-cap <n>",
+    "                          opt-in first-request output ceiling for llama.cpp/vLLM",
     "  --thinking-budget-message <text>",
     "                          text before the end-of-thinking tag; empty text passes none",
     "  --timeout-ms <n>        backend probe timeout",
@@ -331,6 +333,10 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
   "--thinking-budget-message": (options, value) => ({
     ...options,
     thinkingBudgetMessage: value
+  }),
+  "--thinking-phase-output-cap": (options, value) => ({
+    ...options,
+    thinkingPhaseOutputCap: parsePositiveInteger(value)
   }),
   "--stats": (options, value) => ({ ...options, stats: parseStatsMode(value) }),
   "--skills": (options, value) => ({ ...options, skills: parseSkillsMode(value) }),
