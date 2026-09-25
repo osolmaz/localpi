@@ -182,12 +182,13 @@ function runtimeConfig(
   };
 }
 
-// The tool approval gate appends its own detailed rule. This base prompt keeps the same warning
-// when a user disables localpi extensions, and stays true whether approval is on or off.
+// The base prompt carries the tool approval rule. It stays true whether approval is on or off, and
+// it is passed at launch, so every turn has the same system prompt: a per-turn hook would miss
+// turns that an extension starts, change the prompt, and break the server's prompt cache.
 function localpiSystemPrompt(): string {
   return [
     "You are running through localpi, a local Pi launcher for local models.",
-    "Tool calls may require user approval. Never claim that a tool call ran when its result says it was blocked or denied.",
+    "Tool approval rule: tool calls may require user approval. If any tool result says the tool was blocked, denied, or requires approval, the tool did not run. Do not claim blocked tools ran.",
     "Prefer answering directly when tools are not needed."
   ].join("\n");
 }

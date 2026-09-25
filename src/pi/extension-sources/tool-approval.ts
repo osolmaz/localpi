@@ -24,8 +24,6 @@ type CommandContext = {
   };
 };
 
-const approvalRule =
-  "\\n\\nTool approval rule: if any tool result says the tool was blocked, denied, or requires approval, the tool did not run. Do not claim blocked tools ran.";
 const modes: readonly PermissionMode[] = ["ask", "allow"];
 const aliases: readonly string[] = ["on", "off"];
 // Read-only Pi tools cannot change the workspace, so the gate lets them run. bash is not in this
@@ -47,10 +45,6 @@ const gateReadTools: boolean = ${approveReadToolsSource};
 
 export default function localpiToolApproval(pi: ExtensionAPI): void {
   let enabled = initialEnabled;
-
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: event.systemPrompt + approvalRule
-  }));
 
   pi.on("session_start", (_event, ctx) => {
     showStatus(ctx);

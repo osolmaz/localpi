@@ -143,13 +143,10 @@ describe("generated localpi tool approval extension", () => {
     expect(fake.dialogs[0]).toContain("Allow tool call: read?");
   });
 
-  it("appends the approval rule to the system prompt", async () => {
+  it("leaves the system prompt alone, because the rule is part of the launch prompt", async () => {
     const { pi } = await enabledPi();
 
-    const result = await pi.handlers.get("before_agent_start")?.({ systemPrompt: "base" }, {});
-
-    expect(systemPromptOf(result)).toContain("base");
-    expect(systemPromptOf(result)).toContain("Tool approval rule:");
+    expect(pi.handlers.has("before_agent_start")).toBe(false);
   });
 
   it("saves the permission setting when the command turns approval off", async () => {
@@ -277,11 +274,6 @@ function blockReason(result: unknown): string {
 function terminates(result: unknown): boolean {
   const record = result as { readonly terminate?: boolean } | undefined;
   return record?.terminate === true;
-}
-
-function systemPromptOf(result: unknown): string {
-  const record = result as { readonly systemPrompt?: string } | undefined;
-  return record?.systemPrompt ?? "";
 }
 
 function fakePi(): FakePi {
