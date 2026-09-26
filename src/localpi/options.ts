@@ -347,7 +347,16 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
     ...options,
     modelThinkingFormat: parseModelThinkingFormat(value)
   }),
-  "--state-dir": (options, value) => ({ ...options, stateDir: value }),
+  "--state-dir": (options, value) => ({
+    ...options,
+    stateDir: value,
+    // The default session folder lives in the state folder, so it moves with it. A folder from
+    // --session-dir or the environment differs from that default and stays.
+    sessionDir:
+      options.sessionDir === path.join(options.stateDir, "sessions")
+        ? path.join(value, "sessions")
+        : options.sessionDir
+  }),
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: parsePiCommand(value) }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),

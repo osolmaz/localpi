@@ -58,7 +58,7 @@
   },
   "dependencies": {
     "@osolmaz/pi-factory": "^0.7.0",
-    "@osolmaz/pi-factory-web": "^0.1.0",
+    "@osolmaz/pi-factory-web": "0.1.1",
     "pi-acp": "0.0.33",
     "pi-demo-mode": "github:osolmaz/pi-demo-mode#v0.1.0"
   }
