@@ -505,6 +505,14 @@ describe("localpi environment defaults", () => {
     expect(parseLocalpiArgs(["--session-dir", "/tmp/own", "--state-dir", "/tmp/s"])).toMatchObject({
       sessionDir: "/tmp/own"
     });
+    // An explicit folder stays even when it equals another state folder's default.
+    expect(
+      parseLocalpiArgs(["--session-dir", "/tmp/a/sessions", "--state-dir", "/tmp/s"])
+    ).toMatchObject({ sessionDir: "/tmp/a/sessions" });
+    // Only a parsed flag counts, not a flag name that is another flag's value.
+    expect(
+      parseLocalpiArgs(["--thinking-budget-message", "--session-dir", "--state-dir", "/tmp/s"])
+    ).toMatchObject({ sessionDir: "/tmp/s/sessions" });
     process.env["LOCALPI_SESSION_DIR"] = "/tmp/env-sessions";
     expect(parseLocalpiArgs(["--state-dir", "/tmp/s"])).toMatchObject({
       sessionDir: "/tmp/env-sessions"
