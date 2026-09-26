@@ -10,74 +10,102 @@ import {
   makeTemporaryDir
 } from "./support/extension-harness.js";
 
-type Handler = (event: unknown) => unknown;
+type Model = { readonly provider: string; readonly id: string; readonly reasoning?: boolean };
+type Context = { readonly model: Model | undefined };
+type Handler = (event: unknown, ctx: Context) => unknown;
 
 type FakePi = {
   readonly handlers: Map<string, Handler>;
   readonly commands: string[];
   readonly on: (event: string, handler: Handler) => void;
   readonly registerCommand: (name: string, command: unknown) => void;
-  readonly getThinkingLevel: () => string;
 };
+
+const thinker: Model = { provider: "llama-cpp", id: "thinker", reasoning: true };
+const otherThinker: Model = { provider: "llama-cpp", id: "other-thinker", reasoning: true };
+const plain: Model = { provider: "llama-cpp", id: "plain" };
 
 afterEach(async () => {
   await cleanupTemporaryDirs();
 });
 
 describe("generated localpi thinking control extension", () => {
-  it("remembers the level Pi selected", async () => {
-    const { pi, settingsPath } = await startPi("off");
+  it("remembers a level the user chose", async () => {
+    const { select, settingsPath } = await startPi(thinker);
 
-    await pi.handlers.get("thinking_level_select")?.({ level: "low" });
+    await select("low", thinker);
 
     expect(await settings(settingsPath)).toEqual({ thinking: "low" });
   });
 
-  it("remembers the level when the session ends", async () => {
-    const { pi, settingsPath } = await startPi("high");
+  it("does not remember the off that Pi forces for a model that cannot think", async () => {
+    const { select, settingsPath } = await startPi(plain);
 
-    await pi.handlers.get("session_shutdown")?.({ reason: "quit" });
+    await select("off", plain);
 
-    expect(await settings(settingsPath)).toEqual({ thinking: "high" });
+    expect(await savedSettings(settingsPath)).toBeUndefined();
   });
 
-  it("saves the reported level without rewriting it", async () => {
-    const { pi, settingsPath } = await startPi("off");
+  it("does not remember the level Pi adjusts when the model changes", async () => {
+    const { pi, select, settingsPath } = await startPi(thinker);
 
-    await pi.handlers.get("thinking_level_select")?.({ level: "max" });
+    await select("high", otherThinker);
+    await pi.handlers.get("model_select")?.({ model: otherThinker }, { model: otherThinker });
+    expect(await savedSettings(settingsPath)).toBeUndefined();
 
-    expect(await settings(settingsPath)).toEqual({ thinking: "max" });
+    await select("minimal", otherThinker);
+    expect(await settings(settingsPath)).toEqual({ thinking: "minimal" });
+  });
+
+  it("remembers a choice after a model change that kept the level", async () => {
+    const { pi, select, settingsPath } = await startPi(thinker);
+
+    await pi.handlers.get("model_select")?.({ model: otherThinker }, { model: otherThinker });
+    await select("xhigh", otherThinker);
+
+    expect(await settings(settingsPath)).toEqual({ thinking: "xhigh" });
+  });
+
+  it("does not save when the session ends", async () => {
+    const { pi, settingsPath } = await startPi(thinker);
+
+    expect(pi.handlers.has("session_shutdown")).toBe(false);
+    expect(await savedSettings(settingsPath)).toBeUndefined();
   });
 
   it("keeps other remembered settings", async () => {
-    const { pi, settingsPath } = await startPi("off");
+    const { select, settingsPath } = await startPi(thinker);
     await writeFile(settingsPath, `${JSON.stringify({ stats: "line" })}\n`, "utf8");
 
-    await pi.handlers.get("thinking_level_select")?.({ level: "medium" });
+    await select("medium", thinker);
 
     expect(await settings(settingsPath)).toEqual({ stats: "line", thinking: "medium" });
   });
 
   it("registers no slash command, because Pi owns /thinking", async () => {
-    const { pi } = await startPi("off");
+    const { pi } = await startPi(thinker);
 
     expect(pi.commands).toEqual([]);
   });
 });
 
-async function startPi(level: string): Promise<{
+async function startPi(model: Model): Promise<{
   readonly pi: FakePi;
+  readonly select: (level: string, model: Model) => Promise<unknown>;
   readonly settingsPath: string;
 }> {
   const stateDir = await makeTemporaryDir("localpi-thinking-");
   const settingsPath = path.join(stateDir, "settings.json");
   const extension = await loadGeneratedExtension(thinkingControlExtensionSource(settingsPath));
-  const pi = fakePi(level);
+  const pi = fakePi();
   extension(pi);
-  return { pi, settingsPath };
+  await pi.handlers.get("session_start")?.({ reason: "startup" }, { model });
+  const select = async (level: string, current: Model): Promise<unknown> =>
+    await pi.handlers.get("thinking_level_select")?.({ level }, { model: current });
+  return { pi, select, settingsPath };
 }
 
-function fakePi(level: string): FakePi {
+function fakePi(): FakePi {
   return {
     handlers: new Map<string, Handler>(),
     commands: [],
@@ -86,11 +114,16 @@ function fakePi(level: string): FakePi {
     },
     registerCommand(name) {
       this.commands.push(name);
-    },
-    getThinkingLevel() {
-      return level;
     }
   };
+}
+
+async function savedSettings(settingsPath: string): Promise<unknown> {
+  try {
+    return await settings(settingsPath);
+  } catch {
+    return undefined;
+  }
 }
 
 async function settings(settingsPath: string): Promise<unknown> {
