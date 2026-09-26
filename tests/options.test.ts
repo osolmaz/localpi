@@ -497,6 +497,20 @@ describe("localpi environment defaults", () => {
     });
   });
 
+  it("keeps the default session folder inside --state-dir", () => {
+    expect(parseLocalpiArgs(["--state-dir", "/tmp/s"])).toMatchObject({
+      stateDir: "/tmp/s",
+      sessionDir: "/tmp/s/sessions"
+    });
+    expect(parseLocalpiArgs(["--session-dir", "/tmp/own", "--state-dir", "/tmp/s"])).toMatchObject({
+      sessionDir: "/tmp/own"
+    });
+    process.env["LOCALPI_SESSION_DIR"] = "/tmp/env-sessions";
+    expect(parseLocalpiArgs(["--state-dir", "/tmp/s"])).toMatchObject({
+      sessionDir: "/tmp/env-sessions"
+    });
+  });
+
   it("treats a zero continuation limit as off and rejects a bad one", () => {
     process.env["LOCALPI_CONTINUE_ON_TRUNCATION"] = "0";
     expect(parseLocalpiArgs([]).continueOnTruncation).toBe(0);
