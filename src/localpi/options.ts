@@ -165,6 +165,7 @@ export function parseLocalpiArgs(args: readonly string[]): LocalpiOptions {
   let options = defaultOptions();
   const forwardedArgs: string[] = [];
   const demoPromptFlags = demoPromptFlagTracker();
+  const parsedFlags = new Set<string>();
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === undefined) {
@@ -180,13 +181,27 @@ export function parseLocalpiArgs(args: readonly string[]): LocalpiOptions {
     trackDemoPromptFlag(demoPromptFlags, arg);
     const parsed = parseLocalpiFlag(options, args, index);
     if (parsed !== undefined) {
+      parsedFlags.add(arg);
       options = parsed.options;
       index += parsed.advance;
       continue;
     }
     forwardedArgs.push(arg);
   }
-  return normalizeDemoPromptPrecedence({ ...options, forwardedArgs }, demoPromptFlags);
+  return normalizeDemoPromptPrecedence(
+    { ...withSessionDirDefault(options, parsedFlags), forwardedArgs },
+    demoPromptFlags
+  );
+}
+
+// The default session folder lives in the state folder, so it follows --state-dir. A folder from
+// --session-dir or the environment stays.
+function withSessionDirDefault(
+  options: LocalpiOptions,
+  parsedFlags: ReadonlySet<string>
+): LocalpiOptions {
+  if (sessionDirFromEnv() !== undefined || parsedFlags.has("--session-dir")) return options;
+  return { ...options, sessionDir: path.join(options.stateDir, "sessions") };
 }
 
 export function usage(): string {
@@ -347,16 +362,7 @@ const valueFlagUpdaters: Readonly<Record<string, OptionUpdater>> = {
     ...options,
     modelThinkingFormat: parseModelThinkingFormat(value)
   }),
-  "--state-dir": (options, value) => ({
-    ...options,
-    stateDir: value,
-    // The default session folder lives in the state folder, so it moves with it. A folder from
-    // --session-dir or the environment differs from that default and stays.
-    sessionDir:
-      options.sessionDir === path.join(options.stateDir, "sessions")
-        ? path.join(value, "sessions")
-        : options.sessionDir
-  }),
+  "--state-dir": (options, value) => ({ ...options, stateDir: value }),
   "--session-dir": (options, value) => ({ ...options, sessionDir: value }),
   "--pi-command": (options, value) => ({ ...options, piCommand: parsePiCommand(value) }),
   "--thinking": (options, value) => ({ ...options, thinking: parseThinkingLevel(value) }),
@@ -748,10 +754,11 @@ function envFirst(names: readonly string[]): readonly [string, string | undefine
 }
 
 function defaultSessionDir(stateDir: string): string {
-  return envString(
-    "LOCALPI_SESSION_DIR",
-    envString("PI_CODING_AGENT_SESSION_DIR", path.join(stateDir, "sessions"))
-  );
+  return sessionDirFromEnv() ?? path.join(stateDir, "sessions");
+}
+
+function sessionDirFromEnv(): string | undefined {
+  return process.env["LOCALPI_SESSION_DIR"] ?? process.env["PI_CODING_AGENT_SESSION_DIR"];
 }
 
 function requiredValue(args: readonly string[], index: number, flag: string): string {
