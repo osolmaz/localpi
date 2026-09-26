@@ -21,7 +21,7 @@ describe("Pi extensions", () => {
       const status = await readFile(bundle.paths[2] ?? "", "utf8");
       const line = await readFile(bundle.paths[3] ?? "", "utf8");
       expect(thinking).toContain(JSON.stringify(path.join(stateDir, "settings.json")));
-      expect(thinking).toContain("persistThinking(pi.getThinkingLevel())");
+      expect(thinking).not.toContain("session_shutdown");
       expect(thinking).toContain("persistThinking(event.level)");
       expect(thinking).toContain("thinking_level_select");
       expect(thinking).not.toContain("registerCommand");
