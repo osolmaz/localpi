@@ -1,6 +1,6 @@
 {
   "name": "localpi",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "description": "Swiss army knife for running Pi with local inference engines.",
   "type": "module",
   "license": "MIT",
